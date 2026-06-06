@@ -339,7 +339,7 @@ export default function DocumentUpload() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold">Document Upload & AI Verification</h2>
-        <p className="text-gray-400 mt-1">Upload your identity and academic documents for real OCR extraction and YOLO validation</p>
+        <p className="text-gray-400 mt-1">Upload your identity and academic documents for real OCR extraction and document-quality validation</p>
       </div>
 
       <input
@@ -417,7 +417,7 @@ export default function DocumentUpload() {
                       <div className="flex items-center gap-2 mb-2">
                         <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
                         <span className="text-sm text-blue-400 font-medium">
-                          {processing.stage === 'yolo' ? 'Running YOLO Analysis...' : `Running OCR... ${ocrProgress}%`}
+                          {processing.stage === 'yolo' ? 'Running document analysis...' : `Running OCR... ${ocrProgress}%`}
                         </span>
                       </div>
                       {processing.stage === 'ocr' && (
@@ -448,7 +448,7 @@ export default function DocumentUpload() {
                     <div className="flex items-center gap-2 bg-gray-800/30 rounded-lg px-3 py-2">
                       <Eye className="w-4 h-4 text-purple-400" />
                       <div>
-                        <p className="text-[10px] text-gray-500 uppercase">YOLO</p>
+                        <p className="text-[10px] text-gray-500 uppercase">Layout</p>
                         <div className="flex items-center gap-1">
                           {yoloStatusIcon(existingDoc.yoloStatus, existingDoc.id)}
                           <span className="text-xs capitalize">{existingDoc.yoloStatus}</span>
@@ -460,7 +460,7 @@ export default function DocumentUpload() {
                   {/* YOLO Detections */}
                   {docYoloResult && (
                     <div className="bg-gray-800/30 rounded-lg p-3">
-                      <p className="text-[10px] text-gray-500 uppercase mb-2">YOLO Detections</p>
+                      <p className="text-[10px] text-gray-500 uppercase mb-2">Document Signals</p>
                       <div className="space-y-1">
                         {docYoloResult.detections.map((det, i) => (
                           <p key={i} className={`text-xs ${det.startsWith('✓') ? 'text-green-400' : 'text-yellow-400'}`}>
@@ -542,7 +542,7 @@ export default function DocumentUpload() {
             {/* Show YOLO results overlay */}
             {previewDocId && yoloResult[previewDocId] && (
               <div className="absolute bottom-4 left-4 right-4 bg-black/80 backdrop-blur rounded-lg p-4">
-                <p className="text-sm font-medium text-white mb-2">YOLO Analysis Results:</p>
+                <p className="text-sm font-medium text-white mb-2">Document Analysis Results:</p>
                 <div className="flex flex-wrap gap-2">
                   {yoloResult[previewDocId].detections.map((det, i) => (
                     <span key={i} className={`text-xs px-2 py-1 rounded ${det.startsWith('✓') ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
@@ -574,8 +574,8 @@ export default function DocumentUpload() {
               <Eye className="w-5 h-5 text-purple-400" />
             </div>
             <div>
-              <p className="text-sm font-medium">YOLO Detection</p>
-              <p className="text-xs text-gray-400 mt-1">Analyzes document layout, detects stamps, seals, photo regions, and validates authenticity markers</p>
+              <p className="text-sm font-medium">Document Quality Checks</p>
+              <p className="text-xs text-gray-400 mt-1">Analyzes document layout, image quality, text density, and visible authenticity markers</p>
             </div>
           </div>
           <div className="flex items-start gap-3">

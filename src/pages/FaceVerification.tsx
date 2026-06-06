@@ -268,7 +268,7 @@ export default function FaceVerification() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold">Face Verification</h2>
-        <p className="text-gray-400 mt-1">Live selfie capture and CNIC photo comparison using DeepFace</p>
+        <p className="text-gray-400 mt-1">Live selfie capture with browser-based face presence checks</p>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

@@ -86,7 +86,7 @@ export default function EmployerDashboard({ onNavigate }: Props) {
                 </div>
                 <div className="flex items-center gap-3">
                   {v.blockchainVerified && (
-                    <span className="text-xs px-2 py-1 bg-blue-400/10 text-blue-400 border border-blue-400/20 rounded">Blockchain ✓</span>
+                    <span className="text-xs px-2 py-1 bg-blue-400/10 text-blue-400 border border-blue-400/20 rounded">Attested</span>
                   )}
                   <span className={`text-xs px-2 py-1 rounded border font-medium ${
                     v.result === 'valid' ? 'bg-green-400/10 text-green-400 border-green-400/20' :

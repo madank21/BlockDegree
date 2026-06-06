@@ -17,26 +17,26 @@ const fadeUp = {
 
 export default function Landing({ onNavigate }: LandingProps) {
   const features = [
-    { icon: Fingerprint, title: 'AI Identity Verification', desc: 'OCR, YOLO document analysis, and DeepFace real-time face matching ensure only genuine identities pass through.', color: 'from-blue-500 to-cyan-500' },
-    { icon: Link2, title: 'Blockchain Attestation', desc: 'Every degree is cryptographically hashed and permanently recorded on a private Ethereum blockchain.', color: 'from-purple-500 to-pink-500' },
-    { icon: FileSearch, title: 'Document Validation', desc: 'YOLOv8 detects forged documents, stamps, seals, and signatures with enterprise-grade accuracy.', color: 'from-orange-500 to-red-500' },
-    { icon: QrCode, title: 'Instant QR Verification', desc: 'Each degree contains a unique QR code for instant blockchain-backed verification by employers.', color: 'from-green-500 to-emerald-500' },
-    { icon: Database, title: 'Persistent Storage', desc: 'MongoDB ensures all records survive server restarts, power outages, and system failures.', color: 'from-yellow-500 to-orange-500' },
-    { icon: Lock, title: 'Fraud Detection', desc: 'Multi-layer AI fraud detection catches duplicate CNICs, face mismatches, and forged certificates.', color: 'from-red-500 to-rose-500' },
+    { icon: Fingerprint, title: 'Identity Verification', desc: 'OCR extraction, document-quality checks, and live camera capture support student verification.', color: 'from-blue-500 to-cyan-500' },
+    { icon: Link2, title: 'Cryptographic Attestation', desc: 'Every issued degree is hashed into a verifiable local attestation record.', color: 'from-purple-500 to-pink-500' },
+    { icon: FileSearch, title: 'Document Validation', desc: 'Browser-based document analysis checks layout, resolution, lighting, and text-density signals.', color: 'from-orange-500 to-red-500' },
+    { icon: QrCode, title: 'Instant QR Verification', desc: 'Each issued degree contains a unique QR code for fast employer verification.', color: 'from-green-500 to-emerald-500' },
+    { icon: Database, title: 'Browser Persistence', desc: 'Local storage keeps demo records available between sessions on the same browser.', color: 'from-yellow-500 to-orange-500' },
+    { icon: Lock, title: 'Fraud Detection', desc: 'Rule-based fraud checks catch duplicate CNICs, missing documents, and academic data anomalies.', color: 'from-red-500 to-rose-500' },
   ];
 
   const stats = [
     { value: '15,234+', label: 'Degrees Issued', icon: GraduationCap },
     { value: '99.7%', label: 'Fraud Prevention', icon: Shield },
     { value: '<2s', label: 'Verification Time', icon: Zap },
-    { value: '100%', label: 'Blockchain Secured', icon: Link2 },
+    { value: '100%', label: 'Hash Attested', icon: Link2 },
   ];
 
   const steps = [
     { step: '01', title: 'Register', desc: 'Sign up with your official university email', icon: Users },
     { step: '02', title: 'Verify Identity', desc: 'Upload documents and complete face verification', icon: Fingerprint },
     { step: '03', title: 'Apply for Degree', desc: 'Submit your degree application after approval', icon: FileSearch },
-    { step: '04', title: 'Blockchain Issuance', desc: 'Your degree is hashed and recorded on Ethereum', icon: Link2 },
+    { step: '04', title: 'Attestation Issuance', desc: 'Your degree is hashed into a verification record', icon: Link2 },
   ];
 
   return (
@@ -83,7 +83,7 @@ export default function Landing({ onNavigate }: LandingProps) {
           <motion.div {...fadeUp}>
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium mb-6">
               <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-              Powered by Ethereum Blockchain
+              Browser-based degree attestation demo
             </div>
             <h1 className="text-5xl lg:text-7xl font-bold leading-tight mb-6">
               <span className="bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">Secure Your</span>
@@ -91,7 +91,7 @@ export default function Landing({ onNavigate }: LandingProps) {
               <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">Academic Legacy</span>
             </h1>
             <p className="text-lg text-gray-400 mb-8 max-w-lg leading-relaxed">
-              AI-enhanced blockchain-based degree attestation, identity verification, and digital degree management. Tamper-proof. Instant. Permanent.
+              AI-assisted degree attestation, identity verification, and digital degree management with verifiable hashes and QR lookup.
             </p>
             <div className="flex flex-wrap gap-4">
               <button onClick={() => onNavigate('register')} className="group px-8 py-3.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl font-medium transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2">
@@ -105,8 +105,8 @@ export default function Landing({ onNavigate }: LandingProps) {
             <div className="flex items-center gap-6 mt-10">
               {[
                 'SHA-256 Encrypted',
-                'YOLO Validated',
-                'DeepFace Verified',
+                'OCR Extracted',
+                'Rule Checked',
               ].map((badge, i) => (
                 <div key={i} className="flex items-center gap-1.5 text-xs text-gray-500">
                   <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
@@ -129,44 +129,26 @@ export default function Landing({ onNavigate }: LandingProps) {
                   <div className="w-3 h-3 rounded-full bg-red-500" />
                   <div className="w-3 h-3 rounded-full bg-yellow-500" />
                   <div className="w-3 h-3 rounded-full bg-green-500" />
-                  <span className="ml-3 text-xs text-gray-500 font-mono">DegreeRegistry.sol</span>
+                  <span className="ml-3 text-xs text-gray-500 font-mono">attestation.ts</span>
                 </div>
                 <pre className="text-sm font-mono text-gray-400 leading-relaxed overflow-hidden">
-                  <code>{`// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+                  <code>{`function createAttestation(degree) {
+  const degreeId =
+    \`IQRA-\${degree.departmentCode}-\${degree.year}\`;
 
-contract DegreeRegistry {
-    struct Degree {
-        string degreeId;
-        bytes32 degreeHash;
-        address issuer;
-        uint256 timestamp;
-        bool isValid;
-    }
+  const payload = JSON.stringify({
+    degreeId,
+    studentName: degree.studentName,
+    registrationNumber: degree.registrationNumber,
+    program: degree.program,
+    cgpa: degree.cgpa,
+  });
 
-    mapping(string => Degree) degrees;
-
-    event DegreeIssued(
-        string indexed degreeId,
-        bytes32 degreeHash,
-        uint256 timestamp
-    );
-
-    function issueDegree(
-        string memory _degreeId,
-        bytes32 _hash
-    ) public {
-        degrees[_degreeId] = Degree(
-            _degreeId, _hash,
-            msg.sender,
-            block.timestamp,
-            true
-        );
-        emit DegreeIssued(
-            _degreeId, _hash,
-            block.timestamp
-        );
-    }
+  return {
+    degreeId,
+    degreeHash: sha256(payload),
+    qrCodeData: \`/verify/\${degreeId}\`,
+  };
 }`}</code>
                 </pre>
               </div>
@@ -229,7 +211,7 @@ contract DegreeRegistry {
           >
             <span className="text-blue-400 text-sm font-medium uppercase tracking-wider">Core Features</span>
             <h2 className="text-4xl lg:text-5xl font-bold mt-3 mb-4">Enterprise-Grade Security</h2>
-            <p className="text-gray-400 max-w-2xl mx-auto">Multi-layered verification combining AI, computer vision, and blockchain technology for unbreakable degree authentication.</p>
+            <p className="text-gray-400 max-w-2xl mx-auto">Multi-layered verification combining OCR, browser checks, fraud rules, and cryptographic hashes for degree authentication.</p>
           </motion.div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -259,7 +241,7 @@ contract DegreeRegistry {
           <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} className="text-center mb-16">
             <span className="text-purple-400 text-sm font-medium uppercase tracking-wider">Process</span>
             <h2 className="text-4xl lg:text-5xl font-bold mt-3 mb-4">How It Works</h2>
-            <p className="text-gray-400 max-w-2xl mx-auto">From registration to blockchain attestation in four streamlined steps.</p>
+            <p className="text-gray-400 max-w-2xl mx-auto">From registration to degree attestation in four streamlined steps.</p>
           </motion.div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -338,7 +320,7 @@ contract DegreeRegistry {
               <div className="relative bg-gray-900/80 border border-gray-800 rounded-3xl p-12 lg:p-16">
                 <GraduationCap className="w-16 h-16 text-blue-400 mx-auto mb-6" />
                 <h2 className="text-3xl lg:text-4xl font-bold mb-4">Ready to Secure Your Credentials?</h2>
-                <p className="text-gray-400 mb-8 max-w-lg mx-auto">Join the future of academic credential management. Tamper-proof, instant verification, permanently stored on the blockchain.</p>
+                <p className="text-gray-400 mb-8 max-w-lg mx-auto">Manage academic credentials with hash-based verification, QR lookup, and a clear path to production integrations.</p>
                 <div className="flex flex-wrap justify-center gap-4">
                   <button onClick={() => onNavigate('register')} className="px-8 py-3.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl font-medium transition-all shadow-lg shadow-blue-500/25 flex items-center gap-2">
                     Get Started Now <ArrowRight className="w-4 h-4" />
