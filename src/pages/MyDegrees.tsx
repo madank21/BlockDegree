@@ -31,7 +31,7 @@ export default function MyDegrees() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold">My Degrees</h2>
-        <p className="text-gray-400 mt-1">View, download, share, and verify your blockchain-backed degrees</p>
+        <p className="text-gray-400 mt-1">View, download, share, and verify your cryptographically attested degrees</p>
       </div>
 
       {myDegrees.length === 0 ? (
@@ -189,7 +189,7 @@ export default function MyDegrees() {
                       />
                     </div>
                     <div className="text-left flex-1">
-                      <p className="text-xs text-amber-600 font-medium">Blockchain Verified</p>
+                      <p className="text-xs text-amber-600 font-medium">Cryptographically Attested</p>
                       <p className="text-[10px] text-amber-500 font-mono break-all mt-1">ID: {activeDegree.degreeId}</p>
                       <p className="text-[10px] text-amber-500 font-mono break-all mt-0.5">Hash: {activeDegree.blockchainHash?.substring(0, 42)}...</p>
                     </div>

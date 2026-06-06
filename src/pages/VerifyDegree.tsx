@@ -36,7 +36,7 @@ export default function VerifyDegree() {
           <Search className="w-8 h-8 text-blue-400" />
         </div>
         <h2 className="text-2xl font-bold">Verify a Degree</h2>
-        <p className="text-gray-400 mt-1">Enter a Degree ID or Blockchain Hash to verify authenticity</p>
+        <p className="text-gray-400 mt-1">Enter a Degree ID or attestation hash to verify authenticity</p>
       </div>
 
       <form onSubmit={handleVerify} className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
@@ -46,7 +46,7 @@ export default function VerifyDegree() {
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Enter Degree ID or Blockchain Hash..."
+            placeholder="Enter Degree ID or attestation hash..."
             className="w-full pl-12 pr-4 py-4 bg-gray-800/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition text-sm font-mono"
             required
           />
@@ -91,7 +91,7 @@ export default function VerifyDegree() {
                 <CheckCircle2 className="w-8 h-8 text-green-400" />
                 <div>
                   <h3 className="text-lg font-bold text-green-400">VALID — Degree Verified</h3>
-                  <p className="text-sm text-green-400/70">This degree is authentic and recorded on the blockchain</p>
+                  <p className="text-sm text-green-400/70">This degree matches a recorded cryptographic attestation</p>
                 </div>
               </div>
 
@@ -138,7 +138,7 @@ export default function VerifyDegree() {
                 <div className="bg-gray-900/50 rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Link2 className="w-4 h-4 text-blue-400" />
-                    <span className="text-sm font-medium">Blockchain Record</span>
+                    <span className="text-sm font-medium">Attestation Record</span>
                   </div>
                   <p className="text-xs text-gray-400 font-mono break-all">{result.blockchainHash}</p>
                 </div>

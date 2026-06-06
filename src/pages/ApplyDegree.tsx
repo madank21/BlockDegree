@@ -105,7 +105,7 @@ export default function ApplyDegree({ onNavigate }: Props) {
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
         <h2 className="text-2xl font-bold">Apply for Degree</h2>
-        <p className="text-gray-400 mt-1">Submit your degree application for blockchain attestation</p>
+        <p className="text-gray-400 mt-1">Submit your degree application for cryptographic attestation</p>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 space-y-5">
@@ -198,7 +198,7 @@ export default function ApplyDegree({ onNavigate }: Props) {
             <AlertCircle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
             <div>
               <p className="text-sm text-blue-400 font-medium">Important Notice</p>
-              <p className="text-xs text-gray-400 mt-1">Once submitted, your degree application will be reviewed by the administration. If approved, a blockchain-backed degree certificate will be generated with a unique QR verification code.</p>
+              <p className="text-xs text-gray-400 mt-1">Once submitted, your degree application will be reviewed by the administration. If approved, an attested degree certificate will be generated with a unique QR verification code.</p>
             </div>
           </div>
         </div>

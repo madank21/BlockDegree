@@ -29,7 +29,7 @@ export default function DegreeManagement() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold">Degree Management</h2>
-        <p className="text-gray-400 mt-1">Review, approve, and issue blockchain-backed degrees</p>
+        <p className="text-gray-400 mt-1">Review, approve, and issue cryptographic degree attestations</p>
       </div>
 
       <div className="space-y-4">
@@ -104,7 +104,7 @@ export default function DegreeManagement() {
                 <div className="mt-4 flex items-center gap-2 bg-gray-800/30 rounded-lg px-4 py-2.5">
                   <Link2 className="w-4 h-4 text-blue-400 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-500">Blockchain Hash</p>
+                    <p className="text-xs text-gray-500">Attestation Hash</p>
                     <p className="text-xs text-gray-300 font-mono truncate">{deg.blockchainHash}</p>
                   </div>
                   <div className="text-xs text-gray-500">

@@ -15,7 +15,7 @@ export default function EmployerDashboard({ onNavigate }: Props) {
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-800/30 rounded-2xl p-6 lg:p-8">
         <h1 className="text-2xl font-bold">Employer Verification Portal</h1>
-        <p className="text-gray-400 mt-1">Verify academic credentials using Degree ID, Blockchain Hash, or QR Code</p>
+        <p className="text-gray-400 mt-1">Verify academic credentials using Degree ID, attestation hash, or QR Code</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -46,7 +46,7 @@ export default function EmployerDashboard({ onNavigate }: Props) {
         >
           <Shield className="w-8 h-8 text-purple-400 mb-3" />
           <p className="text-2xl font-bold text-purple-400">{verificationRequests.filter(v => v.blockchainVerified).length}</p>
-          <p className="text-sm text-gray-400">Blockchain Verified</p>
+          <p className="text-sm text-gray-400">Attested Records</p>
         </motion.div>
       </div>
 
@@ -58,7 +58,7 @@ export default function EmployerDashboard({ onNavigate }: Props) {
         >
           <Search className="w-12 h-12 text-blue-400 mx-auto mb-4 group-hover:scale-110 transition" />
           <h3 className="text-lg font-semibold mb-2">Search by ID / Hash</h3>
-          <p className="text-sm text-gray-400">Enter a Degree ID or Blockchain Hash to verify credentials</p>
+          <p className="text-sm text-gray-400">Enter a Degree ID or attestation hash to verify credentials</p>
         </motion.button>
         <motion.button
           whileHover={{ scale: 1.02 }}

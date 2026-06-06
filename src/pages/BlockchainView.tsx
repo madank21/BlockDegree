@@ -10,17 +10,17 @@ export default function BlockchainView() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold">Blockchain Explorer</h2>
-        <p className="text-gray-400 mt-1">View all degree attestation transactions on the Ethereum private network</p>
+        <h2 className="text-2xl font-bold">Attestation Ledger</h2>
+        <p className="text-gray-400 mt-1">View local cryptographic degree attestations and verification hashes</p>
       </div>
 
       {/* Network Info */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Network', value: 'Ethereum Private', icon: Link2, color: 'text-blue-400' },
-          { label: 'Total Transactions', value: blockchainTransactions.length, icon: Hash, color: 'text-purple-400' },
-          { label: 'Latest Block', value: `#${Math.max(...blockchainTransactions.map(t => t.blockNumber), 15234).toLocaleString()}`, icon: Cpu, color: 'text-cyan-400' },
-          { label: 'Contract', value: 'DegreeRegistry.sol', icon: Wallet, color: 'text-green-400' },
+          { label: 'Mode', value: 'Local Ledger', icon: Link2, color: 'text-blue-400' },
+          { label: 'Total Records', value: blockchainTransactions.length, icon: Hash, color: 'text-purple-400' },
+          { label: 'Latest Ledger Block', value: `#${Math.max(...blockchainTransactions.map(t => t.blockNumber), 15234).toLocaleString()}`, icon: Cpu, color: 'text-cyan-400' },
+          { label: 'Issuer', value: 'Iqra University', icon: Wallet, color: 'text-green-400' },
         ].map((item, i) => (
           <motion.div
             key={i}
@@ -38,16 +38,16 @@ export default function BlockchainView() {
         ))}
       </div>
 
-      {/* Smart Contract */}
+      {/* Attestation Schema */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
-          <Wallet className="w-5 h-5 text-green-400" /> Smart Contract — DegreeRegistry.sol
+          <Wallet className="w-5 h-5 text-green-400" /> Local Attestation Schema
         </h3>
         <div className="grid md:grid-cols-2 gap-4">
           <div className="bg-gray-800/30 rounded-lg p-4">
-            <p className="text-xs text-gray-500 mb-2">Functions</p>
+            <p className="text-xs text-gray-500 mb-2">Actions</p>
             <div className="space-y-2">
-              {['issueDegree(string, bytes32)', 'verifyDegree(string)', 'getDegree(string)', 'revokeDegree(string)'].map((fn, i) => (
+              {['createDegreeId(application)', 'hashDegreePayload(payload)', 'createAttestation(record)', 'verifyDegree(idOrHash)'].map((fn, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
                   <code className="text-green-400 font-mono text-xs">{fn}</code>
@@ -56,9 +56,9 @@ export default function BlockchainView() {
             </div>
           </div>
           <div className="bg-gray-800/30 rounded-lg p-4">
-            <p className="text-xs text-gray-500 mb-2">Events</p>
+            <p className="text-xs text-gray-500 mb-2">Recorded Fields</p>
             <div className="space-y-2">
-              {['DegreeIssued(string, bytes32, uint256)', 'DegreeVerified(string, address)', 'DegreeRevoked(string, uint256)'].map((ev, i) => (
+              {['degreeId', 'degreeHash', 'txHash', 'issuerAddress', 'timestamp'].map((ev, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm">
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
                   <code className="text-purple-400 font-mono text-xs">{ev}</code>
@@ -72,10 +72,10 @@ export default function BlockchainView() {
       {/* Transactions */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden">
         <div className="p-4 border-b border-gray-800">
-          <h3 className="font-semibold">Transaction History</h3>
+          <h3 className="font-semibold">Attestation History</h3>
         </div>
         {blockchainTransactions.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">No blockchain transactions yet</div>
+          <div className="p-8 text-center text-gray-500">No attestation records yet</div>
         ) : (
           <div className="divide-y divide-gray-800/50">
             {blockchainTransactions.map((tx, i) => (

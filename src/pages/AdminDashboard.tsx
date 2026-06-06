@@ -25,7 +25,7 @@ export default function AdminDashboard({ onNavigate }: Props) {
     { label: 'Degrees Issued', value: issuedDegrees.length, icon: GraduationCap, gradient: 'from-purple-600 to-pink-600', color: 'text-purple-400' },
     { label: 'Pending Apps', value: pendingDegrees.length, icon: Clock, gradient: 'from-yellow-600 to-orange-600', color: 'text-yellow-400' },
     { label: 'Fraud Alerts', value: unresolvedFraud.length, icon: AlertTriangle, gradient: 'from-red-600 to-rose-600', color: 'text-red-400' },
-    { label: 'Blockchain Txs', value: blockchainTransactions.length, icon: Link2, gradient: 'from-indigo-600 to-blue-600', color: 'text-indigo-400' },
+    { label: 'Attestations', value: blockchainTransactions.length, icon: Link2, gradient: 'from-indigo-600 to-blue-600', color: 'text-indigo-400' },
   ];
 
   const recentLogs = [...auditLogs].reverse().slice(0, 8);

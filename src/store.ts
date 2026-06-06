@@ -3,7 +3,7 @@ import { hashPassword, hashPasswordWithSalt, verifyPassword } from './lib/auth';
 import { createDegreeId, createLocalAttestation } from './lib/blockchain';
 import { runFraudChecks } from './lib/fraudDetection';
 
-// Simulated data store
+// Browser-local store. External database/blockchain integrations can replace this boundary later.
 const STORAGE_KEY = 'blockdegree_store';
 
 interface AppState {
@@ -212,7 +212,7 @@ const sampleAuditLogs: AuditLog[] = [
   { id: 'log6', action: 'Student Approved', userId: 'admin1', userName: 'Dr. Abdullah Shah', timestamp: '2025-01-17T09:00:00Z', details: 'Student Madan Kumar (70618) verification approved', category: 'admin' },
   { id: 'log7', action: 'Degree Applied', userId: 'student1', userName: 'Madan Kumar', timestamp: '2026-01-15T14:00:00Z', details: 'Applied for BS Computer Science degree', category: 'degree' },
   { id: 'log8', action: 'Degree Issued', userId: 'admin1', userName: 'Dr. Abdullah Shah', timestamp: '2026-01-20T10:00:00Z', details: 'Degree IQRA-CS-2026-70618 issued to Madan Kumar', category: 'degree' },
-  { id: 'log9', action: 'Blockchain Attestation', userId: 'system', userName: 'System', timestamp: '2026-01-20T10:30:00Z', details: 'Degree hash recorded on Ethereum blockchain (Block #15234)', category: 'blockchain' },
+  { id: 'log9', action: 'Attestation Created', userId: 'system', userName: 'System', timestamp: '2026-01-20T10:30:00Z', details: 'Degree hash recorded in the local attestation ledger (Block #15234)', category: 'blockchain' },
   { id: 'log10', action: 'Fraud Attempt Detected', userId: 'unknown', userName: 'Unknown', timestamp: '2026-01-25T16:00:00Z', details: 'Duplicate CNIC submission detected from different account', category: 'fraud' },
 ];
 
@@ -530,7 +530,7 @@ export const store = {
     state = { ...state, blockchainTransactions: [...state.blockchainTransactions, newTx] };
 
     store.addAuditLog('Degree Issued', 'admin1', 'Administrator', `Issued degree ${deg.degreeId} to ${deg.studentName}`, 'degree');
-    store.addAuditLog('Blockchain Attestation', 'system', 'System', `Degree hash ${attestation.degreeHash.substring(0, 20)}... locally attested as block #${attestation.blockNumber}`, 'blockchain');
+    store.addAuditLog('Attestation Created', 'system', 'System', `Degree hash ${attestation.degreeHash.substring(0, 20)}... locally attested as block #${attestation.blockNumber}`, 'blockchain');
     notify();
   },
 

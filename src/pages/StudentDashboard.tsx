@@ -56,7 +56,7 @@ export default function StudentDashboard({ onNavigate }: Props) {
       color: 'text-green-400',
     },
     {
-      title: 'Blockchain Records',
+      title: 'Attestation Records',
       value: issuedDegrees.filter(d => d.blockchainHash).length,
       icon: Link2,
       gradient: 'from-orange-600 to-red-600',
