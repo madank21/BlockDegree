@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.107.0",
     "@types/crypto-js": "^4.2.2",
     "clsx": "2.1.1",
     "crypto-js": "^4.2.0",
