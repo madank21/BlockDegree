@@ -85,7 +85,7 @@ export default function DegreeManagement() {
                       {isProcessingThis ? (
                         <><Loader2 className="w-4 h-4 animate-spin" /> Issuing...</>
                       ) : (
-                        <><Link2 className="w-4 h-4" /> Issue on Blockchain</>
+                        <><Link2 className="w-4 h-4" /> Issue Attestation</>
                       )}
                     </button>
                   )}

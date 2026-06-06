@@ -10,6 +10,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  passwordHash?: string;
   registrationNumber: string;
   role: UserRole;
   verificationStatus: VerificationStatus;

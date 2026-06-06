@@ -72,7 +72,7 @@ export default function VerifyDegree() {
           className="w-full mt-4 py-3.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-white"
         >
           {loading ? (
-            <><Loader2 className="w-5 h-5 animate-spin" /> Verifying on Blockchain...</>
+            <><Loader2 className="w-5 h-5 animate-spin" /> Verifying attestation...</>
           ) : (
             <><Shield className="w-5 h-5" /> Verify Degree</>
           )}

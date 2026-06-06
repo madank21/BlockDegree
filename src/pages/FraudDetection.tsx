@@ -1,11 +1,12 @@
 import { motion } from 'framer-motion';
 import { useStore } from '../useStore';
+import { runFraudChecks } from '../lib/fraudDetection';
 import {
   AlertTriangle, Shield, CheckCircle2, XCircle, Activity
 } from 'lucide-react';
 
 export default function FraudDetection() {
-  const { fraudReports } = useStore();
+  const { fraudReports, users, degreeApplications } = useStore();
 
   const severityConfig = {
     high: { color: 'text-red-400', bg: 'bg-red-400/10 border-red-400/20', icon: XCircle },
@@ -13,15 +14,36 @@ export default function FraudDetection() {
     safe: { color: 'text-green-400', bg: 'bg-green-400/10 border-green-400/20', icon: CheckCircle2 },
   };
 
+  const liveChecks = degreeApplications.map(application => {
+    const user = users.find(candidate => candidate.id === application.studentId);
+    return runFraudChecks(
+      user,
+      users,
+      application,
+      degreeApplications.filter(candidate => candidate.id !== application.id),
+    );
+  });
+  const averageSafetyScore = liveChecks.length > 0
+    ? Math.round(liveChecks.reduce((sum, check) => sum + check.score, 0) / liveChecks.length)
+    : 100;
+  const duplicateCnicCount = users.filter((user, index) =>
+    !!user.cnicNumber && users.findIndex(candidate => candidate.cnicNumber === user.cnicNumber) !== index,
+  ).length;
+  const fraudulentDocumentCount = users.flatMap(user => user.documents || []).filter(doc => doc.yoloStatus === 'fraudulent').length;
+  const duplicateDegreeCount = liveChecks.filter(check =>
+    check.flags.some(flag => flag.toLowerCase().includes('another active degree')),
+  ).length;
+  const invalidAcademicDataCount = liveChecks.filter(check =>
+    check.flags.some(flag => flag.toLowerCase().includes('cgpa') || flag.toLowerCase().includes('duration')),
+  ).length;
+
   const detectionTypes = [
-    { type: 'Fake Documents', desc: 'YOLO detects forged layout and stamps', count: 2 },
-    { type: 'OCR Mismatch', desc: 'Extracted data inconsistent with registration', count: 1 },
-    { type: 'Face Mismatch', desc: 'Live selfie doesn\'t match CNIC photo', count: 1 },
-    { type: 'Duplicate Accounts', desc: 'Same CNIC across multiple accounts', count: 1 },
-    { type: 'Duplicate Degrees', desc: 'Multiple degree requests for same program', count: 0 },
-    { type: 'Invalid Reg Numbers', desc: 'Registration number not in system', count: 0 },
-    { type: 'Blockchain Tampering', desc: 'Hash mismatch with on-chain record', count: 0 },
-    { type: 'Unauthorized Access', desc: 'Failed login attempts from suspicious IPs', count: 3 },
+    { type: 'Fake Documents', desc: 'Documents flagged by validation checks', count: fraudulentDocumentCount },
+    { type: 'Data Mismatch', desc: 'Application data needs admin review', count: liveChecks.filter(check => check.severity !== 'safe').length },
+    { type: 'Duplicate Accounts', desc: 'Same CNIC across multiple accounts', count: duplicateCnicCount },
+    { type: 'Duplicate Degrees', desc: 'Multiple degree requests for same program', count: duplicateDegreeCount },
+    { type: 'Invalid Academic Data', desc: 'CGPA or study duration anomalies', count: invalidAcademicDataCount },
+    { type: 'High Risk Applications', desc: 'Applications with a score below 40', count: liveChecks.filter(check => check.severity === 'high').length },
   ];
 
   return (
@@ -41,7 +63,7 @@ export default function FraudDetection() {
           <div className="relative w-24 h-24 mx-auto mb-4">
             <svg className="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
               <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
-              <circle cx="50" cy="50" r="40" fill="none" stroke="url(#safeGrad)" strokeWidth="8" strokeDasharray={`${0.85 * 251} 251`} strokeLinecap="round" />
+              <circle cx="50" cy="50" r="40" fill="none" stroke="url(#safeGrad)" strokeWidth="8" strokeDasharray={`${(averageSafetyScore / 100) * 251} 251`} strokeLinecap="round" />
               <defs>
                 <linearGradient id="safeGrad" x1="0%" y1="0%" x2="100%">
                   <stop offset="0%" stopColor="#22c55e" />
@@ -50,7 +72,7 @@ export default function FraudDetection() {
               </defs>
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-2xl font-bold text-green-400">85</span>
+              <span className="text-2xl font-bold text-green-400">{averageSafetyScore}</span>
             </div>
           </div>
           <p className="font-semibold text-green-400">System Safety Score</p>

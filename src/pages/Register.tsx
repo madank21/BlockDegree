@@ -35,9 +35,14 @@ export default function Register({ onNavigate }: RegisterProps) {
     setLoading(true);
     await new Promise(r => setTimeout(r, 1000));
 
-    register(name, email, regNo, 'student');
-    onNavigate('dashboard');
-    setLoading(false);
+    try {
+      register(name, email, regNo, password, 'student');
+      onNavigate('dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

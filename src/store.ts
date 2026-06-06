@@ -1,4 +1,7 @@
 import { User, DegreeApplication, BlockchainTransaction, AuditLog, FraudReport, VerificationRequest, UploadedDocument, UserRole } from './types';
+import { hashPassword, hashPasswordWithSalt, verifyPassword } from './lib/auth';
+import { createDegreeId, createLocalAttestation } from './lib/blockchain';
+import { runFraudChecks } from './lib/fraudDetection';
 
 // Simulated data store
 const STORAGE_KEY = 'blockdegree_store';
@@ -17,30 +20,13 @@ function generateId(): string {
   return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
 }
 
-function generateHash(): string {
-  const chars = '0123456789abcdef';
-  let hash = '0x';
-  for (let i = 0; i < 64; i++) {
-    hash += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return hash;
-}
-
-function generateEthAddress(): string {
-  const chars = '0123456789abcdef';
-  let addr = '0x';
-  for (let i = 0; i < 40; i++) {
-    addr += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return addr;
-}
-
 // Sample data
 const sampleStudents: User[] = [
   {
     id: 'student1',
     name: 'Madan Kumar',
     email: 'madan.70618@iqra.edu.pk',
+    passwordHash: hashPasswordWithSalt('demo123', 'demo-student1'),
     registrationNumber: '70618',
     role: 'student',
     verificationStatus: 'approved',
@@ -63,6 +49,7 @@ const sampleStudents: User[] = [
     id: 'student2',
     name: 'Ayesha Khan',
     email: 'ayesha.70425@iqra.edu.pk',
+    passwordHash: hashPasswordWithSalt('demo123', 'demo-student2'),
     registrationNumber: '70425',
     role: 'student',
     verificationStatus: 'documents_uploaded',
@@ -82,6 +69,7 @@ const sampleStudents: User[] = [
     id: 'student3',
     name: 'Ahmed Raza',
     email: 'ahmed.70312@iqra.edu.pk',
+    passwordHash: hashPasswordWithSalt('demo123', 'demo-student3'),
     registrationNumber: '70312',
     role: 'student',
     verificationStatus: 'face_verified',
@@ -102,6 +90,7 @@ const sampleStudents: User[] = [
     id: 'student4',
     name: 'Fatima Zahra',
     email: 'fatima.70189@iqra.edu.pk',
+    passwordHash: hashPasswordWithSalt('demo123', 'demo-student4'),
     registrationNumber: '70189',
     role: 'student',
     verificationStatus: 'approved',
@@ -125,6 +114,7 @@ const sampleAdmin: User = {
   id: 'admin1',
   name: 'Dr. Abdullah Shah',
   email: 'admin@iqra.edu.pk',
+  passwordHash: hashPasswordWithSalt('demo123', 'demo-admin1'),
   registrationNumber: 'ADM001',
   role: 'admin',
   verificationStatus: 'approved',
@@ -136,6 +126,7 @@ const sampleEmployer: User = {
   id: 'employer1',
   name: 'TechCorp HR',
   email: 'hr@techcorp.com',
+  passwordHash: hashPasswordWithSalt('demo123', 'demo-employer1'),
   registrationNumber: 'EMP001',
   role: 'employer',
   verificationStatus: 'approved',
@@ -239,7 +230,7 @@ function getInitialState(): AppState {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      return JSON.parse(stored);
+      return migrateState(JSON.parse(stored));
     }
   } catch {}
   return {
@@ -250,6 +241,27 @@ function getInitialState(): AppState {
     auditLogs: sampleAuditLogs,
     fraudReports: sampleFraudReports,
     verificationRequests: sampleVerifications,
+  };
+}
+
+function migrateState(input: AppState): AppState {
+  const users = (input.users || []).map(user => ({
+    ...user,
+    passwordHash: user.passwordHash || hashPasswordWithSalt('demo123', `legacy-${user.id}`),
+  }));
+  const currentUser = input.currentUser
+    ? users.find(user => user.id === input.currentUser?.id) || null
+    : null;
+
+  return {
+    ...input,
+    currentUser,
+    users,
+    degreeApplications: input.degreeApplications || [],
+    blockchainTransactions: input.blockchainTransactions || [],
+    auditLogs: input.auditLogs || [],
+    fraudReports: input.fraudReports || [],
+    verificationRequests: input.verificationRequests || [],
   };
 }
 
@@ -278,9 +290,10 @@ export const store = {
   },
 
   // Auth
-  login(email: string, _password: string): User | null {
-    const user = state.users.find(u => u.email === email);
-    if (user) {
+  login(email: string, password: string): User | null {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = state.users.find(u => u.email.toLowerCase() === normalizedEmail);
+    if (user && verifyPassword(password, user.passwordHash)) {
       state = { ...state, currentUser: user };
       store.addAuditLog('User Login', user.id, user.name, `Logged in from ${email}`, 'auth');
       notify();
@@ -297,12 +310,21 @@ export const store = {
     notify();
   },
 
-  register(name: string, email: string, regNo: string, role: UserRole): User {
+  register(name: string, email: string, regNo: string, password: string, role: UserRole): User {
+    if (state.users.some(u => u.email.toLowerCase() === email.trim().toLowerCase())) {
+      throw new Error('An account with this email already exists.');
+    }
+
+    if (state.users.some(u => u.registrationNumber === regNo.trim())) {
+      throw new Error('An account with this registration number already exists.');
+    }
+
     const newUser: User = {
       id: generateId(),
-      name,
-      email,
-      registrationNumber: regNo,
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      passwordHash: hashPassword(password),
+      registrationNumber: regNo.trim(),
       role,
       verificationStatus: 'pending',
       createdAt: new Date().toISOString(),
@@ -420,15 +442,36 @@ export const store = {
 
   // Degree applications
   applyForDegree(app: Omit<DegreeApplication, 'id' | 'status' | 'appliedAt' | 'fraudScore'>) {
+    const student = state.users.find(u => u.id === app.studentId);
+    const fraudCheck = runFraudChecks(
+      student,
+      state.users,
+      { ...app, status: 'pending' },
+      state.degreeApplications,
+    );
     const newApp: DegreeApplication = {
       ...app,
       id: generateId(),
       status: 'pending',
       appliedAt: new Date().toISOString(),
-      fraudScore: Math.floor(Math.random() * 20) + 80,
+      fraudScore: fraudCheck.score,
     };
     state = { ...state, degreeApplications: [...state.degreeApplications, newApp] };
     store.addAuditLog('Degree Applied', app.studentId, app.studentName, `Applied for ${app.degreeTitle}`, 'degree');
+    if (fraudCheck.severity !== 'safe') {
+      const report: FraudReport = {
+        id: generateId(),
+        studentId: app.studentId,
+        studentName: app.studentName,
+        type: 'Degree Application Review',
+        severity: fraudCheck.severity,
+        description: fraudCheck.flags.join(' '),
+        timestamp: new Date().toISOString(),
+        resolved: false,
+      };
+      state = { ...state, fraudReports: [...state.fraudReports, report] };
+      store.addAuditLog('Fraud Review Flagged', app.studentId, app.studentName, fraudCheck.flags.join(' '), 'fraud');
+    }
     notify();
     return newApp;
   },
@@ -447,20 +490,22 @@ export const store = {
   },
 
   issueDegree(degreeId: string) {
-    const hash = generateHash();
-    const txHash = generateHash();
-    const issuerAddress = generateEthAddress();
-    const blockNumber = Math.floor(Math.random() * 10000) + 15000;
+    const degree = state.degreeApplications.find(d => d.id === degreeId);
+    if (!degree) return;
+
+    const issuedAt = new Date().toISOString();
+    const dId = createDegreeId(degree);
+    const attestation = createLocalAttestation({ ...degree, degreeId: dId }, issuedAt);
 
     state = {
       ...state,
       degreeApplications: state.degreeApplications.map(d => {
         if (d.id === degreeId) {
-          const dId = `IQRA-${d.department.substring(0, 2).toUpperCase()}-${d.graduationYear}-${d.registrationNumber}`;
           return {
             ...d,
             status: 'issued' as const,
-            blockchainHash: hash,
+            approvedAt: d.approvedAt || issuedAt,
+            blockchainHash: attestation.degreeHash,
             degreeId: dId,
             qrCodeData: `https://blockdegree.iqra.edu.pk/verify/${dId}`,
           };
@@ -472,20 +517,20 @@ export const store = {
     const deg = state.degreeApplications.find(d => d.id === degreeId)!;
     const newTx: BlockchainTransaction = {
       id: generateId(),
-      txHash,
+      txHash: attestation.txHash,
       degreeId: deg.degreeId!,
       studentRegNo: deg.registrationNumber,
-      degreeHash: hash,
-      timestamp: new Date().toISOString(),
-      issuerAddress,
-      blockNumber,
-      gasUsed: Math.floor(Math.random() * 30000) + 70000,
+      degreeHash: attestation.degreeHash,
+      timestamp: attestation.issuedAt,
+      issuerAddress: attestation.issuerAddress,
+      blockNumber: attestation.blockNumber,
+      gasUsed: 0,
       status: 'confirmed',
     };
     state = { ...state, blockchainTransactions: [...state.blockchainTransactions, newTx] };
 
     store.addAuditLog('Degree Issued', 'admin1', 'Administrator', `Issued degree ${deg.degreeId} to ${deg.studentName}`, 'degree');
-    store.addAuditLog('Blockchain Attestation', 'system', 'System', `Degree hash ${hash.substring(0, 20)}... recorded on block #${blockNumber}`, 'blockchain');
+    store.addAuditLog('Blockchain Attestation', 'system', 'System', `Degree hash ${attestation.degreeHash.substring(0, 20)}... locally attested as block #${attestation.blockNumber}`, 'blockchain');
     notify();
   },
 
