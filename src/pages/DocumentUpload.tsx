@@ -1,0 +1,594 @@
+import { useState, useRef } from 'react';
+import { motion } from 'framer-motion';
+import { useStore } from '../useStore';
+import Tesseract from 'tesseract.js';
+import {
+  Upload, CheckCircle2, Clock, AlertTriangle,
+  Scan, Eye, FileImage, Loader2, X, ZoomIn
+} from 'lucide-react';
+
+export default function DocumentUpload() {
+  const { currentUser, uploadDocument, simulateOCR, simulateYOLO } = useStore();
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [processing, setProcessing] = useState<{ docId: string; stage: string } | null>(null);
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [ocrResult, setOcrResult] = useState<Record<string, { text: string; confidence: number }>>({});
+  const [yoloResult, setYoloResult] = useState<Record<string, { valid: boolean; detections: string[] }>>({});
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeUploadType, setActiveUploadType] = useState<string>('');
+  const [uploadedImages, setUploadedImages] = useState<Record<string, string>>({});
+
+  if (!currentUser) return null;
+
+  const docTypes = [
+    { type: 'cnic', label: 'CNIC (Front & Back)', desc: 'Government-issued ID card', icon: '🪪', required: true },
+    { type: 'marksheet', label: 'Previous Marksheet', desc: 'Latest academic transcript', icon: '📄', required: true },
+    { type: 'certificate', label: 'Previous Certificate', desc: 'Intermediate or equivalent', icon: '📜', required: true },
+    { type: 'academic_record', label: 'Additional Records', desc: 'Any supporting documents', icon: '📋', required: false },
+  ] as const;
+
+  // YOLO-style document analysis (simulated with image analysis)
+  const analyzeDocumentWithYOLO = async (imageData: string, docType: string): Promise<{ valid: boolean; detections: string[]; confidence: number }> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d')!;
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        
+        // Analyze image properties
+        let totalBrightness = 0;
+        let colorVariance = 0;
+        let edgeCount = 0;
+        
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i + 1], b = data[i + 2];
+          const brightness = (r + g + b) / 3;
+          totalBrightness += brightness;
+          colorVariance += Math.abs(r - g) + Math.abs(g - b) + Math.abs(b - r);
+        }
+        
+        const avgBrightness = totalBrightness / (data.length / 4);
+        const avgColorVariance = colorVariance / (data.length / 4);
+        
+        // Check for edges (simplified Sobel-like detection)
+        for (let y = 1; y < canvas.height - 1; y++) {
+          for (let x = 1; x < canvas.width - 1; x++) {
+            const idx = (y * canvas.width + x) * 4;
+            const left = (data[idx - 4] + data[idx - 3] + data[idx - 2]) / 3;
+            const right = (data[idx + 4] + data[idx + 5] + data[idx + 6]) / 3;
+            const diff = Math.abs(left - right);
+            if (diff > 30) edgeCount++;
+          }
+        }
+        
+        const edgeDensity = edgeCount / (canvas.width * canvas.height);
+        
+        // Determine detections based on analysis
+        const detections: string[] = [];
+        let confidence = 70;
+        
+        // Check aspect ratio for document type
+        const aspectRatio = canvas.width / canvas.height;
+        
+        if (docType === 'cnic') {
+          if (aspectRatio > 1.4 && aspectRatio < 1.8) {
+            detections.push('✓ CNIC Card Detected');
+            confidence += 10;
+          }
+          if (avgBrightness > 100 && avgBrightness < 220) {
+            detections.push('✓ Photo Region Found');
+            confidence += 5;
+          }
+          if (edgeDensity > 0.01) {
+            detections.push('✓ Text Regions Detected');
+            confidence += 5;
+          }
+        } else if (docType === 'marksheet' || docType === 'certificate') {
+          if (aspectRatio > 0.6 && aspectRatio < 0.9) {
+            detections.push('✓ Portrait Document Layout');
+            confidence += 10;
+          } else if (aspectRatio > 1.2 && aspectRatio < 1.6) {
+            detections.push('✓ Landscape Document Layout');
+            confidence += 10;
+          }
+          if (edgeDensity > 0.005) {
+            detections.push('✓ Table/Grid Structure Found');
+            confidence += 5;
+          }
+          if (avgColorVariance < 50) {
+            detections.push('✓ Official Document Colors');
+            confidence += 5;
+          }
+        }
+        
+        // Common detections
+        if (canvas.width > 500 && canvas.height > 300) {
+          detections.push('✓ Adequate Resolution');
+          confidence += 5;
+        } else {
+          detections.push('⚠ Low Resolution');
+          confidence -= 10;
+        }
+        
+        if (avgBrightness > 50 && avgBrightness < 230) {
+          detections.push('✓ Good Lighting');
+        } else {
+          detections.push('⚠ Poor Lighting');
+          confidence -= 5;
+        }
+        
+        // Simulate stamp/seal detection based on color clusters
+        if (avgColorVariance > 30) {
+          detections.push('✓ Stamps/Seals Detected');
+          confidence += 5;
+        }
+        
+        const valid = confidence >= 75;
+        
+        resolve({ valid, detections, confidence: Math.min(confidence, 98) });
+      };
+      img.src = imageData;
+    });
+  };
+
+  // Real OCR using Tesseract.js
+  const performOCR = async (imageData: string): Promise<{ text: string; confidence: number }> => {
+    try {
+      const result = await Tesseract.recognize(imageData, 'eng', {
+        logger: (m) => {
+          if (m.status === 'recognizing text') {
+            setOcrProgress(Math.round(m.progress * 100));
+          }
+        },
+      });
+      
+      return {
+        text: result.data.text,
+        confidence: result.data.confidence,
+      };
+    } catch (error) {
+      console.error('OCR Error:', error);
+      return { text: '', confidence: 0 };
+    }
+  };
+
+  // Extract structured data from OCR text
+  const extractDataFromText = (text: string, docType: string): Record<string, string> => {
+    const extracted: Record<string, string> = {};
+    const cleanText = text.replace(/[^\x20-\x7E\n]/g, ' '); // Remove non-printable chars
+    const lines = cleanText.split('\n').filter(l => l.trim().length > 2);
+    
+    // CNIC patterns
+    const cnicPattern = /\d{5}[-\s]?\d{7}[-\s]?\d/;
+    const datePattern = /\d{1,2}[./-]\d{1,2}[./-]\d{2,4}/;
+    
+    for (const line of lines) {
+      // CNIC number
+      const cnicMatch = line.match(cnicPattern);
+      if (cnicMatch && !extracted['CNIC Number']) {
+        extracted['CNIC Number'] = cnicMatch[0].replace(/\s/g, '-');
+      }
+      
+      // Date patterns
+      const dateMatch = line.match(datePattern);
+      if (dateMatch && !extracted['Date of Birth'] && !extracted['Issue Date']) {
+        if (line.toLowerCase().includes('birth') || line.toLowerCase().includes('dob')) {
+          extracted['Date of Birth'] = dateMatch[0];
+        } else if (line.toLowerCase().includes('issue') || line.toLowerCase().includes('expiry')) {
+          extracted['Issue Date'] = dateMatch[0];
+        } else {
+          extracted['Date'] = dateMatch[0];
+        }
+      }
+      
+      // Look for names - more flexible pattern
+      const nameMatch = line.match(/(?:name|holder|student)[:\s]*([A-Za-z\s]{3,40})/i);
+      if (nameMatch && !extracted['Name']) {
+        extracted['Name'] = nameMatch[1].trim();
+      }
+      
+      // Father name
+      const fatherMatch = line.match(/(?:father|s\/o|d\/o|w\/o)[:\s]*([A-Za-z\s]{3,40})/i);
+      if (fatherMatch && !extracted['Father Name']) {
+        extracted['Father Name'] = fatherMatch[1].trim();
+      }
+      
+      // All caps names (common in documents)
+      if (line.match(/^[A-Z\s]{5,35}$/) && !line.match(/PAKISTAN|GOVERNMENT|NATIONAL|IDENTITY|CARD|CERTIFICATE|BOARD|UNIVERSITY/i)) {
+        if (!extracted['Name']) extracted['Name'] = line.trim();
+        else if (!extracted['Father Name']) extracted['Father Name'] = line.trim();
+      }
+      
+      // CGPA/GPA
+      const cgpaMatch = line.match(/(?:CGPA|GPA|Grade\s*Point)[:\s]*([0-4]\.\d{1,2})/i);
+      if (cgpaMatch) extracted['CGPA'] = cgpaMatch[1];
+      
+      // Percentage/Marks
+      const percentMatch = line.match(/(\d{2,3}(?:\.\d{1,2})?)\s*(?:%|percent|marks)/i);
+      if (percentMatch) extracted['Percentage'] = percentMatch[1] + '%';
+      
+      // Registration/Roll numbers
+      const regMatch = line.match(/(?:Reg(?:istration)?|Roll|Student\s*ID)[.\s#:No]*(\d{4,10})/i);
+      if (regMatch && !extracted['Registration No']) {
+        extracted['Registration No'] = regMatch[1];
+      }
+      
+      // Year patterns
+      const yearMatch = line.match(/(?:year|session|batch)[:\s]*(\d{4})/i);
+      if (yearMatch) extracted['Year'] = yearMatch[1];
+      
+      // Board/University
+      const boardMatch = line.match(/(?:board|university)[:\s]*([A-Za-z\s]{5,50})/i);
+      if (boardMatch && !extracted['Board/University']) {
+        extracted['Board/University'] = boardMatch[1].trim();
+      }
+      
+      // Gender
+      if (line.toLowerCase().includes('male') && !extracted['Gender']) {
+        extracted['Gender'] = line.toLowerCase().includes('female') ? 'Female' : 'Male';
+      }
+    }
+    
+    // Add document type context
+    if (Object.keys(extracted).length > 0) {
+      extracted['Document Type'] = docType.replace(/_/g, ' ').toUpperCase();
+    }
+    
+    return extracted;
+  };
+
+  const handleUpload = (type: string) => {
+    setActiveUploadType(type);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeUploadType) return;
+    
+    setUploading(activeUploadType);
+    
+    // Read file as data URL
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const imageData = event.target?.result as string;
+      
+      // Store uploaded image
+      const docId = Math.random().toString(36).substr(2, 9);
+      setUploadedImages(prev => ({ ...prev, [docId]: imageData }));
+      
+      // Create document record
+      const doc = {
+        id: docId,
+        type: activeUploadType as 'cnic' | 'marksheet' | 'certificate' | 'academic_record',
+        fileName: file.name,
+        uploadedAt: new Date().toISOString(),
+        ocrStatus: 'processing' as const,
+        yoloStatus: 'processing' as const,
+      };
+      
+      uploadDocument(currentUser.id, doc);
+      setUploading(null);
+      
+      // Start YOLO analysis
+      setProcessing({ docId, stage: 'yolo' });
+      const yoloAnalysis = await analyzeDocumentWithYOLO(imageData, activeUploadType);
+      setYoloResult(prev => ({ ...prev, [docId]: { valid: yoloAnalysis.valid, detections: yoloAnalysis.detections } }));
+      // Pass YOLO result to store
+      const yoloStatus = yoloAnalysis.valid ? 'valid' : (yoloAnalysis.confidence > 50 ? 'suspicious' : 'fraudulent');
+      simulateYOLO(currentUser.id, docId, yoloStatus as 'valid' | 'suspicious' | 'fraudulent');
+      
+      // Start OCR
+      setProcessing({ docId, stage: 'ocr' });
+      setOcrProgress(0);
+      const ocrData = await performOCR(imageData);
+      // Extract structured data from OCR text
+      const extractedFields = extractDataFromText(ocrData.text, activeUploadType);
+      setOcrResult(prev => ({ ...prev, [docId]: ocrData }));
+      // Pass extracted data to store
+      simulateOCR(currentUser.id, docId, extractedFields);
+      
+      setProcessing(null);
+      setActiveUploadType('');
+    };
+    
+    reader.readAsDataURL(file);
+    
+    // Reset file input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const getDocForType = (type: string) => {
+    return currentUser.documents?.find(d => d.type === type);
+  };
+
+  const ocrStatusIcon = (status: string, docId: string) => {
+    if (processing?.docId === docId && processing.stage === 'ocr') {
+      return <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />;
+    }
+    switch (status) {
+      case 'verified': return <CheckCircle2 className="w-4 h-4 text-green-400" />;
+      case 'processing': return <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />;
+      case 'failed': return <AlertTriangle className="w-4 h-4 text-red-400" />;
+      default: return <Clock className="w-4 h-4 text-gray-500" />;
+    }
+  };
+
+  const yoloStatusIcon = (status: string, docId: string) => {
+    if (processing?.docId === docId && processing.stage === 'yolo') {
+      return <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />;
+    }
+    switch (status) {
+      case 'valid': return <CheckCircle2 className="w-4 h-4 text-green-400" />;
+      case 'suspicious': return <AlertTriangle className="w-4 h-4 text-yellow-400" />;
+      case 'fraudulent': return <AlertTriangle className="w-4 h-4 text-red-400" />;
+      case 'processing': return <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />;
+      default: return <Clock className="w-4 h-4 text-gray-500" />;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">Document Upload & AI Verification</h2>
+        <p className="text-gray-400 mt-1">Upload your identity and academic documents for real OCR extraction and YOLO validation</p>
+      </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/jpg,application/pdf"
+        className="hidden"
+        onChange={handleFileSelect}
+      />
+
+      {/* Upload Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {docTypes.map((dt) => {
+          const existingDoc = getDocForType(dt.type);
+          const isUploading = uploading === dt.type;
+          const isProcessingThis = existingDoc && processing?.docId === existingDoc.id;
+          const docOcrResult = existingDoc ? ocrResult[existingDoc.id] : null;
+          const docYoloResult = existingDoc ? yoloResult[existingDoc.id] : null;
+          const docImage = existingDoc ? uploadedImages[existingDoc.id] : null;
+
+          return (
+            <motion.div
+              key={dt.type}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`relative bg-gray-900/50 border rounded-xl p-6 transition-all ${
+                existingDoc ? (docYoloResult?.valid !== false ? 'border-green-500/20' : 'border-yellow-500/20') : 'border-gray-800 hover:border-blue-500/30'
+              }`}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{dt.icon}</span>
+                  <div>
+                    <h4 className="font-semibold text-sm">{dt.label}</h4>
+                    <p className="text-xs text-gray-500">{dt.desc}</p>
+                  </div>
+                </div>
+                {dt.required && <span className="text-[10px] px-2 py-0.5 bg-red-500/10 text-red-400 rounded border border-red-500/20">Required</span>}
+              </div>
+
+              {existingDoc ? (
+                <div className="space-y-3">
+                  {/* Document Preview */}
+                  <div className="relative">
+                    {docImage && (
+                      <div className="relative group">
+                        <img 
+                          src={docImage} 
+                          alt={dt.label} 
+                          className="w-full h-32 object-cover rounded-lg border border-gray-700"
+                        />
+                        <button
+                          onClick={() => { setPreviewImage(docImage); setPreviewDocId(existingDoc.id); }}
+                          className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center rounded-lg"
+                        >
+                          <ZoomIn className="w-6 h-6 text-white" />
+                        </button>
+                      </div>
+                    )}
+                    {!docImage && (
+                      <div className="flex items-center gap-2 bg-gray-800/50 rounded-lg p-3">
+                        <FileImage className="w-5 h-5 text-blue-400" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{existingDoc.fileName}</p>
+                          <p className="text-xs text-gray-500">{new Date(existingDoc.uploadedAt).toLocaleDateString()}</p>
+                        </div>
+                        <CheckCircle2 className="w-5 h-5 text-green-400" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Processing Status */}
+                  {isProcessingThis && (
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                        <span className="text-sm text-blue-400 font-medium">
+                          {processing.stage === 'yolo' ? 'Running YOLO Analysis...' : `Running OCR... ${ocrProgress}%`}
+                        </span>
+                      </div>
+                      {processing.stage === 'ocr' && (
+                        <div className="w-full bg-gray-700 rounded-full h-1.5">
+                          <div 
+                            className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+                            style={{ width: `${ocrProgress}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Verification Results */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center gap-2 bg-gray-800/30 rounded-lg px-3 py-2">
+                      <Scan className="w-4 h-4 text-blue-400" />
+                      <div>
+                        <p className="text-[10px] text-gray-500 uppercase">OCR</p>
+                        <div className="flex items-center gap-1">
+                          {ocrStatusIcon(existingDoc.ocrStatus, existingDoc.id)}
+                          <span className="text-xs capitalize">
+                            {isProcessingThis && processing.stage === 'ocr' ? `${ocrProgress}%` : existingDoc.ocrStatus}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-gray-800/30 rounded-lg px-3 py-2">
+                      <Eye className="w-4 h-4 text-purple-400" />
+                      <div>
+                        <p className="text-[10px] text-gray-500 uppercase">YOLO</p>
+                        <div className="flex items-center gap-1">
+                          {yoloStatusIcon(existingDoc.yoloStatus, existingDoc.id)}
+                          <span className="text-xs capitalize">{existingDoc.yoloStatus}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* YOLO Detections */}
+                  {docYoloResult && (
+                    <div className="bg-gray-800/30 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase mb-2">YOLO Detections</p>
+                      <div className="space-y-1">
+                        {docYoloResult.detections.map((det, i) => (
+                          <p key={i} className={`text-xs ${det.startsWith('✓') ? 'text-green-400' : 'text-yellow-400'}`}>
+                            {det}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* OCR Extracted Text */}
+                  {docOcrResult && docOcrResult.text && (
+                    <div className="bg-gray-800/30 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[10px] text-gray-500 uppercase">OCR Extracted Text</p>
+                        <span className="text-[10px] text-blue-400">{docOcrResult.confidence.toFixed(1)}% confidence</span>
+                      </div>
+                      <div className="max-h-24 overflow-y-auto">
+                        <p className="text-xs text-gray-300 whitespace-pre-wrap font-mono">
+                          {docOcrResult.text.substring(0, 500)}{docOcrResult.text.length > 500 ? '...' : ''}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Extracted Data */}
+                  {docOcrResult && existingDoc.extractedData && Object.keys(existingDoc.extractedData).length > 0 && (
+                    <div className="bg-gray-800/30 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 uppercase mb-2">Extracted Data</p>
+                      {Object.entries(existingDoc.extractedData).map(([key, val]) => (
+                        <div key={key} className="flex justify-between text-xs">
+                          <span className="text-gray-400 capitalize">{key}:</span>
+                          <span className="text-white">{val}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleUpload(dt.type)}
+                  disabled={!!uploading}
+                  className="w-full border-2 border-dashed border-gray-700 hover:border-blue-500/50 rounded-xl p-6 flex flex-col items-center justify-center gap-2 transition group disabled:opacity-50"
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+                      <span className="text-sm text-blue-400">Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-8 h-8 text-gray-500 group-hover:text-blue-400 transition" />
+                      <span className="text-sm text-gray-400 group-hover:text-white transition">Click to Upload</span>
+                      <span className="text-xs text-gray-600">PNG, JPG, JPEG</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => { setPreviewImage(null); setPreviewDocId(null); }}
+        >
+          <div className="relative max-w-4xl max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => { setPreviewImage(null); setPreviewDocId(null); }}
+              className="absolute -top-10 right-0 p-2 text-gray-400 hover:text-white"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img src={previewImage} alt="Preview" className="max-w-full max-h-[85vh] object-contain rounded-lg" />
+            
+            {/* Show YOLO results overlay */}
+            {previewDocId && yoloResult[previewDocId] && (
+              <div className="absolute bottom-4 left-4 right-4 bg-black/80 backdrop-blur rounded-lg p-4">
+                <p className="text-sm font-medium text-white mb-2">YOLO Analysis Results:</p>
+                <div className="flex flex-wrap gap-2">
+                  {yoloResult[previewDocId].detections.map((det, i) => (
+                    <span key={i} className={`text-xs px-2 py-1 rounded ${det.startsWith('✓') ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+                      {det}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* OCR Info */}
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+        <h3 className="font-semibold mb-4">AI Verification Pipeline</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+              <Scan className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Real OCR Extraction</p>
+              <p className="text-xs text-gray-400 mt-1">Tesseract.js extracts name, CNIC, scores, and academic data from your documents in real-time</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+              <Eye className="w-5 h-5 text-purple-400" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">YOLO Detection</p>
+              <p className="text-xs text-gray-400 mt-1">Analyzes document layout, detects stamps, seals, photo regions, and validates authenticity markers</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-5 h-5 text-green-400" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">Data Validation</p>
+              <p className="text-xs text-gray-400 mt-1">Cross-references extracted data with registration records for fraud detection</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

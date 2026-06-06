@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useState } from 'react';
+import { useStore } from '../useStore';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Blocks, LayoutDashboard, GraduationCap, Shield, Search, FileWarning,
-  ScrollText, LogOut, Menu, X, FileCheck, Users, Activity
+  Shield, GraduationCap, Menu, X, LogOut, User, ChevronDown,
+  LayoutDashboard, FileText, ScanFace, CheckCircle, Link2, AlertTriangle,
+  ClipboardList, Search, Users
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -12,136 +14,159 @@ interface LayoutProps {
 }
 
 export default function Layout({ children, currentPage, onNavigate }: LayoutProps) {
-  const { currentUser, logout } = useApp();
+  const { currentUser, logout } = useStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
-  if (!currentUser) return null;
-
-  type NavItem = { id: string; label: string; icon: React.ReactNode; roles: string[] };
-
-  const navItems: NavItem[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" />, roles: ['admin', 'university', 'student', 'employer'] },
-    { id: 'degrees', label: 'Degrees', icon: <GraduationCap className="w-5 h-5" />, roles: ['admin', 'university', 'student'] },
-    { id: 'issue', label: 'Issue Degree', icon: <FileCheck className="w-5 h-5" />, roles: ['university'] },
-    { id: 'verify', label: 'Verify Degree', icon: <Search className="w-5 h-5" />, roles: ['employer', 'admin'] },
-    { id: 'ocr-verify', label: 'OCR Verification', icon: <Shield className="w-5 h-5" />, roles: ['employer'] },
-    { id: 'fraud', label: 'Fraud Detection', icon: <FileWarning className="w-5 h-5" />, roles: ['admin', 'employer'] },
-    { id: 'blockchain', label: 'Blockchain', icon: <Blocks className="w-5 h-5" />, roles: ['admin', 'university'] },
-    { id: 'audit', label: 'Audit Logs', icon: <ScrollText className="w-5 h-5" />, roles: ['admin'] },
-    { id: 'users', label: 'Users', icon: <Users className="w-5 h-5" />, roles: ['admin'] },
-    { id: 'analytics', label: 'Analytics', icon: <Activity className="w-5 h-5" />, roles: ['admin'] },
+  const studentLinks = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'documents', label: 'Document Upload', icon: FileText },
+    { id: 'face-verify', label: 'Face Verification', icon: ScanFace },
+    { id: 'apply-degree', label: 'Apply for Degree', icon: GraduationCap },
+    { id: 'my-degrees', label: 'My Degrees', icon: CheckCircle },
+    { id: 'verify', label: 'Verify Degree', icon: Search },
   ];
 
-  const filteredNav = navItems.filter(item => item.roles.includes(currentUser.role));
+  const adminLinks = [
+    { id: 'admin-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'students', label: 'Students', icon: Users },
+    { id: 'degree-management', label: 'Degree Management', icon: GraduationCap },
+    { id: 'blockchain', label: 'Blockchain', icon: Link2 },
+    { id: 'fraud', label: 'Fraud Detection', icon: AlertTriangle },
+    { id: 'audit', label: 'Audit Logs', icon: ClipboardList },
+    { id: 'verify', label: 'Verify Degree', icon: Search },
+  ];
 
-  const roleLabels: Record<string, string> = {
-    admin: 'Administrator',
-    university: 'University',
-    student: 'Student',
-    employer: 'Employer',
-  };
+  const employerLinks = [
+    { id: 'employer-dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'verify', label: 'Verify Degree', icon: Search },
+  ];
 
-  const roleBadgeColors: Record<string, string> = {
-    admin: 'bg-red-500/20 text-red-400',
-    university: 'bg-blue-500/20 text-blue-400',
-    student: 'bg-green-500/20 text-green-400',
-    employer: 'bg-purple-500/20 text-purple-400',
+  const links = currentUser?.role === 'admin' ? adminLinks : currentUser?.role === 'employer' ? employerLinks : studentLinks;
+
+  const handleLogout = () => {
+    logout();
+    onNavigate('landing');
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex">
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
-
+    <div className="min-h-screen bg-gray-950 text-white flex">
       {/* Sidebar */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-gray-900 border-r border-gray-800 transform transition-transform lg:transform-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} flex flex-col`}>
-        {/* Logo */}
-        <div className="p-5 border-b border-gray-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-xl flex items-center justify-center">
-                <Blocks className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-base font-bold text-white">BlockDegree</h1>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Verification System</p>
-              </div>
-            </div>
-            <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-gray-400 cursor-pointer">
-              <X className="w-5 h-5" />
-            </button>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-gray-900/95 backdrop-blur-xl border-r border-gray-800 transform transition-transform duration-300 lg:translate-x-0 lg:static ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex items-center gap-3 p-6 border-b border-gray-800">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+            <Shield className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="font-bold text-lg bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">BlockDegree</h1>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Blockchain Attestation</p>
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {filteredNav.map(item => (
+        <nav className="p-4 space-y-1 flex-1 overflow-y-auto">
+          {links.map(link => (
             <button
-              key={item.id}
-              onClick={() => { onNavigate(item.id); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer ${
-                currentPage === item.id
-                  ? 'bg-cyan-500/15 text-cyan-400'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/60'
+              key={link.id}
+              onClick={() => { onNavigate(link.id); setSidebarOpen(false); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                currentPage === link.id
+                  ? 'bg-gradient-to-r from-blue-600/20 to-purple-600/20 text-blue-400 border border-blue-500/20'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
               }`}
             >
-              {item.icon}
-              {item.label}
+              <link.icon className="w-5 h-5" />
+              {link.label}
             </button>
           ))}
         </nav>
 
-        {/* User info */}
         <div className="p-4 border-t border-gray-800">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm">
-              {currentUser.name.charAt(0)}
+          <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-xl p-4 border border-blue-800/30">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              <span className="text-xs text-green-400 font-medium">Blockchain Active</span>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">{currentUser.name}</p>
-              <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-medium ${roleBadgeColors[currentUser.role]}`}>
-                {roleLabels[currentUser.role]}
-              </span>
-            </div>
+            <p className="text-[11px] text-gray-500">Ethereum Private Network</p>
+            <p className="text-[11px] text-gray-500">Block #15,234</p>
           </div>
-          <button
-            onClick={logout}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition cursor-pointer"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign Out
-          </button>
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* Overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Main */}
       <div className="flex-1 flex flex-col min-h-screen">
         {/* Top bar */}
-        <header className="h-16 bg-gray-900/80 border-b border-gray-800 flex items-center px-4 lg:px-8 backdrop-blur sticky top-0 z-30">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-gray-400 mr-4 cursor-pointer">
-            <Menu className="w-6 h-6" />
-          </button>
-          <div className="flex-1">
-            <h2 className="text-lg font-semibold text-white capitalize">
-              {navItems.find(n => n.id === currentPage)?.label || 'Dashboard'}
-            </h2>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              Ethereum Connected
+        <header className="sticky top-0 z-30 bg-gray-950/80 backdrop-blur-xl border-b border-gray-800">
+          <div className="flex items-center justify-between px-4 lg:px-8 h-16">
+            <div className="flex items-center gap-4">
+              <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden p-2 hover:bg-gray-800 rounded-lg">
+                {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+              <div>
+                <h2 className="font-semibold text-white capitalize">{currentPage.replace(/-/g, ' ')}</h2>
+                <p className="text-xs text-gray-500">Iqra University Degree Attestation System</p>
+              </div>
             </div>
-            <div className="text-xs text-gray-600 font-mono hidden md:block">
-              {currentUser.walletAddress.slice(0, 6)}...{currentUser.walletAddress.slice(-4)}
+
+            <div className="relative">
+              <button
+                onClick={() => setProfileOpen(!profileOpen)}
+                className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-800/50 transition"
+              >
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-sm font-bold">
+                  {currentUser?.name.charAt(0)}
+                </div>
+                <div className="hidden sm:block text-left">
+                  <p className="text-sm font-medium">{currentUser?.name}</p>
+                  <p className="text-[10px] text-gray-500 uppercase">{currentUser?.role}</p>
+                </div>
+                <ChevronDown className="w-4 h-4 text-gray-500" />
+              </button>
+
+              <AnimatePresence>
+                {profileOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute right-0 top-full mt-2 w-56 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl overflow-hidden"
+                  >
+                    <div className="p-4 border-b border-gray-800">
+                      <p className="font-medium text-sm">{currentUser?.name}</p>
+                      <p className="text-xs text-gray-500">{currentUser?.email}</p>
+                    </div>
+                    <div className="p-2">
+                      <button onClick={() => { onNavigate('profile'); setProfileOpen(false); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition">
+                        <User className="w-4 h-4" /> Profile
+                      </button>
+                      <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-lg transition">
+                        <LogOut className="w-4 h-4" /> Logout
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
-          {children}
+        {/* Content */}
+        <main className="flex-1 p-4 lg:p-8">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentPage}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
     </div>
