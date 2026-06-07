@@ -180,50 +180,50 @@ export default function FaceVerification() {
     stopCamera();
   };
 
-  // Analyze captured image
-  const analyzeAndCompare = async () => {
-    setStage('analyzing');
-    setAnalysisDetails([]);
+  // // Analyze captured image
+  // const analyzeAndCompare = async () => {
+  //   setStage('analyzing');
+  //   setAnalysisDetails([]);
     
-    // Simulate analysis steps
-    await new Promise(r => setTimeout(r, 1000));
-    setAnalysisDetails(prev => [...prev, '✓ Face detected in selfie']);
+  //   // Simulate analysis steps
+  //   await new Promise(r => setTimeout(r, 1000));
+  //   setAnalysisDetails(prev => [...prev, '✓ Face detected in selfie']);
     
-    await new Promise(r => setTimeout(r, 800));
-    setAnalysisDetails(prev => [...prev, '✓ Facial landmarks extracted (68 points)']);
+  //   await new Promise(r => setTimeout(r, 800));
+  //   setAnalysisDetails(prev => [...prev, '✓ Facial landmarks extracted (68 points)']);
     
-    await new Promise(r => setTimeout(r, 800));
-    setAnalysisDetails(prev => [...prev, '✓ Face encoding generated (128-d vector)']);
+  //   await new Promise(r => setTimeout(r, 800));
+  //   setAnalysisDetails(prev => [...prev, '✓ Face encoding generated (128-d vector)']);
     
-    setStage('comparing');
+  //   setStage('comparing');
     
-    await new Promise(r => setTimeout(r, 1000));
-    setAnalysisDetails(prev => [...prev, '✓ Loading CNIC reference photo']);
+  //   await new Promise(r => setTimeout(r, 1000));
+  //   setAnalysisDetails(prev => [...prev, '✓ Loading CNIC reference photo']);
     
-    await new Promise(r => setTimeout(r, 800));
-    setAnalysisDetails(prev => [...prev, '✓ Extracting CNIC face encoding']);
+  //   await new Promise(r => setTimeout(r, 800));
+  //   setAnalysisDetails(prev => [...prev, '✓ Extracting CNIC face encoding']);
     
-    await new Promise(r => setTimeout(r, 1000));
-    setAnalysisDetails(prev => [...prev, '✓ Computing cosine similarity']);
+  //   await new Promise(r => setTimeout(r, 1000));
+  //   setAnalysisDetails(prev => [...prev, '✓ Computing cosine similarity']);
     
-    // Calculate result
-    const conf = Math.floor(Math.random() * 15) + 85;
-    setConfidence(conf);
+  //   // Calculate result
+  //   const conf = Math.floor(Math.random() * 15) + 85;
+  //   setConfidence(conf);
     
-    await new Promise(r => setTimeout(r, 500));
-    setAnalysisDetails(prev => [...prev, `✓ Similarity score: ${conf}%`]);
+  //   await new Promise(r => setTimeout(r, 500));
+  //   setAnalysisDetails(prev => [...prev, `✓ Similarity score: ${conf}%`]);
     
-    if (conf >= 75) {
-      setResult('match');
-      setAnalysisDetails(prev => [...prev, '✓ VERIFICATION PASSED']);
-      completeFaceVerification(currentUser.id);
-    } else {
-      setResult('failed');
-      setAnalysisDetails(prev => [...prev, '✗ VERIFICATION FAILED - Face mismatch']);
-    }
+  //   if (conf >= 75) {
+  //     setResult('match');
+  //     setAnalysisDetails(prev => [...prev, '✓ VERIFICATION PASSED']);
+  //     completeFaceVerification(currentUser.id);
+  //   } else {
+  //     setResult('failed');
+  //     setAnalysisDetails(prev => [...prev, '✗ VERIFICATION FAILED - Face mismatch']);
+  //   }
     
-    setStage('result');
-  };
+  //   setStage('result');
+  // };
   
     // Analyze captured image with REAL face verification
     const analyzeAndCompare = async () => {
