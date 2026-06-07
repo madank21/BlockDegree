@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, X, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, X, CheckCircle2, Camera } from 'lucide-react';
 import Html5Qrcode from 'html5-qrcode';
 
 interface Props {
@@ -12,16 +12,35 @@ export default function QRScanner({ onScan, onClose }: Props) {
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scanned, setScanned] = useState<string | null>(null);
+  const [permissionStatus, setPermissionStatus] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const containerId = 'qr-reader-' + Math.random().toString(36).slice(2, 9);
 
   useEffect(() => {
-    startScanner();
-
+    // Check camera permissions status
+    checkCameraPermissions();
     return () => {
       stopScanner();
     };
   }, []);
+
+  const checkCameraPermissions = async () => {
+    try {
+      const status = await navigator.permissions.query({ name: 'camera' as any });
+      setPermissionStatus(status.state as 'prompt' | 'granted' | 'denied');
+      
+      status.addEventListener('change', () => {
+        setPermissionStatus(status.state as 'prompt' | 'granted' | 'denied');
+      });
+
+      if (status.state === 'granted') {
+        startScanner();
+      }
+    } catch (err) {
+      console.warn('Permission query not supported, attempting direct access', err);
+      startScanner();
+    }
+  };
 
   const startScanner = async () => {
     try {
@@ -49,18 +68,23 @@ export default function QRScanner({ onScan, onClose }: Props) {
       );
 
       setScanning(true);
+      setPermissionStatus('granted');
     } catch (err: any) {
       const errorMsg =
         err.name === 'NotAllowedError'
-          ? 'Camera access denied. Please allow camera permissions.'
+          ? 'Camera access denied. Please allow camera permissions in your browser settings and try again.'
           : err.name === 'NotFoundError'
-          ? 'No camera found on your device.'
+          ? 'No camera found on your device. Please connect a camera and try again.'
           : err.name === 'NotSupportedError'
-          ? 'QR scanning is not supported on your device.'
+          ? 'QR scanning is not supported on your browser or device.'
           : `Camera error: ${err.message || 'Unknown error'}`;
 
       setError(errorMsg);
       setScanning(false);
+      
+      if (err.name === 'NotAllowedError') {
+        setPermissionStatus('denied');
+      }
     }
   };
 
@@ -77,6 +101,10 @@ export default function QRScanner({ onScan, onClose }: Props) {
 
   const handleRetry = async () => {
     setScanned(null);
+    await startScanner();
+  };
+
+  const requestCameraPermission = async () => {
     await startScanner();
   };
 
@@ -109,7 +137,55 @@ export default function QRScanner({ onScan, onClose }: Props) {
 
           {/* Scanner Area */}
           <div className="p-6">
-            {error ? (
+            {permissionStatus === 'denied' ? (
+              <div className="text-center">
+                <AlertTriangle className="w-16 h-16 text-orange-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-orange-400 mb-2">Camera Permission Denied</h3>
+                <p className="text-gray-400 text-sm mb-6">
+                  This browser doesn't have permission to access your camera. Please:
+                </p>
+                <div className="text-left bg-gray-800/50 rounded-lg p-4 mb-6 text-sm text-gray-300 space-y-2">
+                  <p>1. Click the camera/lock icon in your browser address bar</p>
+                  <p>2. Find "Camera" in the permissions list</p>
+                  <p>3. Change it to "Allow"</p>
+                  <p>4. Refresh the page and try again</p>
+                </div>
+                <button
+                  onClick={() => {
+                    window.location.reload();
+                  }}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-white transition mb-3"
+                >
+                  Reload Page
+                </button>
+                <button
+                  onClick={onClose}
+                  className="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium text-white transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : error && permissionStatus !== 'granted' ? (
+              <div className="text-center">
+                <Camera className="w-16 h-16 text-blue-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-blue-400 mb-2">Request Camera Access</h3>
+                <p className="text-gray-400 text-sm mb-6">
+                  We need access to your camera to scan QR codes on degree certificates.
+                </p>
+                <button
+                  onClick={requestCameraPermission}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-white transition mb-3"
+                >
+                  Allow Camera Access
+                </button>
+                <button
+                  onClick={onClose}
+                  className="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium text-white transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : error ? (
               <div className="text-center">
                 <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-red-400 mb-2">Camera Error</h3>

@@ -5,7 +5,7 @@ import { Camera, CheckCircle2, ScanFace, Shield, User, AlertTriangle, RefreshCw,
 
 export default function FaceVerification() {
   const { currentUser, completeFaceVerification } = useStore();
-  const [stage, setStage] = useState<'ready' | 'camera' | 'captured' | 'analyzing' | 'comparing' | 'result'>('ready');
+  const [stage, setStage] = useState<'ready' | 'permission' | 'camera' | 'captured' | 'analyzing' | 'comparing' | 'result'>('ready');
   const [result, setResult] = useState<'match' | 'failed' | null>(null);
   const [confidence, setConfidence] = useState(0);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -13,6 +13,7 @@ export default function FaceVerification() {
   const [cnicImage] = useState<string | null>(null);
   const [faceDetected, setFaceDetected] = useState(false);
   const [analysisDetails, setAnalysisDetails] = useState<string[]>([]);
+  const [permissionStatus, setPermissionStatus] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -22,6 +23,25 @@ export default function FaceVerification() {
   if (!currentUser) return null;
 
   const alreadyVerified = currentUser.verificationStatus === 'face_verified' || currentUser.verificationStatus === 'approved';
+
+  // Check camera permissions on mount
+  useEffect(() => {
+    checkCameraPermissions();
+  }, []);
+
+  // Check camera permissions
+  const checkCameraPermissions = async () => {
+    try {
+      const status = await navigator.permissions.query({ name: 'camera' as any });
+      setPermissionStatus(status.state as 'prompt' | 'granted' | 'denied');
+      
+      status.addEventListener('change', () => {
+        setPermissionStatus(status.state as 'prompt' | 'granted' | 'denied');
+      });
+    } catch (err) {
+      console.warn('Permission query not supported', err);
+    }
+  };
 
   // Start camera
   const startCamera = async () => {
@@ -39,6 +59,7 @@ export default function FaceVerification() {
       });
       
       streamRef.current = stream;
+      setPermissionStatus('granted');
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -49,13 +70,20 @@ export default function FaceVerification() {
       }
     } catch (err: any) {
       console.error('Camera error:', err);
-      setCameraError(
-        err.name === 'NotAllowedError' 
-          ? 'Camera access denied. Please allow camera permissions and try again.'
-          : err.name === 'NotFoundError'
-          ? 'No camera found. Please connect a camera and try again.'
-          : 'Failed to access camera. Please check your device settings.'
-      );
+      
+      if (err.name === 'NotAllowedError') {
+        setPermissionStatus('denied');
+        setCameraError(
+          'Camera access denied. Please allow camera permissions in your browser settings:\n1. Click the camera/lock icon in your address bar\n2. Find "Camera" in permissions\n3. Change to "Allow"\n4. Refresh and try again'
+        );
+      } else if (err.name === 'NotFoundError') {
+        setCameraError('No camera found. Please connect a camera and try again.');
+      } else if (err.name === 'NotSupportedError') {
+        setCameraError('QR scanning is not supported on your browser or device.');
+      } else {
+        setCameraError('Failed to access camera. Please check your device settings.');
+      }
+      
       setStage('ready');
     }
   };
@@ -399,19 +427,43 @@ export default function FaceVerification() {
             {/* Ready State */}
             {stage === 'ready' && (
               <div className="text-center p-6">
-                <div className="w-24 h-24 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 border-2 border-dashed border-gray-600">
-                  <User className="w-12 h-12 text-gray-500" />
-                </div>
-                <p className="text-gray-400 text-sm">Click the button below to start camera</p>
-                <p className="text-gray-500 text-xs mt-1">Ensure good lighting and face the camera directly</p>
-                
-                {cameraError && (
-                  <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                    <div className="flex items-center gap-2 text-red-400 text-sm">
-                      <AlertTriangle className="w-4 h-4" />
-                      {cameraError}
+                {permissionStatus === 'denied' ? (
+                  <>
+                    <AlertTriangle className="w-24 h-24 text-orange-400 mx-auto mb-4" />
+                    <h3 className="font-semibold text-orange-400 mb-2">Camera Permission Denied</h3>
+                    <p className="text-gray-400 text-sm mb-4">
+                      Please allow camera access in your browser settings:
+                    </p>
+                    <div className="text-left bg-gray-800/50 rounded-lg p-4 mb-4 text-xs text-gray-300 space-y-2">
+                      <p>1. Click the camera/lock icon in your address bar</p>
+                      <p>2. Find "Camera" in the permissions list</p>
+                      <p>3. Change it to "Allow"</p>
+                      <p>4. Refresh the page and try again</p>
                     </div>
-                  </div>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-white transition"
+                    >
+                      Reload Page
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-24 h-24 rounded-full bg-gray-700/50 flex items-center justify-center mx-auto mb-4 border-2 border-dashed border-gray-600">
+                      <User className="w-12 h-12 text-gray-500" />
+                    </div>
+                    <p className="text-gray-400 text-sm">Click the button below to start camera</p>
+                    <p className="text-gray-500 text-xs mt-1">Ensure good lighting and face the camera directly</p>
+                    
+                    {cameraError && (
+                      <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                        <div className="flex items-center gap-2 text-red-400 text-sm">
+                          <AlertTriangle className="w-4 h-4" />
+                          {cameraError}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -500,12 +552,23 @@ export default function FaceVerification() {
           {/* Camera Controls */}
           <div className="p-4 border-t border-gray-800 flex gap-3">
             {stage === 'ready' && (
-              <button
-                onClick={startCamera}
-                className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl font-medium flex items-center justify-center gap-2 transition text-white"
-              >
-                <Camera className="w-5 h-5" /> Start Camera
-              </button>
+              <>
+                {permissionStatus === 'denied' ? (
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="flex-1 py-3 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 rounded-xl font-medium flex items-center justify-center gap-2 transition text-white"
+                  >
+                    <AlertTriangle className="w-5 h-5" /> Reload to Allow Camera
+                  </button>
+                ) : (
+                  <button
+                    onClick={startCamera}
+                    className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl font-medium flex items-center justify-center gap-2 transition text-white"
+                  >
+                    <Camera className="w-5 h-5" /> Start Camera
+                  </button>
+                )}
+              </>
             )}
             
             {stage === 'camera' && (

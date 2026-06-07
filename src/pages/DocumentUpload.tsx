@@ -4,11 +4,11 @@ import { useStore } from '../useStore';
 import Tesseract from 'tesseract.js';
 import {
   Upload, CheckCircle2, Clock, AlertTriangle,
-  Scan, Eye, FileImage, Loader2, X, ZoomIn
+  Scan, Eye, FileImage, Loader2, X, ZoomIn, Trash2
 } from 'lucide-react';
 
 export default function DocumentUpload() {
-  const { currentUser, uploadDocument, simulateOCR, simulateYOLO } = useStore();
+  const { currentUser, uploadDocument, simulateOCR, simulateYOLO, validateDocumentData, removeDocument } = useStore();
   const [uploading, setUploading] = useState<string | null>(null);
   const [processing, setProcessing] = useState<{ docId: string; stage: string } | null>(null);
   const [ocrProgress, setOcrProgress] = useState(0);
@@ -19,6 +19,7 @@ export default function DocumentUpload() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeUploadType, setActiveUploadType] = useState<string>('');
   const [uploadedImages, setUploadedImages] = useState<Record<string, string>>({});
+  const [validatingDocId, setValidatingDocId] = useState<string | null>(null);
 
   if (!currentUser) return null;
 
@@ -26,7 +27,6 @@ export default function DocumentUpload() {
     { type: 'cnic', label: 'CNIC (Front & Back)', desc: 'Government-issued ID card', icon: '🪪', required: true },
     { type: 'marksheet', label: 'Previous Marksheet', desc: 'Latest academic transcript', icon: '📄', required: true },
     { type: 'certificate', label: 'Previous Certificate', desc: 'Intermediate or equivalent', icon: '📜', required: true },
-    { type: 'academic_record', label: 'Additional Records', desc: 'Any supporting documents', icon: '📋', required: false },
   ] as const;
 
   // YOLO-style document analysis (simulated with image analysis)
@@ -296,6 +296,13 @@ export default function DocumentUpload() {
       // Pass extracted data to store
       simulateOCR(currentUser.id, docId, extractedFields);
       
+      // Auto-validate document data
+      setValidatingDocId(docId);
+      setTimeout(() => {
+        validateDocumentData(currentUser.id, docId);
+        setValidatingDocId(null);
+      }, 500);
+      
       setProcessing(null);
       setActiveUploadType('');
     };
@@ -308,6 +315,20 @@ export default function DocumentUpload() {
 
   const getDocForType = (type: string) => {
     return currentUser.documents?.find(d => d.type === type);
+  };
+
+  const handleValidateDocument = (docId: string) => {
+    setValidatingDocId(docId);
+    setTimeout(() => {
+      validateDocumentData(currentUser.id, docId);
+      setValidatingDocId(null);
+    }, 300);
+  };
+
+  const handleRemoveDocument = (docId: string, docType: string) => {
+    if (confirm(`Are you sure you want to remove the ${docType} document? This action cannot be undone.`)) {
+      removeDocument(currentUser.id, docId);
+    }
   };
 
   const ocrStatusIcon = (status: string, docId: string) => {
@@ -498,6 +519,65 @@ export default function DocumentUpload() {
                       ))}
                     </div>
                   )}
+
+                  {/* Validation Status */}
+                  {existingDoc.validationStatus && (
+                    <div className={`rounded-lg p-3 ${
+                      existingDoc.validationStatus === 'valid'
+                        ? 'bg-green-500/10 border border-green-500/20'
+                        : existingDoc.validationStatus === 'mismatch'
+                        ? 'bg-red-500/10 border border-red-500/20'
+                        : 'bg-yellow-500/10 border border-yellow-500/20'
+                    }`}>
+                      <div className="flex items-start gap-2 mb-2">
+                        {existingDoc.validationStatus === 'valid' ? (
+                          <CheckCircle2 className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                        ) : (
+                          <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                        )}
+                        <div>
+                          <p className="text-[10px] text-gray-400 uppercase">Data Validation</p>
+                          <p className={`text-xs font-medium ${existingDoc.validationStatus === 'valid' ? 'text-green-400' : 'text-red-400'}`}>
+                            {existingDoc.validationStatus === 'valid' ? '✓ Data Verified' : '✗ Data Mismatch Detected'}
+                          </p>
+                        </div>
+                      </div>
+                      {existingDoc.validationErrors && existingDoc.validationErrors.length > 0 && (
+                        <div className="space-y-1">
+                          {existingDoc.validationErrors.map((error, i) => (
+                            <p key={i} className="text-xs text-red-400">{error}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
+                    {!existingDoc.validationStatus || existingDoc.validationStatus === 'pending' ? (
+                      <button
+                        onClick={() => handleValidateDocument(existingDoc.id)}
+                        disabled={validatingDocId === existingDoc.id}
+                        className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition flex items-center justify-center gap-2"
+                      >
+                        {validatingDocId === existingDoc.id ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Validating...
+                          </>
+                        ) : (
+                          'Validate Data'
+                        )}
+                      </button>
+                    ) : null}
+                    <button
+                      onClick={() => handleRemoveDocument(existingDoc.id, dt.label)}
+                      className="flex-1 px-3 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs font-medium rounded-lg transition flex items-center justify-center gap-2 border border-red-600/30"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Remove
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <button
@@ -556,35 +636,35 @@ export default function DocumentUpload() {
         </div>
       )}
 
-      {/* OCR Info */}
+      {/* OCR Info - Simplified */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-        <h3 className="font-semibold mb-4">AI Verification Pipeline</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <h3 className="font-semibold mb-4">Verification Pipeline</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-              <Scan className="w-5 h-5 text-blue-400" />
+            <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0 text-lg">
+              ✓
             </div>
             <div>
               <p className="text-sm font-medium">Real OCR Extraction</p>
-              <p className="text-xs text-gray-400 mt-1">Tesseract.js extracts name, CNIC, scores, and academic data from your documents in real-time</p>
+              <p className="text-xs text-gray-400 mt-1">Extracts name, CNIC, and academic data from documents</p>
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
-              <Eye className="w-5 h-5 text-purple-400" />
+            <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0 text-lg">
+              ✓
             </div>
             <div>
               <p className="text-sm font-medium">Document Quality Checks</p>
-              <p className="text-xs text-gray-400 mt-1">Analyzes document layout, image quality, text density, and visible authenticity markers</p>
+              <p className="text-xs text-gray-400 mt-1">Analyzes layout, quality, and authenticity markers</p>
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-5 h-5 text-green-400" />
+            <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0 text-lg">
+              ✓
             </div>
             <div>
               <p className="text-sm font-medium">Data Validation</p>
-              <p className="text-xs text-gray-400 mt-1">Cross-references extracted data with registration records for fraud detection</p>
+              <p className="text-xs text-gray-400 mt-1">Verifies extracted data matches your profile</p>
             </div>
           </div>
         </div>

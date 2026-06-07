@@ -2,6 +2,7 @@ import { User, DegreeApplication, BlockchainTransaction, AuditLog, FraudReport, 
 import { hashPassword, hashPasswordWithSalt, verifyPassword } from './lib/auth';
 import { createDegreeId, createLocalAttestation } from './lib/blockchain';
 import { runFraudChecks } from './lib/fraudDetection';
+import { UserDataManager, DocumentManager, DegreeManager, BackupManager, StorageManager } from './lib/dataPersistence';
 
 // Browser-local store. External database/blockchain integrations can replace this boundary later.
 const STORAGE_KEY = 'blockdegree_store';
@@ -576,6 +577,135 @@ export const store = {
     notify();
   },
 
+  // Validate document data against user profile
+  validateDocumentData(userId: string, docId: string): { isValid: boolean; errors: string[] } {
+    const user = state.users.find(u => u.id === userId);
+    const doc = user?.documents?.find(d => d.id === docId);
+
+    const errors: string[] = [];
+
+    if (!user || !doc) {
+      errors.push('Document or user not found');
+      return { isValid: false, errors };
+    }
+
+    if (!doc.extractedData || Object.keys(doc.extractedData).length === 0) {
+      errors.push('No extracted data available for validation');
+      return { isValid: false, errors };
+    }
+
+    const extracted = doc.extractedData;
+
+    // Validate Name
+    if (extracted['Name'] && user.name) {
+      const extractedName = extracted['Name'].toLowerCase().trim();
+      const userName = user.name.toLowerCase().trim();
+      if (extractedName !== userName && !userName.includes(extractedName.split(' ')[0])) {
+        errors.push(`Name mismatch: Document shows "${extracted['Name']}" but profile has "${user.name}"`);
+      }
+    }
+
+    // Validate CNIC
+    if (extracted['CNIC Number'] && user.cnicNumber) {
+      const extractedCNIC = extracted['CNIC Number'].replace(/\s/g, '').replace(/-/g, '');
+      const userCNIC = user.cnicNumber.replace(/\s/g, '').replace(/-/g, '');
+      if (extractedCNIC !== userCNIC) {
+        errors.push(`CNIC mismatch: Document shows "${extracted['CNIC Number']}" but profile has "${user.cnicNumber}"`);
+      }
+    }
+
+    // Validate Father Name
+    if (extracted['Father Name'] && user.fatherName) {
+      const extractedFather = extracted['Father Name'].toLowerCase().trim();
+      const userFather = user.fatherName.toLowerCase().trim();
+      if (extractedFather !== userFather && !userFather.includes(extractedFather.split(' ')[0])) {
+        errors.push(`Father name mismatch: Document shows "${extracted['Father Name']}" but profile has "${user.fatherName}"`);
+      }
+    }
+
+    // Validate Registration Number
+    if (extracted['Registration No'] && user.registrationNumber) {
+      if (extracted['Registration No'] !== user.registrationNumber) {
+        errors.push(`Registration number mismatch: Document shows "${extracted['Registration No']}" but profile has "${user.registrationNumber}"`);
+      }
+    }
+
+    // For marksheet and certificate, validate CGPA
+    if ((doc.type === 'marksheet' || doc.type === 'certificate') && extracted['CGPA']) {
+      if (user.cgpa) {
+        const docCGPA = parseFloat(extracted['CGPA']);
+        const userCGPA = user.cgpa;
+        if (Math.abs(docCGPA - userCGPA) > 0.05) {
+          errors.push(`CGPA mismatch: Document shows "${extracted['CGPA']}" but profile has "${user.cgpa}"`);
+        }
+      }
+    }
+
+    const isValid = errors.length === 0;
+
+    // Update document validation status
+    state = {
+      ...state,
+      users: state.users.map(u => {
+        if (u.id === userId && u.documents) {
+          return {
+            ...u,
+            documents: u.documents.map(d =>
+              d.id === docId
+                ? { ...d, validationStatus: isValid ? 'valid' : 'mismatch', validationErrors: errors }
+                : d
+            ),
+          };
+        }
+        return u;
+      }),
+    };
+
+    if (state.currentUser?.id === userId) {
+      const updated = state.users.find(u => u.id === userId);
+      if (updated) state = { ...state, currentUser: updated };
+    }
+
+    const logStatus = isValid ? 'PASSED' : 'FAILED';
+    const logDetails = isValid ? 'Data matched successfully' : errors.join('; ');
+    store.addAuditLog('Document Validation', userId, user.name, `Validation ${logStatus}: ${logDetails}`, 'verification');
+
+    notify();
+    return { isValid, errors };
+  },
+
+  // Remove document
+  removeDocument(userId: string, docId: string) {
+    const user = state.users.find(u => u.id === userId);
+    const doc = user?.documents?.find(d => d.id === docId);
+
+    if (!user || !doc) {
+      console.error('Document or user not found');
+      return;
+    }
+
+    state = {
+      ...state,
+      users: state.users.map(u => {
+        if (u.id === userId) {
+          return {
+            ...u,
+            documents: u.documents?.filter(d => d.id !== docId),
+          };
+        }
+        return u;
+      }),
+    };
+
+    if (state.currentUser?.id === userId) {
+      const updated = state.users.find(u => u.id === userId);
+      if (updated) state = { ...state, currentUser: updated };
+    }
+
+    store.addAuditLog('Document Removed', userId, user.name, `Removed ${doc.type}: ${doc.fileName}`, 'verification');
+    notify();
+  },
+
   // Reset data
   resetData() {
     localStorage.removeItem(STORAGE_KEY);
@@ -589,5 +719,69 @@ export const store = {
       verificationRequests: sampleVerifications,
     };
     notify();
+  },
+
+  // Data Persistence Methods
+  /**
+   * Create a backup of all data
+   */
+  createDataBackup() {
+    return BackupManager.createBackup();
+  },
+
+  /**
+   * Restore from backup
+   */
+  restoreFromBackup() {
+    return BackupManager.restoreBackup();
+  },
+
+  /**
+   * Export all data as JSON
+   */
+  exportAllData() {
+    BackupManager.exportAllData();
+  },
+
+  /**
+   * Import data from JSON file
+   */
+  importData(file: File) {
+    return BackupManager.importData(file);
+  },
+
+  /**
+   * Get storage statistics
+   */
+  getStorageStats() {
+    return StorageManager.getStorageStats();
+  },
+
+  /**
+   * Get storage usage percentage
+   */
+  getStoragePercentage() {
+    return StorageManager.getStoragePercentage();
+  },
+
+  /**
+   * Get storage warning message
+   */
+  getStorageWarning() {
+    return StorageManager.getStorageWarning();
+  },
+
+  /**
+   * Clear old documents
+   */
+  clearOldDocuments(daysOld: number = 90) {
+    return StorageManager.clearOldDocuments(daysOld);
+  },
+
+  /**
+   * Verify data integrity
+   */
+  verifyDataIntegrity() {
+    return StorageManager.verifyDataIntegrity();
   },
 };

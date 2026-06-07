@@ -34,6 +34,8 @@ export interface UploadedDocument {
   ocrStatus: 'pending' | 'processing' | 'verified' | 'failed';
   yoloStatus: 'pending' | 'processing' | 'valid' | 'suspicious' | 'fraudulent';
   extractedData?: Record<string, string>;
+  validationStatus?: 'pending' | 'valid' | 'mismatch' | 'invalid';
+  validationErrors?: string[];
 }
 
 export interface DegreeApplication {
