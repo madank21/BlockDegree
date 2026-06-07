@@ -9,11 +9,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "@supabase/supabase-js": "^2.107.0",
     "@types/crypto-js": "^4.2.2",
+    "@vladmandic/face-api": "^1.7.15",
     "clsx": "2.1.1",
     "crypto-js": "^4.2.0",
+    "ethers": "^6.16.0",
     "framer-motion": "^12.40.0",
+    "html2canvas": "^1.4.1",
+    "html5-qrcode": "^2.3.8",
+    "jspdf": "^4.2.1",
     "lucide-react": "^1.17.0",
     "qrcode.react": "^4.2.0",
     "react": "19.2.6",

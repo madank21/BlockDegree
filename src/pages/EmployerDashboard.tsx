@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion';
 import { useStore } from '../useStore';
 import { Search, CheckCircle2, Shield, QrCode } from 'lucide-react';
+import { useState } from 'react';
+import QRScanner from '../components/QRScanner';
 
 interface Props {
   onNavigate: (page: string) => void;
@@ -10,6 +12,15 @@ export default function EmployerDashboard({ onNavigate }: Props) {
   const { currentUser, verificationRequests } = useStore();
 
   if (!currentUser) return null;
+    const [showQRScanner, setShowQRScanner] = useState(false);
+    const [scannedQR, setScannedQR] = useState<string | null>(null);
+
+    const handleQRScanned = (result: string) => {
+      setScannedQR(result);
+      setShowQRScanner(false);
+      // Parse QR data and extract degree ID
+      console.log('QR Code scanned:', result);
+    };
 
   return (
     <div className="space-y-6">
@@ -64,6 +75,7 @@ export default function EmployerDashboard({ onNavigate }: Props) {
           whileHover={{ scale: 1.02 }}
           className="bg-gray-900/50 border border-gray-800 hover:border-purple-500/30 rounded-xl p-8 text-center group transition"
           onClick={() => onNavigate('verify')}
+            onClick={() => setShowQRScanner(true)}
         >
           <QrCode className="w-12 h-12 text-purple-400 mx-auto mb-4 group-hover:scale-110 transition" />
           <h3 className="text-lg font-semibold mb-2">QR Code Scan</h3>

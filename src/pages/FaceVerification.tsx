@@ -224,7 +224,107 @@ export default function FaceVerification() {
     
     setStage('result');
   };
+  
+    // Analyze captured image with REAL face verification
+    const analyzeAndCompare = async () => {
+      setStage('analyzing');
+      setAnalysisDetails([]);
 
+      try {
+        // Import real face verification functions
+        const { loadFaceModels, getFaceDescriptor, compareFaces, analyzeImageQuality } = await import('../lib/faceVerification');
+
+        // Step 1: Load AI models
+        setAnalysisDetails(prev => [...prev, '⏳ Loading face recognition models...']);
+        await loadFaceModels();
+        setAnalysisDetails(prev => [...prev, '✓ Face recognition models loaded (ssdMobilenet + Facenet)']);
+
+        // Step 2: Analyze image quality of selfie
+        if (!canvasRef.current) {
+          setAnalysisDetails(prev => [...prev, '✗ Capture canvas not available']);
+          setResult('failed');
+          setStage('result');
+          return;
+        }
+
+        const { quality, issues } = await analyzeImageQuality(canvasRef.current);
+        setAnalysisDetails(prev => [...prev, `📊 Image quality: ${quality}/100`]);
+        if (issues.length > 0) {
+          issues.forEach(issue => {
+            setAnalysisDetails(prev => [...prev, `⚠️  ${issue}`]);
+          });
+        }
+
+        // Step 3: Detect and extract face from selfie
+        const selfieDescriptor = await getFaceDescriptor(canvasRef.current);
+        if (!selfieDescriptor) {
+          setAnalysisDetails(prev => [...prev, '✗ No face detected in selfie. Please retake photo.']);
+          setResult('failed');
+          setStage('result');
+          return;
+        }
+        setAnalysisDetails(prev => [...prev, '✓ Selfie face detected and encoded (128-dimensional vector)']);
+
+        setStage('comparing');
+
+        // Step 4: Get CNIC reference photo
+        const cnicDoc = currentUser.documents?.find(d => d.type === 'cnic');
+        if (!cnicDoc) {
+          setAnalysisDetails(prev => [...prev, '⚠️  No CNIC document on file. Using fallback reference.']);
+          setResult('failed');
+          setStage('result');
+          return;
+        }
+
+        setAnalysisDetails(prev => [...prev, '✓ Found CNIC reference photo in profile']);
+
+        // Step 5: Extract face from CNIC (would come from stored file)
+        const { extractFaceFromDataURL } = await import('../lib/faceVerification');
+      
+        let cnicDescriptor = null;
+        if (cnicDoc && 'fileUrl' in cnicDoc) {
+          try {
+            cnicDescriptor = await extractFaceFromDataURL(cnicDoc.fileUrl as any);
+          } catch (e) {
+            console.warn('Could not extract CNIC photo');
+          }
+        }
+
+        if (!cnicDescriptor) {
+          setAnalysisDetails(prev => [...prev, '⚠️  CNIC photo cannot be processed. Please re-upload.']);
+          setResult('failed');
+          setStage('result');
+          return;
+        }
+
+        setAnalysisDetails(prev => [...prev, '✓ CNIC reference face extracted and encoded']);
+
+        // Step 6: REAL face comparison using Euclidean distance
+        const comparison = compareFaces(selfieDescriptor, cnicDescriptor);
+        setConfidence(comparison.confidence);
+      
+        setAnalysisDetails(prev => [...prev, `✓ Computing Euclidean distance metric`]);
+        setAnalysisDetails(prev => [...prev, `📏 Distance: ${comparison.distance.toFixed(4)} (threshold: 0.60)`]);
+        setAnalysisDetails(prev => [...prev, `📊 Confidence score: ${comparison.confidence}%`]);
+
+        if (comparison.match) {
+          setResult('match');
+          setAnalysisDetails(prev => [...prev, '✅ VERIFICATION PASSED — Faces match!']);
+          await new Promise(r => setTimeout(r, 500));
+          completeFaceVerification(currentUser.id);
+        } else {
+          setResult('failed');
+          setAnalysisDetails(prev => [...prev, `❌ VERIFICATION FAILED — Distance ${comparison.distance.toFixed(4)} > 0.60`]);
+        }
+      } catch (err) {
+        console.error('Face verification error:', err);
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        setAnalysisDetails(prev => [...prev, `✗ Error: ${errorMsg}`]);
+        setResult('failed');
+      }
+
+      setStage('result');
+    };
   // Cleanup on unmount
   useEffect(() => {
     return () => {

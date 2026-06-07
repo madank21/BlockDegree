@@ -6,6 +6,9 @@ import {
   GraduationCap, Printer, Share2, CheckCircle2, Link2,
   X, Copy, Eye
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import DegreeCertificate from '../components/DegreeCertificate';
 
 export default function MyDegrees() {
   const { currentUser, degreeApplications } = useStore();
@@ -26,6 +29,36 @@ export default function MyDegrees() {
   const handlePrint = () => {
     window.print();
   };
+  
+    const downloadPDF = async (degree: any) => {
+      try {
+        const element = document.getElementById(`degree-certificate-${degree.id}`);
+        if (!element) return;
+
+        // Create canvas from the certificate HTML
+        const canvas = await html2canvas(element, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+        });
+
+        // Create PDF from canvas
+        const pdf = new jsPDF({
+          orientation: 'landscape',
+          unit: 'px',
+          format: [canvas.width / 2, canvas.height / 2],
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 2, canvas.height / 2);
+        pdf.save(`${degree.degreeId}_Certificate.pdf`);
+      } catch (err) {
+        console.error('PDF download error:', err);
+        alert('Failed to download PDF. Please try again.');
+      }
+    };
 
   return (
     <div className="space-y-6">
@@ -99,7 +132,10 @@ export default function MyDegrees() {
                   <button className="flex-1 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm flex items-center justify-center gap-1.5 transition text-white" onClick={e => { e.stopPropagation(); handlePrint(); }}>
                     <Printer className="w-4 h-4" /> Print
                   </button>
-                  <button className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm flex items-center justify-center gap-1.5 transition text-white" onClick={e => { e.stopPropagation(); copyHash(deg.blockchainHash || ''); }}>
+                    <button className="flex-1 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm flex items-center justify-center gap-1.5 transition text-white" onClick={e => { e.stopPropagation(); downloadPDF(deg); }}>
+                      <Printer className="w-4 h-4" /> Download
+                    </button>
+                    <button className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm flex items-center justify-center gap-1.5 transition text-white" onClick={e => { e.stopPropagation(); copyHash(deg.blockchainHash || ''); }}>
                     <Share2 className="w-4 h-4" /> Share
                   </button>
                 </div>
@@ -128,26 +164,31 @@ export default function MyDegrees() {
             >
               {/* Certificate */}
               <div className="bg-gradient-to-b from-amber-50 to-amber-100 rounded-xl p-1 shadow-2xl" id="degree-certificate">
-                <div className="border-4 border-double border-amber-800/30 rounded-lg p-8 lg:p-12 text-center relative overflow-hidden">
-                  {/* Watermark */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
-                    <GraduationCap className="w-96 h-96 text-amber-900" />
-                  </div>
+                  <DegreeCertificate degree={activeDegree} user={currentUser} />
+                </div>
 
-                  {/* Header */}
-                  <div className="relative">
-                    <div className="flex items-center justify-center gap-4 mb-2">
-                      <img src="/images/university-logo.png" alt="Logo" className="w-16 h-16 rounded-full object-cover" />
-                    </div>
-                    <h2 className="text-2xl lg:text-3xl font-serif font-bold text-amber-900 mb-1">IQRA UNIVERSITY</h2>
-                    <p className="text-sm text-amber-700 tracking-widest uppercase">Karachi, Pakistan</p>
-                    <div className="w-32 h-px bg-amber-800/30 mx-auto my-4" />
-                    <p className="text-sm text-amber-600 italic">This is to certify that</p>
-                  </div>
+                {/* Modal Footer */}
+                <div className="flex gap-3 mt-4 justify-center">
+                  <button
+                    onClick={() => downloadPDF(activeDegree)}
+                    className="px-6 py-2 bg-green-600 hover:bg-green-500 rounded-lg font-medium text-white transition flex items-center gap-2"
+                  >
+                    <Printer className="w-4 h-4" /> Download PDF
+                  </button>
+                  <button
+                    onClick={() => handlePrint()}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-white transition flex items-center gap-2"
+                  >
+                    <Printer className="w-4 h-4" /> Print
+                  </button>
+                  <button
+                    onClick={() => setSelectedDegree(null)}
+                    className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium text-white transition flex items-center gap-2"
+                  >
+                    <X className="w-4 h-4" /> Close
+                  </button>
+                </div>
 
-                  {/* Student Info */}
-                  <div className="my-6">
-                    <h1 className="text-3xl lg:text-4xl font-serif font-bold text-amber-950 mb-2">{activeDegree.studentName}</h1>
                     <p className="text-sm text-amber-700">Registration No: {activeDegree.registrationNumber}</p>
                   </div>
 
