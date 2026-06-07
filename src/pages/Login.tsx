@@ -16,7 +16,7 @@ export default function Login({ onNavigate }: LoginProps) {
   const [loading, setLoading] = useState(false);
 
   const demoAccounts = [
-    { email: 'madan.70618@iqra.edu.pk', role: 'Student (Verified)', color: 'blue' },
+    //{ email: 'madan.70618@iqra.edu.pk', role: 'Student (Verified)', color: 'blue' },
     { email: 'admin@iqra.edu.pk', role: 'Administrator', color: 'purple' },
     { email: 'hr@techcorp.com', role: 'Employer', color: 'green' },
   ];
