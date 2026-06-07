@@ -189,58 +189,7 @@ export default function MyDegrees() {
                   </button>
                 </div>
 
-                    <p className="text-sm text-amber-700">Registration No: {activeDegree.registrationNumber}</p>
-                  </div>
-
-                  <p className="text-amber-700 mb-2">has successfully completed the requirements for the degree of</p>
-
-                  <h3 className="text-xl lg:text-2xl font-serif font-bold text-amber-900 my-4">{activeDegree.degreeTitle}</h3>
-
-                  <p className="text-amber-700 text-sm mb-1">from the Department of {activeDegree.department}</p>
-                  <p className="text-amber-700 text-sm">with a Cumulative Grade Point Average of <strong className="text-amber-900">{activeDegree.cgpa}</strong></p>
-                  <p className="text-amber-700 text-sm mt-2">Graduated in the year <strong className="text-amber-900">{activeDegree.graduationYear}</strong></p>
-
-                  <div className="w-32 h-px bg-amber-800/30 mx-auto my-6" />
-
-                  {/* Bottom details */}
-                  <div className="grid grid-cols-3 gap-4 text-center mb-6">
-                    <div>
-                      <div className="w-24 h-px bg-amber-800/30 mx-auto mb-2" />
-                      <p className="text-xs text-amber-600">Vice Chancellor</p>
-                    </div>
-                    <div>
-                      <div className="w-24 h-px bg-amber-800/30 mx-auto mb-2" />
-                      <p className="text-xs text-amber-600">Registrar</p>
-                    </div>
-                    <div>
-                      <div className="w-24 h-px bg-amber-800/30 mx-auto mb-2" />
-                      <p className="text-xs text-amber-600">Controller of Examinations</p>
-                    </div>
-                  </div>
-
-                  {/* QR and Blockchain */}
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/50 rounded-lg p-4">
-                    <div>
-                      <QRCodeSVG
-                        value={activeDegree.qrCodeData || activeDegree.degreeId || ''}
-                        size={80}
-                        level="H"
-                        includeMargin
-                        bgColor="transparent"
-                      />
-                    </div>
-                    <div className="text-left flex-1">
-                      <p className="text-xs text-amber-600 font-medium">Cryptographically Attested</p>
-                      <p className="text-[10px] text-amber-500 font-mono break-all mt-1">ID: {activeDegree.degreeId}</p>
-                      <p className="text-[10px] text-amber-500 font-mono break-all mt-0.5">Hash: {activeDegree.blockchainHash?.substring(0, 42)}...</p>
-                    </div>
-                    <div className="flex items-center gap-1 bg-green-100 px-3 py-1 rounded-full">
-                      <CheckCircle2 className="w-3 h-3 text-green-600" />
-                      <span className="text-xs text-green-700 font-medium">VALID</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                    
 
               {/* Actions */}
               <div className="bg-gray-900 rounded-b-xl p-4 flex flex-wrap gap-3 justify-between items-center border-t border-gray-800">
