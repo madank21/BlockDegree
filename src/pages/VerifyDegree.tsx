@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../useStore';
+
 import { QRCodeSVG } from 'qrcode.react';
 import {
   Search, CheckCircle2, XCircle, Link2, Shield, Loader2, AlertTriangle
 } from 'lucide-react';
 
 export default function VerifyDegree() {
-  const { verifyDegree } = useStore();
+  const { verifyDegreeStrict, verifyDegree } = useStore();
+
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -18,6 +20,21 @@ export default function VerifyDegree() {
     setLoading(true);
     setSearched(false);
     await new Promise(r => setTimeout(r, 1500));
+    const res = verifyDegreeStrict(query.trim());
+    if (!res) {
+      setResult(null);
+      setSearched(true);
+      setLoading(false);
+      return;
+    }
+
+    // If strict verification fails, force INVALID display.
+    if (!res.valid) {
+      setResult({ ...(res as any), status: 'revoked' } as any);
+    } else {
+      setResult(res as any);
+    }
+
     const res = verifyDegree(query.trim());
 
     // Extra safety: reject if required documents were never validated
@@ -167,8 +184,7 @@ export default function VerifyDegree() {
               </div>
             </div>
           ) : result && result.status === 'revoked' ? (
-            <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6 text-center">
-              <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-3" />
+            <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6 text-center">              <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-3" />
               <h3 className="text-lg font-bold text-red-400">REVOKED — Degree Revoked</h3>
               <p className="text-sm text-gray-400 mt-1">This degree has been revoked by the issuing authority</p>
             </div>

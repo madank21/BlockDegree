@@ -543,12 +543,53 @@ export const store = {
     notify();
   },
 
-  // Verify degree
+  // Verify degree (basic lookup)
   verifyDegree(degreeIdOrHash: string): DegreeApplication | null {
     return state.degreeApplications.find(d =>
       d.degreeId === degreeIdOrHash || d.blockchainHash === degreeIdOrHash
     ) || null;
   },
+
+  // Verify degree with required document validation checks
+  // Rejects issued degrees if CNIC/marksheet/certificate are missing or not validated as 'valid'
+  verifyDegreeStrict(degreeIdOrHash: string): (DegreeApplication & { valid: boolean; validationErrors: string[] }) | null {
+    const degree = state.degreeApplications.find(d =>
+      d.degreeId === degreeIdOrHash || d.blockchainHash === degreeIdOrHash
+    );
+
+    if (!degree) return null;
+
+    const student = state.users.find(u => u.id === degree.studentId);
+    const errors: string[] = [];
+
+    if (!student) {
+      errors.push('Student record not found for this degree.');
+      return { ...(degree as any), valid: false, validationErrors: errors };
+    }
+
+    const requiredTypes: Array<UploadedDocument['type']> = ['cnic', 'marksheet', 'certificate'];
+    const docs = student.documents || [];
+
+    for (const type of requiredTypes) {
+      const doc = docs.find(d => d.type === type);
+      if (!doc) {
+        errors.push(`Missing required document: ${type}`);
+        continue;
+      }
+      if (doc.validationStatus !== 'valid') {
+        errors.push(`Required document not validated (${type}): ${doc.validationStatus || 'pending/unknown'}`);
+      }
+    }
+
+    const valid = errors.length === 0;
+
+    return {
+      ...(degree as any),
+      valid,
+      validationErrors: errors,
+    };
+  },
+
 
   // Audit
   addAuditLog(action: string, userId: string, userName: string, details: string, category: AuditLog['category']) {
