@@ -273,7 +273,11 @@ export default function DocumentUpload() {
         uploadedAt: new Date().toISOString(),
         ocrStatus: 'processing' as const,
         yoloStatus: 'processing' as const,
+        // Store the uploaded dataURL so FaceVerification can extract CNIC face reference.
+        // This avoids relying on a non-existent fileUrl field.
+        fileUrl: imageData,
       };
+
       
       uploadDocument(currentUser.id, doc);
       setUploading(null);

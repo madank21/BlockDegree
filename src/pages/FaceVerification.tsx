@@ -298,28 +298,36 @@ export default function FaceVerification() {
         // Step 4: Get CNIC reference photo
         const cnicDoc = currentUser.documents?.find(d => d.type === 'cnic');
         if (!cnicDoc) {
-          setAnalysisDetails(prev => [...prev, '⚠️  No CNIC document on file. Using fallback reference.']);
+          setAnalysisDetails(prev => [...prev, '⚠️  No CNIC document on file. Please upload CNIC first.']);
           setResult('failed');
           setStage('result');
           return;
         }
 
-        setAnalysisDetails(prev => [...prev, '✓ Found CNIC reference photo in profile']);
+        setAnalysisDetails(prev => [...prev, '✓ Found CNIC reference document in profile']);
 
-        // Step 5: Extract face from CNIC (would come from stored file)
+        // Step 5: Extract face from CNIC using stored dataURL
         const { extractFaceFromDataURL } = await import('../lib/faceVerification');
-      
+
+        // We persist uploaded dataURL as `fileUrl` in DocumentUpload.
+        // (Previously code tried `fileUrl` but DocumentUpload never stored it.)
+        const cnicDataUrl = (cnicDoc as any).fileUrl as string | undefined;
+        if (!cnicDataUrl) {
+          setAnalysisDetails(prev => [...prev, '⚠️  CNIC data is missing. Please re-upload CNIC so face reference can be extracted.']);
+          setResult('failed');
+          setStage('result');
+          return;
+        }
+
         let cnicDescriptor = null;
-        if (cnicDoc && 'fileUrl' in cnicDoc) {
-          try {
-            cnicDescriptor = await extractFaceFromDataURL(cnicDoc.fileUrl as any);
-          } catch (e) {
-            console.warn('Could not extract CNIC photo');
-          }
+        try {
+          cnicDescriptor = await extractFaceFromDataURL(cnicDataUrl);
+        } catch {
+          cnicDescriptor = null;
         }
 
         if (!cnicDescriptor) {
-          setAnalysisDetails(prev => [...prev, '⚠️  CNIC photo cannot be processed. Please re-upload.']);
+          setAnalysisDetails(prev => [...prev, '⚠️  CNIC photo cannot be processed (no face detected). Please re-upload.']);
           setResult('failed');
           setStage('result');
           return;
