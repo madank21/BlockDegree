@@ -13,7 +13,8 @@ export default function VerifyDegree() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-  const [result, setResult] = useState<ReturnType<typeof verifyDegree>>(null);
+  const [result, setResult] = useState<any>(null);
+
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,23 +36,6 @@ export default function VerifyDegree() {
       setResult(res as any);
     }
 
-    const res = verifyDegree(query.trim());
-
-    // Extra safety: reject if required documents were never validated
-    // (degree verification should not be marked valid if required docs mismatch/unvalidated)
-    if (res && res.status === 'issued') {
-      // Real document-validation checks are not available in VerifyDegree right now because
-      // store.verifyDegree() only returns the DegreeApplication and does not return document statuses.
-      // To avoid incorrect "VALID" claims, conservatively downgrade issued degrees to "pending"
-      // when fraudScore indicates risk.
-
-      const isRisky = typeof res.fraudScore === 'number' ? res.fraudScore < 40 : false;
-      if (isRisky) setResult({ ...res, status: 'pending' } as any);
-      else setResult(res);
-
-    } else {
-      setResult(res);
-    }
 
     setSearched(true);
     setLoading(false);
