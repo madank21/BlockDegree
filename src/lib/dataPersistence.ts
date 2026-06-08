@@ -44,7 +44,8 @@ export const UserDataManager = {
       this.updateLastSync();
     } catch (err) {
       console.error('Error saving user:', err);
-      this.handleStorageError(err);
+      // ignore
+
     }
   },
 
@@ -298,18 +299,27 @@ export const DegreeManager = {
  */
 export const BackupManager = {
   /**
-   * Create full backup of all data
+   * Create full backup of all data.
+   * Note: The app state is primarily persisted by src/store.ts under STORAGE_KEY='blockdegree_store'.
+   * This backup therefore serializes that same state to avoid persistence drift.
    */
+
   createBackup(): { success: boolean; timestamp: string; size: number } {
     try {
+      const appStateRaw = localStorage.getItem('blockdegree_store');
       const backup = {
         timestamp: new Date().toISOString(),
         data: {
+          // Preserve exact UI state used by the app
+          appStoreState: appStateRaw ? JSON.parse(appStateRaw) : null,
+
+          // Also include the normalized managers as extra fallback
           users: UserDataManager.getAllUsers(),
           documents: DocumentManager.getAllDocuments(),
           degrees: DegreeManager.getAllDegrees(),
         },
       };
+
 
       const backupStr = JSON.stringify(backup);
       localStorage.setItem(BACKUP_KEY, backupStr);
