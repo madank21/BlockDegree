@@ -295,8 +295,10 @@ export default function FaceVerification() {
 
         setStage('comparing');
 
-        // Step 4: Get CNIC reference photo
-        const cnicDoc = currentUser.documents?.find(d => d.type === 'cnic');
+        // Step 4: Ensure required document validation is PASSED before allowing face verification
+        const requiredDocs = (currentUser.documents || []).filter(d => d.type === 'cnic');
+        const cnicDoc = requiredDocs[0];
+
         if (!cnicDoc) {
           setAnalysisDetails(prev => [...prev, '⚠️  No CNIC document on file. Please upload CNIC first.']);
           setResult('failed');
@@ -304,13 +306,21 @@ export default function FaceVerification() {
           return;
         }
 
-        setAnalysisDetails(prev => [...prev, '✓ Found CNIC reference document in profile']);
+        if (cnicDoc.validationStatus !== 'valid') {
+          const reason = cnicDoc.validationErrors?.length
+            ? `: ${cnicDoc.validationErrors[0]}`
+            : '';
+          setAnalysisDetails(prev => [...prev, `✗ CNIC data validation not passed${reason}. Re-validate or re-upload CNIC.`]);
+          setResult('failed');
+          setStage('result');
+          return;
+        }
+
+        setAnalysisDetails(prev => [...prev, '✓ CNIC validation passed — proceeding to face comparison']);
 
         // Step 5: Extract face from CNIC using stored dataURL
         const { extractFaceFromDataURL } = await import('../lib/faceVerification');
 
-        // We persist uploaded dataURL as `fileUrl` in DocumentUpload.
-        // (Previously code tried `fileUrl` but DocumentUpload never stored it.)
         const cnicDataUrl = (cnicDoc as any).fileUrl as string | undefined;
         if (!cnicDataUrl) {
           setAnalysisDetails(prev => [...prev, '⚠️  CNIC data is missing. Please re-upload CNIC so face reference can be extracted.']);
@@ -318,6 +328,7 @@ export default function FaceVerification() {
           setStage('result');
           return;
         }
+
 
         let cnicDescriptor = null;
         try {

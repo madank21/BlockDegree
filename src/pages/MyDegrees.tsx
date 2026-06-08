@@ -364,40 +364,15 @@ export default function MyDegrees() {
               )}
 
               {/* Action Buttons Footer */}
+              {/* Removed extra options: print-only (QR is already printed as part of DegreeCertificate) */}
               <div className="flex flex-wrap gap-3 mt-4 justify-center">
                 {activeDegree.status === 'issued' && (
-                  <>
-                    <button
-                      onClick={() => downloadPDF(activeDegree)}
-                      className="px-6 py-2 bg-green-600 hover:bg-green-500 rounded-lg font-medium text-white transition flex items-center gap-2"
-                    >
-                      <Download className="w-4 h-4" /> PDF
-                    </button>
-                    <button
-                      onClick={() => printCertificate(activeDegree.id)}
-                      className="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-white transition flex items-center gap-2"
-                    >
-                      <Printer className="w-4 h-4" /> Print
-                    </button>
-                    <button
-                      onClick={() => shareDegree(activeDegree)}
-                      className="px-6 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg font-medium text-white transition flex items-center gap-2"
-                    >
-                      <Share2 className="w-4 h-4" /> Share
-                    </button>
-                    <button
-                      onClick={() => exportJson(activeDegree)}
-                      className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-medium text-white transition flex items-center gap-2"
-                    >
-                      <FileJson className="w-4 h-4" /> Export JSON
-                    </button>
-                    <button
-                      onClick={downloadQR}
-                      className="px-6 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg font-medium text-white transition flex items-center gap-2"
-                    >
-                      <QrCode className="w-4 h-4" /> Download QR
-                    </button>
-                  </>
+                  <button
+                    onClick={() => printCertificate(activeDegree.id)}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-white transition flex items-center gap-2"
+                  >
+                    <Printer className="w-4 h-4" /> Print
+                  </button>
                 )}
                 <button
                   onClick={() => setSelectedDegree(null)}
@@ -406,6 +381,7 @@ export default function MyDegrees() {
                   <X className="w-4 h-4" /> Close
                 </button>
               </div>
+
             </motion.div>
           </motion.div>
         )}
