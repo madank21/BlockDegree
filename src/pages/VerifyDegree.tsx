@@ -29,12 +29,11 @@ export default function VerifyDegree() {
       return;
     }
 
-    // If strict verification fails, force INVALID display.
-    if (!res.valid) {
-      setResult({ ...(res as any), status: 'revoked' } as any);
-    } else {
-      setResult(res as any);
-    }
+    // Strict verification result wiring:
+    // - valid  => VALID
+    // - invalid => INVALID (show mismatch/missing reasons)
+    setResult({ ...(res as any), status: res.valid ? 'issued' : 'invalid' } as any);
+
 
 
     setSearched(true);
@@ -113,6 +112,7 @@ export default function VerifyDegree() {
               </div>
 
               <div className="p-6 space-y-4">
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-3">
                     <div>
@@ -168,18 +168,38 @@ export default function VerifyDegree() {
               </div>
             </div>
           ) : result && result.status === 'revoked' ? (
-            <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6 text-center">              <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-3" />
+            <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6 text-center">
+              <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-3" />
               <h3 className="text-lg font-bold text-red-400">REVOKED — Degree Revoked</h3>
               <p className="text-sm text-gray-400 mt-1">This degree has been revoked by the issuing authority</p>
             </div>
           ) : (
-            <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-8 text-center">
-              <XCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
-              <h3 className="text-lg font-bold text-red-400">INVALID — Degree Not Found</h3>
-              <p className="text-sm text-gray-400 mt-1">No degree matching this ID or hash was found in the system</p>
-              <p className="text-xs text-gray-500 mt-2">This could indicate a fraudulent or non-existent credential</p>
+            <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-8">
+              <div className="flex items-start gap-3">
+                <XCircle className="w-12 h-12 text-red-400 mt-1 shrink-0" />
+                <div>
+                  <h3 className="text-lg font-bold text-red-400">INVALID — Verification Failed</h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    {result?.validationErrors?.length
+                      ? 'Degree does not match required documents (OCR/validation mismatch).'
+                      : 'No valid attestation record found for this Degree ID / hash.'}
+                  </p>
+
+                  {Array.isArray(result?.validationErrors) && result.validationErrors.length > 0 && (
+                    <div className="mt-4 bg-gray-900/50 rounded-lg p-4 border border-red-500/20">
+                      <p className="text-xs text-gray-400 uppercase font-medium">Reasons</p>
+                      <ul className="mt-2 list-disc pl-5 space-y-1 text-sm text-gray-300">
+                        {result.validationErrors.map((err: string, idx: number) => (
+                          <li key={idx}>{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
+
         </motion.div>
       )}
     </div>
