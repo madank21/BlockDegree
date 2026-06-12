@@ -3,20 +3,28 @@ import { motion } from 'framer-motion';
 import { useStore } from '../useStore';
 
 import { QRCodeSVG } from 'qrcode.react';
-import {
-  Search, CheckCircle2, XCircle, Link2, Shield, Loader2, AlertTriangle
-} from 'lucide-react';
+import { Search, CheckCircle2, XCircle, Link2, Shield, Loader2, AlertTriangle } from 'lucide-react';
+
+import type { DegreeApplication } from '../types';
+
+type VerifyStrictResult = (DegreeApplication & {
+  valid: boolean;
+  validationErrors: string[];
+}) & {
+  status: 'issued' | 'invalid';
+};
 
 export default function VerifyDegree() {
-  const { verifyDegreeStrict, verifyDegree } = useStore();
+  const { verifyDegreeStrict } = useStore();
 
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<VerifyStrictResult | null>(null);
 
 
-  const handleVerify = async (e: React.FormEvent) => {
+
+  const handleVerify = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setSearched(false);

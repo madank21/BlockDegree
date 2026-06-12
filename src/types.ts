@@ -36,7 +36,9 @@ export interface UploadedDocument {
   extractedData?: Record<string, string>;
   validationStatus?: 'pending' | 'valid' | 'mismatch' | 'invalid';
   validationErrors?: string[];
+  fileUrl?: string;
 }
+
 
 export interface DegreeApplication {
   id: string;
