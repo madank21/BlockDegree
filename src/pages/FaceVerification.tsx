@@ -46,7 +46,7 @@ export default function FaceVerification() {
   // Start camera
   const startCamera = async () => {
     setCameraError(null);
-    setStage('camera');
+    setStage('permission');
     
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -59,6 +59,7 @@ export default function FaceVerification() {
       });
       
       streamRef.current = stream;
+      setStage('camera');
       setPermissionStatus('granted');
       
       if (videoRef.current) {

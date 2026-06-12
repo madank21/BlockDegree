@@ -543,20 +543,21 @@ export const store = {
     notify();
   },
 
-  // Verify degree (basic lookup)
+  /**
+   * Basic Degree Lookup
+   */
   verifyDegree(degreeIdOrHash: string): DegreeApplication | null {
     return state.degreeApplications.find(d =>
       d.degreeId === degreeIdOrHash || d.blockchainHash === degreeIdOrHash
     ) || null;
   },
 
-  // Verify degree with required document validation checks
-  // Rejects issued degrees if CNIC/marksheet/certificate are missing or not validated as 'valid'
-  verifyDegreeStrict(degreeIdOrHash: string): (DegreeApplication & { valid: boolean; validationErrors: string[] }) | null {
-    const degree = state.degreeApplications.find(d =>
-      d.degreeId === degreeIdOrHash || d.blockchainHash === degreeIdOrHash
-    );
-
+  /**
+   * Deep Verification Logic
+   * Rejects degrees if the supporting evidence (OCR/Docs) is invalid.
+   */
+  verifyDegreeStrict(degreeIdOrHash: string): (DegreeApplication & { valid: boolean; errors: string[] }) | null {
+    const degree = this.verifyDegree(degreeIdOrHash);
     if (!degree) return null;
 
     const student = state.users.find(u => u.id === degree.studentId);
@@ -564,30 +565,18 @@ export const store = {
 
     if (!student) {
       errors.push('Student record not found for this degree.');
-      return { ...(degree as any), valid: false, validationErrors: errors };
+    } else {
+      // Check if all required docs exist and are 'valid'
+      const required = ['cnic', 'marksheet', 'certificate'];
+      required.forEach(type => {
+        const doc = student.documents?.find(d => d.type === type);
+        if (!doc || doc.validationStatus !== 'valid') {
+          errors.push(`Supporting ${type} is missing or has data mismatches.`);
+        }
+      });
     }
 
-    const requiredTypes: Array<UploadedDocument['type']> = ['cnic', 'marksheet', 'certificate'];
-    const docs = student.documents || [];
-
-    for (const type of requiredTypes) {
-      const doc = docs.find(d => d.type === type);
-      if (!doc) {
-        errors.push(`Missing required document: ${type}`);
-        continue;
-      }
-      if (doc.validationStatus !== 'valid') {
-        errors.push(`Required document not validated (${type}): ${doc.validationStatus || 'pending/unknown'}`);
-      }
-    }
-
-    const valid = errors.length === 0;
-
-    return {
-      ...(degree as any),
-      valid,
-      validationErrors: errors,
-    };
+    return { ...degree, valid: errors.length === 0, errors };
   },
 
 

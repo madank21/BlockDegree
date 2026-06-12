@@ -9,7 +9,7 @@ import type { DegreeApplication } from '../types';
 
 type VerifyStrictResult = (DegreeApplication & {
   valid: boolean;
-  validationErrors: string[];
+  errors: string[];
 }) & {
   status: 'issued' | 'invalid';
 };
@@ -188,16 +188,16 @@ export default function VerifyDegree() {
                 <div>
                   <h3 className="text-lg font-bold text-red-400">INVALID — Verification Failed</h3>
                   <p className="text-sm text-gray-400 mt-1">
-                    {result?.validationErrors?.length
+                    {result?.errors?.length
                       ? 'Degree does not match required documents (OCR/validation mismatch).'
                       : 'No valid attestation record found for this Degree ID / hash.'}
                   </p>
 
-                  {Array.isArray(result?.validationErrors) && result.validationErrors.length > 0 && (
+                  {Array.isArray(result?.errors) && result.errors.length > 0 && (
                     <div className="mt-4 bg-gray-900/50 rounded-lg p-4 border border-red-500/20">
                       <p className="text-xs text-gray-400 uppercase font-medium">Reasons</p>
                       <ul className="mt-2 list-disc pl-5 space-y-1 text-sm text-gray-300">
-                        {result.validationErrors.map((err: string, idx: number) => (
+                        {result.errors.map((err: string, idx: number) => (
                           <li key={idx}>{err}</li>
                         ))}
                       </ul>

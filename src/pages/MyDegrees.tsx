@@ -355,16 +355,7 @@ export default function MyDegrees() {
                 </div>
               </div>
 
-              {/* QR Code (for issued degrees) */}
-              {activeDegree.status === 'issued' && activeDegree.degreeId && (
-                <div className="bg-gray-900 rounded-xl p-4 mt-4 flex flex-col items-center" id="degreeQR">
-                  <p className="text-sm text-gray-400 mb-2">Scan to verify</p>
-                  <QRCodeSVG value={getVerificationUrl(activeDegree.degreeId)} size={160} />
-                </div>
-              )}
-
               {/* Action Buttons Footer */}
-              {/* Removed extra options: print-only (QR is already printed as part of DegreeCertificate) */}
               <div className="flex flex-wrap gap-3 mt-4 justify-center">
                 {activeDegree.status === 'issued' && (
                   <button
