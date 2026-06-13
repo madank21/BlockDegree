@@ -1,256 +1,254 @@
 import { ethers } from 'ethers';
-import { DegreeApplication } from '../types';
+import DegreeRegistryABI from '../../artifacts/contracts/DegreeRegistry.sol/DegreeRegistry.json';
 
-// Smart Contract ABI (from your compiled contract)
-const DEGREE_REGISTRY_ABI = [
-  'function issueDegree(string degreeId, bytes32 degreeHash) external',
-  'function verifyDegree(string degreeId) external view returns (bool, bytes32, uint256)',
-  'function revokeDegree(string degreeId) external',
-  'event DegreeIssued(string indexed degreeId, bytes32 degreeHash, uint256 timestamp)',
-  'event DegreeRevoked(string indexed degreeId, uint256 timestamp)',
-];
+// ── Types ──────────────────────────────────────────────────────────────────
 
-/**
- * Connect to user's Web3 wallet (MetaMask, etc.)
- */
-export async function connectWallet(): Promise<{
-  provider: ethers.BrowserProvider;
-  signer: ethers.Signer;
-  address: string;
-}> {
-  if (!window.ethereum) {
-    throw new Error('MetaMask or similar Web3 wallet not found. Please install one.');
-  }
-
-  try {
-    // Request account access
-    const accounts = await window.ethereum.request({
-      method: 'eth_requestAccounts',
-    });
-
-    const provider = new ethers.BrowserProvider(window.ethereum);
-    const signer = await provider.getSigner();
-    const address = accounts[0];
-
-    return { provider, signer, address };
-  } catch (error: any) {
-    if (error.code === 4001) {
-      throw new Error('User rejected wallet connection');
-    }
-    throw error;
-  }
+export interface DegreeIssuanceInput {
+  degreeId: string;
+  studentName: string;
+  registrationNumber: string;
+  program: string;
+  department: string;
+  admissionYear: number;
+  graduationYear: number;
+  cgpaX100: number; // e.g., 3.75 GPA → 375
 }
 
-/**
- * Get the currently connected wallet address
- */
-export async function getConnectedAddress(): Promise<string | null> {
-  if (!window.ethereum) return null;
-
-  try {
-    const accounts = await window.ethereum.request({
-      method: 'eth_accounts',
-    });
-    return accounts[0] || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Switch to Sepolia testnet
- */
-export async function switchToSepolia(): Promise<void> {
-  if (!window.ethereum) {
-    throw new Error('Web3 wallet not found');
-  }
-
-  try {
-    await window.ethereum.request({
-      method: 'wallet_switchEthereumChain',
-      params: [{ chainId: '0xaa36a7' }], // Sepolia chain ID
-    });
-  } catch (error: any) {
-    if (error.code === 4902) {
-      // Chain not added, add it
-      await window.ethereum.request({
-        method: 'wallet_addEthereumChain',
-        params: [
-          {
-            chainId: '0xaa36a7',
-            chainName: 'Sepolia',
-            rpcUrls: ['https://sepolia.infura.io/v3/' + import.meta.env.VITE_INFURA_KEY],
-            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-            blockExplorerUrls: ['https://sepolia.etherscan.io'],
-          },
-        ],
-      });
-    } else {
-      throw error;
-    }
-  }
-}
-
-/**
- * Hash degree data using Keccak256 (Ethereum standard)
- */
-export function hashDegreeData(data: Record<string, any>): string {
-  const encoded = ethers.AbiCoder.defaultAbiCoder().encode(['string'], [JSON.stringify(data)]);
-  return ethers.keccak256(encoded);
-}
-
-/**
- * Issue a degree on the Ethereum blockchain
- */
-export async function issueDegreeOnChain(
-  degree: DegreeApplication,
-  degreeId: string,
-  contractAddress: string
-): Promise<{
+export interface IssuanceResult {
   txHash: string;
   blockNumber: number;
-  degreeHash: string;
-  issuedAt: string;
-}> {
-  await switchToSepolia();
-
-  const { signer } = await connectWallet();
-  const contract = new ethers.Contract(contractAddress, DEGREE_REGISTRY_ABI, signer);
-
-  // Create degree payload and hash
-  const payload = {
-    degreeId,
-    studentId: degree.studentId,
-    studentName: degree.studentName,
-    registrationNumber: degree.registrationNumber,
-    program: degree.program,
-    degreeTitle: degree.degreeTitle,
-    cgpa: degree.cgpa,
-    admissionYear: degree.admissionYear,
-    graduationYear: degree.graduationYear,
-    issuedAt: new Date().toISOString(),
-  };
-
-  const degreeHash = hashDegreeData(payload);
-
-  try {
-    // Call smart contract function
-    const tx = await contract.issueDegree(degreeId, degreeHash);
-
-    // Wait for transaction to be mined
-    const receipt = await tx.wait();
-
-    if (!receipt) {
-      throw new Error('Transaction failed - no receipt');
-    }
-
-    return {
-      txHash: receipt.hash,
-      blockNumber: receipt.blockNumber,
-      degreeHash,
-      issuedAt: payload.issuedAt,
-    };
-  } catch (error: any) {
-    console.error('Blockchain issue error:', error);
-    throw new Error(`Failed to issue degree: ${error.message}`);
-  }
-}
-
-/**
- * Verify a degree on the blockchain
- */
-export async function verifyDegreeOnChain(
-  degreeId: string,
-  contractAddress: string
-): Promise<{
-  valid: boolean;
-  degreeHash: string;
   timestamp: number;
-  blockNumber?: number;
-  txHash?: string;
-}> {
-  try {
-    // Use public RPC provider (no wallet needed for read-only)
-    const provider = new ethers.JsonRpcProvider(
-      `https://sepolia.infura.io/v3/${import.meta.env.VITE_INFURA_KEY}`
+  degreeHash: string;
+}
+
+export interface DegreeRecord {
+  degreeId: string;
+  degreeHash: string;
+  studentName: string;
+  registrationNumber: string;
+  program: string;
+  department: string;
+  admissionYear: number;
+  graduationYear: number;
+  cgpaX100: number;
+  issuer: string;
+  issuedAt: number;
+  isRevoked: boolean;
+}
+
+export interface VerificationResult {
+  valid: boolean;
+  revoked: boolean;
+  degreeId?: string;
+  message: string;
+}
+
+// ── Provider & Signer ──────────────────────────────────────────────────────
+
+/**
+ * Returns a read-only provider connected to local Ganache.
+ */
+export function getProvider(): ethers.JsonRpcProvider {
+  const rpc = import.meta.env.VITE_GANACHE_RPC || 'http://127.0.0.1:7545';
+  return new ethers.JsonRpcProvider(rpc);
+}
+
+/**
+ * Returns a signer from MetaMask.
+ * Used for write operations like issueDegree or revokeDegree.
+ */
+export async function getSigner(): Promise<ethers.Signer> {
+  if (!window.ethereum) {
+    throw new Error(
+      'MetaMask not detected. Please install MetaMask and connect it to Ganache.'
     );
-
-    const contract = new ethers.Contract(contractAddress, DEGREE_REGISTRY_ABI, provider);
-
-    const [valid, degreeHash, timestamp] = await contract.verifyDegree(degreeId);
-
-    return {
-      valid,
-      degreeHash,
-      timestamp: Number(timestamp) * 1000, // Convert to milliseconds
-    };
-  } catch (error: any) {
-    console.error('Blockchain verification error:', error);
-    throw new Error(`Failed to verify degree: ${error.message}`);
   }
-}
 
-/**
- * Revoke a degree on the blockchain (admin only)
- */
-export async function revokeDegreeOnChain(
-  degreeId: string,
-  contractAddress: string
-): Promise<{ txHash: string; blockNumber: number }> {
-  await switchToSepolia();
+  await window.ethereum.request({ method: 'eth_requestAccounts' });
 
-  const { signer } = await connectWallet();
-  const contract = new ethers.Contract(contractAddress, DEGREE_REGISTRY_ABI, signer);
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const signer = await provider.getSigner();
 
-  try {
-    const tx = await contract.revokeDegree(degreeId);
-    const receipt = await tx.wait();
+  const network = await provider.getNetwork();
+  const expectedChainId = BigInt(import.meta.env.VITE_CHAIN_ID || '1337');
 
-    if (!receipt) {
-      throw new Error('Transaction failed');
-    }
-
-    return {
-      txHash: receipt.hash,
-      blockNumber: receipt.blockNumber,
-    };
-  } catch (error: any) {
-    throw new Error(`Failed to revoke degree: ${error.message}`);
+  if (network.chainId !== expectedChainId) {
+    throw new Error(
+      `Wrong network. MetaMask is on chain ${network.chainId}. ` +
+      `Please switch to Ganache (chain ID ${expectedChainId}).`
+    );
   }
+
+  return signer;
+}
+
+// ── Contract Instances ─────────────────────────────────────────────────────
+
+const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000';
+
+/**
+ * Read-only contract instance.
+ */
+export function getReadContract(): ethers.Contract {
+  const provider = getProvider();
+  return new ethers.Contract(CONTRACT_ADDRESS, DegreeRegistryABI.abi, provider);
 }
 
 /**
- * Get current account balance
+ * Write-enabled contract instance.
  */
-export async function getAccountBalance(): Promise<string> {
-  const { provider, address } = await connectWallet();
-  const balance = await provider.getBalance(address);
-  return ethers.formatEther(balance);
+export async function getWriteContract(): Promise<ethers.Contract> {
+  const signer = await getSigner();
+  return new ethers.Contract(CONTRACT_ADDRESS, DegreeRegistryABI.abi, signer);
 }
 
+// ── Hashing Utility ────────────────────────────────────────────────────────
+
 /**
- * Listen for degree issued events
+ * Deterministic SHA-256 hash of degree data using Web Crypto API.
  */
-export function listenToDegreeEvents(
-  contractAddress: string,
-  onDegreeIssued: (event: any) => void
-): (() => void) {
-  const provider = new ethers.JsonRpcProvider(
-    `https://sepolia.infura.io/v3/${import.meta.env.VITE_INFURA_KEY}`
+export async function computeDegreeHash(input: DegreeIssuanceInput): Promise<string> {
+  const normalized = JSON.stringify({
+    degreeId:           input.degreeId.trim().toLowerCase(),
+    studentName:        input.studentName.trim().toLowerCase(),
+    registrationNumber: input.registrationNumber.trim().toUpperCase(),
+    program:            input.program.trim().toLowerCase(),
+    department:         input.department.trim().toLowerCase(),
+    admissionYear:      input.admissionYear,
+    graduationYear:     input.graduationYear,
+    cgpaX100:           input.cgpaX100,
+  });
+
+  const msgBuffer = new TextEncoder().encode(normalized);
+  const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return '0x' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ── Business Methods ───────────────────────────────────────────────────────
+
+/**
+ * Writes degree hash and student metadata to blockchain.
+ */
+export async function issueDegreeOnChain(
+  input: DegreeIssuanceInput
+): Promise<IssuanceResult> {
+  const degreeHash = await computeDegreeHash(input);
+  const contract = await getWriteContract();
+
+  const tx = await contract.issueDegree(
+    input.degreeId,
+    degreeHash,
+    input.studentName,
+    input.registrationNumber,
+    input.program,
+    input.department,
+    input.admissionYear,
+    input.graduationYear,
+    input.cgpaX100
   );
 
-  const contract = new ethers.Contract(contractAddress, DEGREE_REGISTRY_ABI, provider);
+  const receipt = await tx.wait(1);
+  const provider = contract.runner?.provider as ethers.JsonRpcProvider;
+  const block = await provider.getBlock(receipt.blockNumber);
+  const timestamp = block?.timestamp ?? Math.floor(Date.now() / 1000);
 
-  const listener = (degreeId: string, degreeHash: string, timestamp: number) => {
-    onDegreeIssued({ degreeId, degreeHash, timestamp: Number(timestamp) * 1000 });
+  return {
+    txHash:      receipt.hash,
+    blockNumber: receipt.blockNumber,
+    timestamp,
+    degreeHash,
   };
+}
 
-  contract.on('DegreeIssued', listener);
+/**
+ * Verifies a degree hash on the blockchain.
+ * Returns VALID / REVOKED / INVALID.
+ */
+export async function verifyDegreeOnChain(
+  degreeHash: string
+): Promise<VerificationResult> {
+  try {
+    const contract = getReadContract();
+    const [found, revoked, degreeId] = await contract.verifyByHash(degreeHash);
 
-  // Return unsubscribe function
-  return () => {
-    contract.off('DegreeIssued', listener);
+    if (!found) {
+      return {
+        valid: false,
+        revoked: false,
+        message: 'INVALID — No record found on the blockchain.',
+      };
+    }
+
+    if (revoked) {
+      return {
+        valid: false,
+        revoked: true,
+        degreeId,
+        message: 'REVOKED — This degree has been revoked by the university.',
+      };
+    }
+
+    return {
+      valid: true,
+      revoked: false,
+      degreeId,
+      message: 'VALID — Degree verified on blockchain.',
+    };
+  } catch (err: any) {
+    return { valid: false, revoked: false, message: `Verification error: ${err.message}` };
+  }
+}
+
+/**
+ * Administrative revocation.
+ */
+export async function revokeDegreeOnChain(degreeId: string): Promise<{
+  txHash: string;
+  blockNumber: number;
+}> {
+  const contract = await getWriteContract();
+  const tx = await contract.revokeDegree(degreeId);
+  const receipt = await tx.wait(1);
+  return { txHash: receipt.hash, blockNumber: receipt.blockNumber };
+}
+
+/**
+ * Fetch full record for detail views.
+ */
+export async function getDegreeOnChain(degreeId: string): Promise<DegreeRecord> {
+  const contract = getReadContract();
+  const result = await contract.getDegree(degreeId);
+
+  return {
+    degreeId: result[0], degreeHash: result[1], studentName: result[2],
+    registrationNumber: result[3], program: result[4], department: result[5],
+    admissionYear: Number(result[6]), graduationYear: Number(result[7]),
+    cgpaX100: Number(result[8]), issuer: result[9], issuedAt: Number(result[10]),
+    isRevoked: result[11],
   };
+}
+
+// ── Network Health Check ────────────────────────────────────────────────────
+
+/**
+ * Confirms Ganache is reachable.
+ */
+export async function checkBlockchainConnection(): Promise<{
+  connected: boolean;
+  blockNumber?: number;
+  error?: string;
+}> {
+  try {
+    const provider = getProvider();
+    const blockNumber = await provider.getBlockNumber();
+    return { connected: true, blockNumber };
+  } catch (err: any) {
+    return {
+      connected: false,
+      error: 'Cannot reach Ganache. Make sure it is running on port 7545.',
+    };
+  }
 }
 
 export { ethers };

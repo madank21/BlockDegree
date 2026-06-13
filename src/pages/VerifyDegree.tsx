@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../useStore';
 
+import { verifyDegreeOnChain } from '../lib/ethereumBlockchain';
 import { QRCodeSVG } from 'qrcode.react';
 import { Search, CheckCircle2, XCircle, Link2, Shield, Loader2, AlertTriangle } from 'lucide-react';
 
@@ -28,24 +29,38 @@ export default function VerifyDegree() {
     e.preventDefault();
     setLoading(true);
     setSearched(false);
-    await new Promise(r => setTimeout(r, 1500));
-    const res = verifyDegreeStrict(query.trim());
-    if (!res) {
-      setResult(null);
+    
+    try {
+      const q = query.trim();
+      let res: any = null;
+
+      // If user provided a 66-char hex hash, check blockchain directly
+      if (q.startsWith('0x') && q.length === 66) {
+        const chainRes = await verifyDegreeOnChain(q);
+        if (chainRes.valid && chainRes.degreeId) {
+          // Fetch local metadata if found on chain
+          const localData = await verifyDegreeStrict(chainRes.degreeId);
+          res = localData;
+        } else {
+          res = { valid: false, errors: [chainRes.message] };
+        }
+      } else {
+        // Standard Degree ID lookup (includes blockchain check in strict mode)
+        res = await verifyDegreeStrict(q);
+      }
+
+      if (!res) {
+        setResult(null);
+      } else {
+        setResult({ ...res, status: res.valid ? 'issued' : 'invalid' });
+      }
+    } catch (error) {
+      console.error('Verification error:', error);
+      setResult({ valid: false, errors: ['An internal error occurred during verification.'] } as any);
+    } finally {
       setSearched(true);
       setLoading(false);
-      return;
     }
-
-    // Strict verification result wiring:
-    // - valid  => VALID
-    // - invalid => INVALID (show mismatch/missing reasons)
-    setResult({ ...(res as any), status: res.valid ? 'issued' : 'invalid' } as any);
-
-
-
-    setSearched(true);
-    setLoading(false);
   };
 
   const presetQueries = [

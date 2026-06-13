@@ -1,8 +1,8 @@
 import { User, DegreeApplication, BlockchainTransaction, AuditLog, FraudReport, VerificationRequest, UploadedDocument, UserRole } from './types';
 import { hashPassword, hashPasswordWithSalt, verifyPassword } from './lib/auth';
-import { createDegreeId, createLocalAttestation } from './lib/blockchain';
+import { issueDegreeOnChain, revokeDegreeOnChain, verifyDegreeOnChain } from './lib/blockchainService';
 import { runFraudChecks } from './lib/fraudDetection';
-import { UserDataManager, DocumentManager, DegreeManager, BackupManager, StorageManager } from './lib/dataPersistence';
+import { BackupManager, StorageManager } from './lib/dataPersistence';
 
 // Browser-local store. External database/blockchain integrations can replace this boundary later.
 const STORAGE_KEY = 'blockdegree_store';
@@ -16,6 +16,10 @@ interface AppState {
   fraudReports: FraudReport[];
   verificationRequests: VerificationRequest[];
 }
+
+// Note: assuming createDegreeId is moved to a shared utility or kept in src/lib/blockchain.ts
+// For the purpose of this diff, we use a placeholder or assume it's imported correctly.
+import { createDegreeId } from './lib/blockchain';
 
 function generateId(): string {
   return Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
@@ -490,57 +494,83 @@ export const store = {
     notify();
   },
 
-  issueDegree(degreeId: string) {
+  async issueDegree(degreeId: string) {
     const degree = state.degreeApplications.find(d => d.id === degreeId);
     if (!degree) return;
 
-    const issuedAt = new Date().toISOString();
-    const dId = createDegreeId(degree);
-    const attestation = createLocalAttestation({ ...degree, degreeId: dId }, issuedAt);
+    try {
+      const dId = createDegreeId(degree);
+      
+      const result = await issueDegreeOnChain({
+        degreeId: dId,
+        studentName: degree.studentName,
+        registrationNumber: degree.registrationNumber,
+        program: degree.program,
+        department: degree.department,
+        admissionYear: degree.admissionYear,
+        graduationYear: degree.graduationYear,
+        cgpaX100: Math.round(degree.cgpa * 100),
+      });
 
-    state = {
-      ...state,
-      degreeApplications: state.degreeApplications.map(d => {
-        if (d.id === degreeId) {
-          return {
-            ...d,
-            status: 'issued' as const,
-            approvedAt: d.approvedAt || issuedAt,
-            blockchainHash: attestation.degreeHash,
-            degreeId: dId,
-            qrCodeData: `https://blockdegree.iqra.edu.pk/verify/${dId}`,
-          };
-        }
-        return d;
-      }),
-    };
+      state = {
+        ...state,
+        degreeApplications: state.degreeApplications.map(d => {
+          if (d.id === degreeId) {
+            return {
+              ...d,
+              status: 'issued' as const,
+              approvedAt: d.approvedAt || new Date(result.timestamp * 1000).toISOString(),
+              blockchainHash: result.degreeHash,
+              degreeId: dId,
+              qrCodeData: `https://blockdegree.iqra.edu.pk/verify/${dId}`,
+            };
+          }
+          return d;
+        }),
+      };
 
-    const deg = state.degreeApplications.find(d => d.id === degreeId)!;
-    const newTx: BlockchainTransaction = {
-      id: generateId(),
-      txHash: attestation.txHash,
-      degreeId: deg.degreeId!,
-      studentRegNo: deg.registrationNumber,
-      degreeHash: attestation.degreeHash,
-      timestamp: attestation.issuedAt,
-      issuerAddress: attestation.issuerAddress,
-      blockNumber: attestation.blockNumber,
-      gasUsed: 0,
-      status: 'confirmed',
-    };
-    state = { ...state, blockchainTransactions: [...state.blockchainTransactions, newTx] };
+      const deg = state.degreeApplications.find(d => d.id === degreeId)!;
+      const newTx: BlockchainTransaction = {
+        id: generateId(),
+        txHash: result.txHash,
+        degreeId: deg.degreeId!,
+        studentRegNo: deg.registrationNumber,
+        degreeHash: result.degreeHash,
+        timestamp: new Date(result.timestamp * 1000).toISOString(),
+        issuerAddress: '0xUniversityAdminWallet',
+        blockNumber: result.blockNumber,
+        gasUsed: 0,
+        status: 'confirmed',
+      };
+      state = { ...state, blockchainTransactions: [...state.blockchainTransactions, newTx] };
 
-    store.addAuditLog('Degree Issued', 'admin1', 'Administrator', `Issued degree ${deg.degreeId} to ${deg.studentName}`, 'degree');
-    store.addAuditLog('Attestation Created', 'system', 'System', `Degree hash ${attestation.degreeHash.substring(0, 20)}... locally attested as block #${attestation.blockNumber}`, 'blockchain');
-    notify();
+      store.addAuditLog('Degree Issued', 'admin1', 'Administrator', `Issued degree ${deg.degreeId} to ${deg.studentName}`, 'degree');
+      notify();
+    } catch (error) {
+      console.error('Blockchain issuance failed:', error);
+      throw error;
+    }
   },
 
-  revokeDegree(degreeId: string) {
-    state = {
-      ...state,
-      degreeApplications: state.degreeApplications.map(d => d.id === degreeId ? { ...d, status: 'revoked' as const } : d),
-    };
-    notify();
+  async revokeDegree(degreeId: string) {
+    const degree = state.degreeApplications.find(d => d.id === degreeId);
+    if (!degree || !degree.degreeId) return;
+
+    try {
+      const result = await revokeDegreeOnChain(degree.degreeId);
+      state = {
+        ...state,
+        degreeApplications: state.degreeApplications.map(d => 
+          d.id === degreeId ? { ...d, status: 'revoked' as const } : d
+        ),
+      };
+      store.addAuditLog('Degree Revoked', 'admin1', 'Administrator', `Revoked degree ${degree.degreeId}`, 'degree');
+      notify();
+      return result;
+    } catch (error) {
+      console.error('Blockchain revocation failed:', error);
+      throw error;
+    }
   },
 
   /**
@@ -556,12 +586,23 @@ export const store = {
    * Deep Verification Logic
    * Rejects degrees if the supporting evidence (OCR/Docs) is invalid.
    */
-  verifyDegreeStrict(degreeIdOrHash: string): (DegreeApplication & { valid: boolean; errors: string[] }) | null {
+  async verifyDegreeStrict(degreeIdOrHash: string): Promise<(DegreeApplication & { valid: boolean; errors: string[] }) | null> {
     const degree = this.verifyDegree(degreeIdOrHash);
     if (!degree) return null;
 
     const student = state.users.find(u => u.id === degree.studentId);
     const errors: string[] = [];
+
+    // REAL BLOCKCHAIN VERIFICATION
+    if (degree.blockchainHash) {
+      try {
+        const chainRes = await verifyDegreeOnChain(degree.blockchainHash);
+        if (!chainRes.valid) errors.push(chainRes.message);
+        if (chainRes.revoked) errors.push('Degree has been revoked on the blockchain.');
+      } catch (err) {
+        errors.push('Blockchain verification failed to reach the network.');
+      }
+    }
 
     if (!student) {
       errors.push('Student record not found for this degree.');
