@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../useStore';
 
-import { verifyDegreeOnChain } from '../lib/ethereumBlockchain';
+import { verifyByHashOnChain } from '../lib/blockchainService';
 import { QRCodeSVG } from 'qrcode.react';
 import { Search, CheckCircle2, XCircle, Link2, Shield, Loader2, AlertTriangle } from 'lucide-react';
 
@@ -12,7 +12,7 @@ type VerifyStrictResult = (DegreeApplication & {
   valid: boolean;
   errors: string[];
 }) & {
-  status: 'issued' | 'invalid';
+  status: 'issued' | 'revoked' | 'invalid';
 };
 
 export default function VerifyDegree() {
@@ -34,10 +34,22 @@ export default function VerifyDegree() {
       const q = query.trim();
       let res: any = null;
 
-      // If user provided a 66-char hex hash, check blockchain directly
+      // If user provided a 66-char hex hash, check blockchain directly first
       if (q.startsWith('0x') && q.length === 66) {
-        const chainRes = await verifyDegreeOnChain(q);
-        if (chainRes.valid && chainRes.degreeId) {
+        const chainRes = await verifyByHashOnChain(q);
+        
+        if (chainRes.revoked) {
+          // Try to get metadata even if revoked to show who it belonged to
+          const localData = chainRes.degreeId ? await verifyDegreeStrict(chainRes.degreeId) : null;
+          setResult({ 
+            ...(localData || { degreeId: chainRes.degreeId }), 
+            status: 'revoked',
+            valid: false,
+            errors: [chainRes.message]
+          } as any);
+          setSearched(true);
+          return;
+        } else if (chainRes.valid && chainRes.degreeId) {
           // Fetch local metadata if found on chain
           const localData = await verifyDegreeStrict(chainRes.degreeId);
           res = localData;
@@ -52,7 +64,12 @@ export default function VerifyDegree() {
       if (!res) {
         setResult(null);
       } else {
-        setResult({ ...res, status: res.valid ? 'issued' : 'invalid' });
+        // Map status based on validation result and error messages
+        const isRevoked = res.errors?.some((e: string) => e.toLowerCase().includes('revoked'));
+        setResult({ 
+          ...res, 
+          status: isRevoked ? 'revoked' : (res.valid ? 'issued' : 'invalid') 
+        });
       }
     } catch (error) {
       console.error('Verification error:', error);
@@ -108,7 +125,7 @@ export default function VerifyDegree() {
         <button
           type="submit"
           disabled={loading || !query.trim()}
-          className="w-full mt-4 py-3.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-white"
+          className="w-full mt-4 py-3.5 bg-linear-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-white"
         >
           {loading ? (
             <><Loader2 className="w-5 h-5 animate-spin" /> Verifying attestation...</>

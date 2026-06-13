@@ -1,6 +1,6 @@
 import { User, DegreeApplication, BlockchainTransaction, AuditLog, FraudReport, VerificationRequest, UploadedDocument, UserRole } from './types';
 import { hashPassword, hashPasswordWithSalt, verifyPassword } from './lib/auth';
-import { issueDegreeOnChain, revokeDegreeOnChain, verifyDegreeOnChain } from './lib/blockchainService';
+import { issueDegreeOnChain, revokeDegreeOnChain, verifyByHashOnChain } from './lib/blockchainService';
 import { runFraudChecks } from './lib/fraudDetection';
 import { BackupManager, StorageManager } from './lib/dataPersistence';
 
@@ -374,6 +374,7 @@ export const store = {
               ocrStatus: 'verified' as const, 
               extractedData: extractedData || { status: 'Verified' } 
             } : d),
+            // Update overall verification status, assuming OCR is a step
             verificationStatus: 'ocr_verified' as const,
           };
         }
@@ -384,6 +385,12 @@ export const store = {
       const updated = state.users.find(u => u.id === userId);
       if (updated) state = { ...state, currentUser: updated };
     }
+    // After OCR, immediately validate the document data against user profile
+    // This ensures `validationStatus` and `validationErrors` are set.
+    if (docId) {
+      store.validateDocumentData(userId, docId);
+    }
+
     const user = state.users.find(u => u.id === userId);
     store.addAuditLog('OCR Verification', userId, user?.name || '', `Document ${docId} OCR completed`, 'verification');
     notify();
@@ -406,6 +413,11 @@ export const store = {
     if (state.currentUser?.id === userId) {
       const updated = state.users.find(u => u.id === userId);
       if (updated) state = { ...state, currentUser: updated };
+    }
+    // After YOLO, re-validate the document data against user profile
+    // This ensures `validationStatus` and `validationErrors` are updated if YOLO flags something.
+    if (docId) {
+      store.validateDocumentData(userId, docId);
     }
     const user = state.users.find(u => u.id === userId);
     store.addAuditLog('YOLO Analysis', userId, user?.name || '', `Document ${docId} YOLO result: ${result}`, 'verification');
@@ -530,6 +542,9 @@ export const store = {
       };
 
       const deg = state.degreeApplications.find(d => d.id === degreeId)!;
+      // Use the connected wallet address if available, otherwise placeholder
+      const issuer = (window.ethereum as any)?.selectedAddress || '0xUniversityAdminWallet';
+      
       const newTx: BlockchainTransaction = {
         id: generateId(),
         txHash: result.txHash,
@@ -537,7 +552,7 @@ export const store = {
         studentRegNo: deg.registrationNumber,
         degreeHash: result.degreeHash,
         timestamp: new Date(result.timestamp * 1000).toISOString(),
-        issuerAddress: '0xUniversityAdminWallet',
+        issuerAddress: issuer,
         blockNumber: result.blockNumber,
         gasUsed: 0,
         status: 'confirmed',
@@ -596,7 +611,7 @@ export const store = {
     // REAL BLOCKCHAIN VERIFICATION
     if (degree.blockchainHash) {
       try {
-        const chainRes = await verifyDegreeOnChain(degree.blockchainHash);
+        const chainRes = await verifyByHashOnChain(degree.blockchainHash);
         if (!chainRes.valid) errors.push(chainRes.message);
         if (chainRes.revoked) errors.push('Degree has been revoked on the blockchain.');
       } catch (err) {

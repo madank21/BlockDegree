@@ -10,7 +10,7 @@ export default function FaceVerification() {
   const [confidence, setConfidence] = useState(0);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [cnicImage] = useState<string | null>(null);
+  const [cnicImage, setCnicImage] = useState<string | null>(null);
   const [faceDetected, setFaceDetected] = useState(false);
   const [analysisDetails, setAnalysisDetails] = useState<string[]>([]);
   const [permissionStatus, setPermissionStatus] = useState<'prompt' | 'granted' | 'denied'>('prompt');
@@ -21,6 +21,14 @@ export default function FaceVerification() {
   const animationRef = useRef<number | null>(null);
 
   if (!currentUser) return null;
+
+  useEffect(() => {
+    // Load the CNIC photo URL from the store for the reference display
+    const cnicDoc = currentUser.documents?.find(d => d.type === 'cnic');
+    if (cnicDoc && (cnicDoc as any).fileUrl) {
+      setCnicImage((cnicDoc as any).fileUrl);
+    }
+  }, [currentUser]);
 
   const alreadyVerified = currentUser.verificationStatus === 'face_verified' || currentUser.verificationStatus === 'approved';
 
@@ -47,7 +55,13 @@ export default function FaceVerification() {
   const startCamera = async () => {
     setCameraError(null);
     setStage('permission');
-    
+
+    // Reset face detection state when re-starting the camera
+    setFaceDetected(false);
+    setCapturedImage(null);
+    setResult(null);
+    setConfidence(0);
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
@@ -64,8 +78,21 @@ export default function FaceVerification() {
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        
+
+        // Ensure the browser is ready to render frames.
+        // Some browsers will reject play() unless we handle/await it.
+        try {
+          const playPromise = videoRef.current.play();
+          if (playPromise && typeof (playPromise as any).then === 'function') {
+            await playPromise;
+          }
+        } catch (playErr) {
+          console.error('video.play() failed:', playErr);
+          setCameraError(
+            `Camera started but preview did not play automatically.\nReason: ${(playErr as any)?.message ?? String(playErr)}\nTry: click the Start Camera button again or interact with the page.`
+          );
+        }
+
         // Start face detection loop
         startFaceDetection();
       }
@@ -442,7 +469,7 @@ export default function FaceVerification() {
             </div>
           </div>
 
-          <div className="aspect-[4/3] bg-gray-800 relative flex items-center justify-center overflow-hidden">
+          <div className="aspect-4/3 bg-gray-800 relative flex items-center justify-center overflow-hidden">
             {/* Canvas for face detection overlay */}
             <canvas ref={canvasRef} className="hidden" />
             
@@ -578,14 +605,14 @@ export default function FaceVerification() {
                 {permissionStatus === 'denied' ? (
                   <button
                     onClick={() => window.location.reload()}
-                    className="flex-1 py-3 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 rounded-xl font-medium flex items-center justify-center gap-2 transition text-white"
+                    className="flex-1 py-3 bg-linear-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 rounded-xl font-medium flex items-center justify-center gap-2 transition text-white"
                   >
                     <AlertTriangle className="w-5 h-5" /> Reload to Allow Camera
                   </button>
                 ) : (
                   <button
                     onClick={startCamera}
-                    className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl font-medium flex items-center justify-center gap-2 transition text-white"
+                    className="flex-1 py-3 bg-linear-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl font-medium flex items-center justify-center gap-2 transition text-white"
                   >
                     <Camera className="w-5 h-5" /> Start Camera
                   </button>
@@ -600,7 +627,7 @@ export default function FaceVerification() {
                   className="px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition text-white"
                 >
                   <X className="w-5 h-5" />
-                </button>
+                </button> 
                 <button
                   onClick={capturePhoto}
                   disabled={!faceDetected}
@@ -620,7 +647,7 @@ export default function FaceVerification() {
                   <RefreshCw className="w-5 h-5" /> Retake
                 </button>
                 <button
-                  onClick={analyzeAndCompare}
+                  onClick={analyzeAndCompare} // This function is already defined in the context
                   className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl font-medium flex items-center justify-center gap-2 transition text-white"
                 >
                   <ScanFace className="w-5 h-5" /> Verify Face
@@ -646,7 +673,7 @@ export default function FaceVerification() {
             <h4 className="font-semibold mb-4 flex items-center gap-2">
               <Shield className="w-5 h-5 text-blue-400" />
               CNIC Reference Photo
-            </h4>
+              </h4>
             <div className="aspect-[3/2] bg-gray-800 rounded-lg flex items-center justify-center border border-gray-700 overflow-hidden">
               {cnicImage ? (
                 <img src={cnicImage} alt="CNIC" className="w-full h-full object-cover" />
