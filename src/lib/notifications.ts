@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import emailjs from '@emailjs/browser';
 
 // Initialize EmailJS (do this once on app load)
