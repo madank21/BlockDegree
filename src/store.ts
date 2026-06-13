@@ -566,12 +566,26 @@ export const store = {
     if (!student) {
       errors.push('Student record not found for this degree.');
     } else {
-      // Check if all required docs exist and are 'valid'
-      const required = ['cnic', 'marksheet', 'certificate'];
+      // Check if all required docs exist AND have passed validation.
+      const required = ['cnic', 'marksheet', 'certificate'] as const;
+
       required.forEach(type => {
         const doc = student.documents?.find(d => d.type === type);
-        if (!doc || doc.validationStatus !== 'valid') {
-          errors.push(`Supporting ${type} is missing or has data mismatches.`);
+
+        if (!doc) {
+          errors.push(`Supporting ${type} is missing.`);
+          return;
+        }
+
+        if (doc.validationStatus !== 'valid') {
+          const extra = doc.validationErrors?.length ? ` Details: ${doc.validationErrors.join('; ')}` : '';
+          errors.push(`Supporting ${type} failed data validation.${extra}`);
+          return;
+        }
+
+        // Hard guarantee: strict verification must not pass if extracted OCR payload is missing.
+        if (!doc.extractedData || Object.keys(doc.extractedData).length === 0) {
+          errors.push(`Supporting ${type} has no extracted OCR data (cannot verify integrity).`);
         }
       });
     }

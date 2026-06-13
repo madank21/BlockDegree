@@ -323,12 +323,14 @@ export default function FaceVerification() {
         const { extractFaceFromDataURL } = await import('../lib/faceVerification');
 
         const cnicDataUrl = (cnicDoc as any).fileUrl as string | undefined;
+        // Strict requirement: CNIC face reference must exist.
         if (!cnicDataUrl) {
-          setAnalysisDetails(prev => [...prev, '⚠️  CNIC data is missing. Please re-upload CNIC so face reference can be extracted.']);
+          setAnalysisDetails(prev => [...prev, '✗ CNIC face reference not available (CNIC.fileUrl missing). Re-upload CNIC to enable face verification.']);
           setResult('failed');
           setStage('result');
           return;
         }
+
 
 
         let cnicDescriptor = null;

@@ -2,18 +2,19 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../useStore';
 import { QRCodeSVG } from 'qrcode.react';
+
 import {
-  GraduationCap, Printer, Share2, CheckCircle2, Link2,
-  X, Copy, Eye, Download, FileJson, QrCode
+  GraduationCap, Printer, CheckCircle2, Link2,
+  X, Eye
 } from 'lucide-react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+
 import DegreeCertificate from '../components/DegreeCertificate';
 
 export default function MyDegrees() {
   const { currentUser, degreeApplications } = useStore();
   const [selectedDegree, setSelectedDegree] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied] = useState(false);
+
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -35,13 +36,6 @@ export default function MyDegrees() {
   // Helper: generate public verification URL
   const getVerificationUrl = (degreeId: string) =>
     `${window.location.origin}/verify/${degreeId}`;
-
-  // Copy blockchain hash to clipboard
-  const copyHash = (hash: string) => {
-    navigator.clipboard.writeText(hash);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   // Print only the certificate (opens new window)
   const printCertificate = (id: string) => {
@@ -67,84 +61,7 @@ export default function MyDegrees() {
     win?.print();
   };
 
-  // Download PDF with improved quality (scale 4)
-  const downloadPDF = async (degree: any) => {
-    const element = document.getElementById(`degree-certificate-${degree.id}`);
-    if (!element) {
-      alert('Certificate not found');
-      return;
-    }
-    try {
-      const canvas = await html2canvas(element, {
-        scale: 4,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-      });
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'px',
-        format: [canvas.width / 2, canvas.height / 2],
-      });
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width / 2, canvas.height / 2);
-      pdf.save(`${degree.degreeId}_Certificate.pdf`);
-    } catch (err) {
-      console.error('PDF download error:', err);
-      alert('Failed to download PDF. Please try again.');
-    }
-  };
 
-  // Share degree using Web Share API or clipboard
-  const shareDegree = async (degree: any) => {
-    const url = getVerificationUrl(degree.degreeId);
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: degree.degreeTitle,
-          text: 'Verify this blockchain degree',
-          url,
-        });
-      } else {
-        await navigator.clipboard.writeText(url);
-        alert('Verification link copied to clipboard');
-      }
-    } catch (err) {
-      console.error('Share failed:', err);
-    }
-  };
-
-  // Export degree data as JSON
-  const exportJson = (degree: any) => {
-    const blob = new Blob([JSON.stringify(degree, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${degree.degreeId}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Download QR code as SVG
-  const downloadQR = () => {
-    const svg = document.querySelector('#degreeQR svg');
-    if (!svg) {
-      alert('QR code not found');
-      return;
-    }
-    const serializer = new XMLSerializer();
-    const source = serializer.serializeToString(svg);
-    const blob = new Blob([source], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'degree-qr.svg';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   // Statistics counts
   const totalDegrees = myDegrees.length;
@@ -268,17 +185,17 @@ export default function MyDegrees() {
 
               {deg.status === 'issued' && (
                 <div className="mt-4 flex gap-2">
-                  <button className="flex-1 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm flex items-center justify-center gap-1.5 transition text-white" onClick={e => { e.stopPropagation(); setSelectedDegree(deg.id); }}>
+                  <button
+                    className="flex-1 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm flex items-center justify-center gap-1.5 transition text-white"
+                    onClick={e => { e.stopPropagation(); setSelectedDegree(deg.id); }}
+                  >
                     <Eye className="w-4 h-4" /> View
                   </button>
-                  <button className="flex-1 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm flex items-center justify-center gap-1.5 transition text-white" onClick={e => { e.stopPropagation(); printCertificate(deg.id); }}>
+                  <button
+                    className="flex-1 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm flex items-center justify-center gap-1.5 transition text-white"
+                    onClick={e => { e.stopPropagation(); printCertificate(deg.id); }}
+                  >
                     <Printer className="w-4 h-4" /> Print
-                  </button>
-                  <button className="flex-1 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm flex items-center justify-center gap-1.5 transition text-white" onClick={e => { e.stopPropagation(); downloadPDF(deg); }}>
-                    <Download className="w-4 h-4" /> Download
-                  </button>
-                  <button className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm flex items-center justify-center gap-1.5 transition text-white" onClick={e => { e.stopPropagation(); shareDegree(deg); }}>
-                    <Share2 className="w-4 h-4" /> Share
                   </button>
                 </div>
               )}
