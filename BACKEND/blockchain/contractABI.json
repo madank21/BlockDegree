@@ -1,0 +1,110 @@
+[
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "tokenId", "type": "uint256" },
+      { "indexed": true, "name": "graduateAddress", "type": "address" },
+      { "indexed": false, "name": "degreeHash", "type": "bytes32" },
+      { "indexed": false, "name": "certificateNumber", "type": "string" },
+      { "indexed": false, "name": "timestamp", "type": "uint256" }
+    ],
+    "name": "DegreeIssued",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "tokenId", "type": "uint256" },
+      { "indexed": false, "name": "degreeHash", "type": "bytes32" },
+      { "indexed": false, "name": "reason", "type": "string" },
+      { "indexed": false, "name": "timestamp", "type": "uint256" }
+    ],
+    "name": "DegreeRevoked",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "name": "from", "type": "address" },
+      { "indexed": true, "name": "to", "type": "address" },
+      { "indexed": true, "name": "tokenId", "type": "uint256" }
+    ],
+    "name": "Transfer",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      { "name": "degreeHash", "type": "bytes32" },
+      { "name": "graduateAddress", "type": "address" },
+      { "name": "studentName", "type": "string" },
+      { "name": "degreeTitle", "type": "string" },
+      { "name": "institutionName", "type": "string" },
+      { "name": "graduationDate", "type": "uint256" },
+      { "name": "certificateNumber", "type": "string" }
+    ],
+    "name": "issueDegree",
+    "outputs": [{ "name": "tokenId", "type": "uint256" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "name": "degreeHash", "type": "bytes32" },
+      { "name": "reason", "type": "string" }
+    ],
+    "name": "revokeDegree",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "name": "degreeHash", "type": "bytes32" }],
+    "name": "verifyDegree",
+    "outputs": [
+      { "name": "isValid", "type": "bool" },
+      { "name": "isRevoked", "type": "bool" },
+      { "name": "studentName", "type": "string" },
+      { "name": "degreeTitle", "type": "string" },
+      { "name": "institutionName", "type": "string" },
+      { "name": "graduationDate", "type": "uint256" },
+      { "name": "certificateNumber", "type": "string" },
+      { "name": "issueTimestamp", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "name": "tokenId", "type": "uint256" }],
+    "name": "getDegreeByTokenId",
+    "outputs": [
+      { "name": "degreeHash", "type": "bytes32" },
+      { "name": "studentName", "type": "string" },
+      { "name": "degreeTitle", "type": "string" },
+      { "name": "institutionName", "type": "string" },
+      { "name": "graduationDate", "type": "uint256" },
+      { "name": "certificateNumber", "type": "string" },
+      { "name": "isRevoked", "type": "bool" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalSupply",
+    "outputs": [{ "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [{ "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]
