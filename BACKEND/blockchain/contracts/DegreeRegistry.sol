@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.19;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/Counters.sol";
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/refs/tags/v5.0.0/contracts/token/ERC721/ERC721.sol";
+import "https://raw.githubusercontent.com/OpenZeppelin/openzeppelin-contracts/refs/tags/v5.0.0/contracts/access/Ownable.sol";
 
 /**
  * @title DegreeRegistry
  * @dev Blockchain-based degree certificate registry using ERC721 NFTs
  */
 contract DegreeRegistry is ERC721, Ownable {
-    using Counters for Counters.Counter;
-    Counters.Counter private _tokenIds;
+    // OpenZeppelin v5 removed Counters.sol. We use a standard uint256 counter instead.
+    uint256 private _tokenIds;
 
     // ─── Structs ──────────────────────────────────────────────────────────────
 
@@ -103,12 +102,12 @@ contract DegreeRegistry is ERC721, Ownable {
         require(bytes(degreeTitle).length > 0, "DegreeRegistry: Degree title required");
         require(bytes(certificateNumber).length > 0, "DegreeRegistry: Certificate number required");
 
-        _tokenIds.increment();
-        uint256 newTokenId = _tokenIds.current();
+        // Native increment replaces _tokenIds.increment()
+        _tokenIds++;
+        uint256 newTokenId = _tokenIds;
 
-        address recipient = graduateAddress != address(0) ? graduateAddress : address(this);
-
-        _safeMint(recipient, newTokenId);
+        require(graduateAddress != address(0), "DegreeRegistry: Graduate address required");
+        _mint(graduateAddress, newTokenId);
 
         _degrees[newTokenId] = Degree({
             degreeHash: degreeHash,
@@ -199,6 +198,7 @@ contract DegreeRegistry is ERC721, Ownable {
             bool isRevoked
         )
     {
+        // Internal _ownerOf used to check token existence in OpenZeppelin v5
         require(_ownerOf(tokenId) != address(0), "DegreeRegistry: Token does not exist");
         Degree memory degree = _degrees[tokenId];
 
@@ -222,7 +222,8 @@ contract DegreeRegistry is ERC721, Ownable {
     // ─── Total Supply ─────────────────────────────────────────────────────────
 
     function totalSupply() external view returns (uint256) {
-        return _tokenIds.current();
+        // Native variable return replaces _tokenIds.current()
+        return _tokenIds;
     }
 
     // ─── Token URI ────────────────────────────────────────────────────────────
