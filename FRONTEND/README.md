@@ -2053,3 +2053,10 @@ This architecture requires **zero backend server** — everything runs either in
 
 verification is not working properly it should reject if data in documents does not match with given data also also it should have a option to remove the documents i uploaded, it should request sys to access the camera, for now it doess not has camera access, and QR code should be printed on the degree and remove extra options, make sure they are working properly. Also manage the data of the user along with their degrees and crendentials in a file or folder setup this feature properly to avoid loss of data.
 now complete these missing features one by one correctly
+
+
+
+TO UNTRACK .env
+pip install git-filter-repo
+git filter-repo --path .env --invert-paths
+git push --force --all
