@@ -4,7 +4,7 @@ const Degree = require('../models/Degree');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const blockchainService = require('../services/blockchainService');
-const qrService = require('../services/qrService');
+const QRService = require("../services/qrService");
 const notificationService = require('../services/notificationService');
 const { logger } = require('../src/utils/logger');
 
