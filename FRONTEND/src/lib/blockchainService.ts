@@ -83,17 +83,16 @@ export async function issueDegreeOnChain(
   const degreeHash = await computeDegreeHash(input);
   const contract = await getWriteContract();
 
-  const tx = await contract.issueDegree(
-    input.degreeId,
-    degreeHash,
-    input.studentName,
-    input.registrationNumber,
-    input.program,
-    input.department,
-    input.admissionYear,
-    input.graduationYear,
-    input.cgpaX100
-  );
+  function issueDegree(
+  string memory _degreeId,           // 1
+  string memory _studentName,        // 2
+  string memory _registrationNumber, // 3
+  string memory _department,         // 4
+  string memory _program,            // 5
+  string memory _cgpa,               // 6  ← string, not number
+  string memory _graduationYear,     // 7  ← string, not number
+  string memory _degreeHash          // 8  ← hash goes LAST
+) public onlyOwner
 
   const receipt = await tx.wait(1);
   const provider = contract.runner?.provider as ethers.JsonRpcProvider;

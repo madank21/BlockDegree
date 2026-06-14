@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 import { ethers } from 'ethers';
-import DegreeRegistryABI from '../../artifacts/contracts/DegreeRegistry.sol/DegreeRegistry.json';
+import DegreeRegistryABI from '../../../artifacts/contracts/DegreeRegistry.sol/DegreeRegistry.json';
 
 // Type declaration for window.ethereum (MetaMask)
 declare global {
