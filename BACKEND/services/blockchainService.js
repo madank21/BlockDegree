@@ -282,5 +282,6 @@ class BlockchainService {
 }
 
 // Singleton instance
-const blockchainService = new BlockchainService();
-module.exports = blockchainService;
+// const blockchainService = new BlockchainService();
+// module.exports = blockchainService;
+module.exports = BlockchainService; 
