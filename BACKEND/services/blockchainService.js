@@ -44,44 +44,46 @@ class BlockchainService {
 
     try {
       const {
-        degreeHash,
-        graduateAddress,
+        degreeId,
         studentName,
-        degreeTitle,
-        institutionName,
-        graduationDate,
-        certificateNumber,
+        registrationNumber,
+        department,
+        program,
+        cgpa,
+        graduationYear,
+        degreeHash,
       } = degreeData;
 
-      logger.info(`Issuing degree on blockchain: ${degreeHash}`);
+      logger.info(`Issuing degree on blockchain: ${degreeId}`);
 
+      // Estimate gas (optional but helpful)
       const gasEstimate = await this.contract.issueDegree.estimateGas(
-        degreeHash,
-        graduateAddress || ethers.ZeroAddress,
+        degreeId,
         studentName,
-        degreeTitle,
-        institutionName,
-        Math.floor(new Date(graduationDate).getTime() / 1000),
-        certificateNumber
+        registrationNumber,
+        department,
+        program,
+        cgpa,
+        graduationYear,
+        degreeHash
       );
 
       const tx = await this.contract.issueDegree(
-        degreeHash,
-        graduateAddress || ethers.ZeroAddress,
+        degreeId,
         studentName,
-        degreeTitle,
-        institutionName,
-        Math.floor(new Date(graduationDate).getTime() / 1000),
-        certificateNumber,
-        {
-          gasLimit: Math.floor(Number(gasEstimate) * 1.2), // 20% buffer
-        }
+        registrationNumber,
+        department,
+        program,
+        cgpa,
+        graduationYear,
+        degreeHash,
+        { gasLimit: gasEstimate }
       );
 
       logger.info(`Blockchain tx submitted: ${tx.hash}`);
 
       // Save pending transaction
-      await this.savePendingTransaction(tx.hash, degreeData.degreeId);
+      await this.savePendingTransaction(tx.hash, degreeId);
 
       // Wait for confirmation
       const receipt = await tx.wait(1);
@@ -96,7 +98,6 @@ class BlockchainService {
         blockNumber: receipt.blockNumber,
         gasUsed: receipt.gasUsed.toString(),
         timestamp: new Date().toISOString(),
-        tokenId: this.extractTokenId(receipt),
       };
     } catch (error) {
       logger.error('Blockchain issueDegree error:', error);
@@ -104,22 +105,19 @@ class BlockchainService {
     }
   }
 
-  // ─── Verify Degree on Blockchain ──────────────────────────────────────────
+  // ─── Verify Degree by Hash ────────────────────────────────────────────────
   async verifyDegree(degreeHash) {
     this.ensureConnected();
 
     try {
-      const result = await this.contract.verifyDegree(degreeHash);
+      const result = await this.contract.verifyByHash(degreeHash);
 
+      // The contract returns: (bool exists, bool isValid, bool isRevoked, string degreeId)
       return {
-        isValid: result.isValid,
-        isRevoked: result.isRevoked,
-        studentName: result.studentName,
-        degreeTitle: result.degreeTitle,
-        institutionName: result.institutionName,
-        graduationDate: new Date(Number(result.graduationDate) * 1000).toISOString(),
-        certificateNumber: result.certificateNumber,
-        issueTimestamp: new Date(Number(result.issueTimestamp) * 1000).toISOString(),
+        exists: result[0],
+        isValid: result[1],
+        isRevoked: result[2],
+        degreeId: result[3],
       };
     } catch (error) {
       logger.error('Blockchain verifyDegree error:', error);
@@ -127,12 +125,46 @@ class BlockchainService {
     }
   }
 
-  // ─── Revoke Degree on Blockchain ──────────────────────────────────────────
-  async revokeDegree(degreeHash, reason) {
+  // ─── Get Full Degree Details by ID ──────────────────────────────────────
+  async getDegree(degreeId) {
     this.ensureConnected();
 
     try {
-      const tx = await this.contract.revokeDegree(degreeHash, reason);
+      const result = await this.contract.getDegree(degreeId);
+
+      // The contract returns:
+      // (string studentName, string registrationNumber, string department,
+      //  string program, string cgpa, string graduationYear, string degreeHash,
+      //  string degreeId, address issuerAddress, uint256 timestamp,
+      //  bool isValid, bool isRevoked)
+      return {
+        studentName: result[0],
+        registrationNumber: result[1],
+        department: result[2],
+        program: result[3],
+        cgpa: result[4],
+        graduationYear: result[5],
+        degreeHash: result[6],
+        degreeId: result[7],
+        issuerAddress: result[8],
+        timestamp: result[9].toString(),
+        isValid: result[10],
+        isRevoked: result[11],
+      };
+    } catch (error) {
+      logger.error('Blockchain getDegree error:', error);
+      throw new Error(`Failed to get degree: ${error.message}`);
+    }
+  }
+
+  // ─── Revoke Degree on Blockchain ──────────────────────────────────────────
+  async revokeDegree(degreeId, reason) {
+    this.ensureConnected();
+
+    try {
+      // Your contract might not have a `reason` parameter – adjust accordingly.
+      // Assuming the contract is `revokeDegree(string degreeId)`
+      const tx = await this.contract.revokeDegree(degreeId);
       const receipt = await tx.wait(1);
 
       return {
@@ -146,25 +178,12 @@ class BlockchainService {
     }
   }
 
-  // ─── Get Degree by Token ID ───────────────────────────────────────────────
-  async getDegreeByTokenId(tokenId) {
-    this.ensureConnected();
-
-    try {
-      const result = await this.contract.getDegreeByTokenId(tokenId);
-      return result;
-    } catch (error) {
-      logger.error('Blockchain getDegreeByTokenId error:', error);
-      throw new Error(`Failed to get degree: ${error.message}`);
-    }
-  }
-
   // ─── Get Total Degrees Issued ─────────────────────────────────────────────
   async getTotalDegreesIssued() {
     this.ensureConnected();
 
     try {
-      const total = await this.contract.totalSupply();
+      const total = await this.contract.totalDegrees();
       return Number(total);
     } catch (error) {
       logger.error('Blockchain getTotalDegreesIssued error:', error);
@@ -257,31 +276,6 @@ class BlockchainService {
       logger.error('Failed to update transaction status:', error);
     }
   }
-
-  // ─── Extract Token ID from Receipt ───────────────────────────────────────
-  extractTokenId(receipt) {
-    try {
-      const event = receipt.logs.find(log => {
-        try {
-          const parsed = this.contract.interface.parseLog(log);
-          return parsed?.name === 'DegreeIssued' || parsed?.name === 'Transfer';
-        } catch {
-          return false;
-        }
-      });
-
-      if (event) {
-        const parsed = this.contract.interface.parseLog(event);
-        return parsed.args.tokenId?.toString();
-      }
-    } catch (error) {
-      logger.warn('Could not extract token ID:', error.message);
-    }
-    return null;
-  }
 }
 
-// Singleton instance
-// const blockchainService = new BlockchainService();
-// module.exports = blockchainService;
-module.exports = BlockchainService; 
+module.exports = BlockchainService;
