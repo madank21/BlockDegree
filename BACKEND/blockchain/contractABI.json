@@ -97,67 +97,6 @@
         "internalType": "string",
         "name": "_degreeId",
         "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_studentName",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_registrationNumber",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_department",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_program",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_cgpa",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_graduationYear",
-        "type": "string"
-      },
-      {
-        "internalType": "string",
-        "name": "_degreeHash",
-        "type": "string"
-      }
-    ],
-    "name": "issueDegree",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "_degreeId",
-        "type": "string"
-      }
-    ],
-    "name": "revokeDegree",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "_degreeId",
-        "type": "string"
       }
     ],
     "name": "getDegree",
@@ -246,6 +185,54 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "_degreeId",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_studentName",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_registrationNumber",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_department",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_program",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_cgpa",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_graduationYear",
+        "type": "string"
+      },
+      {
+        "internalType": "string",
+        "name": "_degreeHash",
+        "type": "string"
+      }
+    ],
+    "name": "issueDegree",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "owner",
     "outputs": [
@@ -256,6 +243,19 @@
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "_degreeId",
+        "type": "string"
+      }
+    ],
+    "name": "revokeDegree",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {

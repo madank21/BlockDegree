@@ -7,5 +7,14 @@
     "blockNumber": 1,
     "transactionHash": "0x327a5e9ddea4d6bbd946019d03c5082bfc3759234a02f025df6ffc0eea2c00f9",
     "deployedAt": "2026-06-16T11:47:56.849Z"
+  },
+  "11155111": {
+    "contractAddress": "0xB9Ec3a1f5326da6f3Ea59150038DFC19BCF3ab44",
+    "deployer": "0x66Ab8Edb184492b3A97Faaf8A33302681822E9A3",
+    "network": "sepolia",
+    "chainId": "11155111",
+    "blockNumber": 11074559,
+    "transactionHash": "0x6e057d0e5231687a830e02764237e4eee8dba4f73dbc13cf8da2074d8f732156",
+    "deployedAt": "2026-06-16T18:40:49.988Z"
   }
 }
