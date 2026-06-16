@@ -54,7 +54,7 @@ async function main() {
   
   if (fs.existsSync(artifactPath)) {
     const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
-    const backendABIPath = path.join(__dirname, '../../backend/blockchain/contractABI.json');
+    const backendABIPath = path.join(__dirname, '../contractABI.json');
     fs.writeFileSync(backendABIPath, JSON.stringify(artifact.abi, null, 2));
     console.log(`📄 ABI copied to backend: ${backendABIPath}`);
   }
