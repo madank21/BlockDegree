@@ -74,7 +74,7 @@ class BlockchainService {
         degreeHash
       );
 
-      const gasLimit = (gasEstimate * 120n) / 100n; // 20% buffer
+      const gasLimit = BigInt(Math.floor(Number(gasEstimate) * 1.2)); // 20% buffer
 
       const tx = await this.contract.issueDegree(
         degreeId,
@@ -154,7 +154,7 @@ class BlockchainService {
   }
 
   // ─── Revoke Degree ────────────────────────────────────────────────────
-  async revokeDegree(degreeId, reason) {
+  async revokeDegree(degreeId) {
     await this.ensureConnected();
     try {
       const tx = await this.contract.revokeDegree(degreeId);

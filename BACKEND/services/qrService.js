@@ -17,18 +17,27 @@ class QRService {
    * BlockDegree‑specific QR for degree verification.
    * Payload includes degreeId, degreeHash, and transaction hash.
    */
-  static async generateDegreeQR(degreeId, degreeHash, txHash) {
-    const payload = {
-      degreeId,
-      degreeHash,
-      txHash,
-    };
-    try {
-      return await QRCode.toDataURL(JSON.stringify(payload, Object.keys(payload).sort()));
-    } catch (err) {
-      throw new Error('Degree QR generation failed: ' + err.message);
-    }
+  static async generateDegreeQR(degreeId, degreeHash, txHash, verificationUrl = null) {
+  const payload = {
+    degreeId,
+    degreeHash,
+    txHash,
+    verificationUrl,
+  };
+
+  const sortedPayload = {};
+  Object.keys(payload)
+    .sort()
+    .forEach(key => {
+      sortedPayload[key] = payload[key];
+    });
+
+  try {
+    return await QRCode.toDataURL(JSON.stringify(sortedPayload));
+  } catch (err) {
+    throw new Error('Degree QR generation failed: ' + err.message);
   }
+}
 }
 
 module.exports = QRService;
