@@ -1,7 +1,9 @@
+// services/ocrService.js
 const Tesseract = require('tesseract.js');
 const sharp = require('sharp');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { logger } = require('../src/utils/logger');
 
 class OCRService {
@@ -55,7 +57,11 @@ class OCRService {
       const confidence = result.data.confidence;
       const rawText = result.data.text;
 
+      // Parse all fields
       const extractedData = this.parseDocumentText(rawText);
+
+      // ✅ Generate degree hash from raw OCR text
+      const degreeHash = this.generateDegreeHash(rawText);
 
       logger.info(`OCR completed. Confidence: ${confidence}%`);
 
@@ -63,6 +69,7 @@ class OCRService {
         rawText,
         confidence,
         extractedData,
+        degreeHash,                     // <-- new field for blockchain
         words: result.data.words?.map(w => ({ text: w.text, confidence: w.confidence })),
         isHighConfidence: confidence >= this.confidenceThreshold,
       };
@@ -76,12 +83,11 @@ class OCRService {
   parseDocumentText(text) {
     const extracted = {};
 
-    // Name patterns
+    // --- Student Name ---
     const namePatterns = [
       /(?:this is to certify that|certify that|awarded to|presented to|degree to)\s+([A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
       /Name[:\s]+([A-Z][a-z]+ [A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
     ];
-
     for (const pattern of namePatterns) {
       const match = text.match(pattern);
       if (match) {
@@ -90,14 +96,13 @@ class OCRService {
       }
     }
 
-    // Degree title patterns
+    // --- Degree Title ---
     const degreePatterns = [
       /Bachelor of (?:Science|Arts|Engineering|Business|Commerce|Education|Medicine|Law)[^,\n]*/i,
       /Master of (?:Science|Arts|Engineering|Business|Commerce|Education|Medicine|Law)[^,\n]*/i,
       /Doctor of (?:Philosophy|Medicine|Science|Law)[^,\n]*/i,
       /(?:degree|diploma) (?:of|in) ([A-Za-z\s]+)/i,
     ];
-
     for (const pattern of degreePatterns) {
       const match = text.match(pattern);
       if (match) {
@@ -106,13 +111,12 @@ class OCRService {
       }
     }
 
-    // Date patterns
+    // --- Graduation Date ---
     const datePatterns = [
       /(\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4})/i,
       /(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}/i,
       /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/,
     ];
-
     for (const pattern of datePatterns) {
       const match = text.match(pattern);
       if (match) {
@@ -121,13 +125,54 @@ class OCRService {
       }
     }
 
-    // GPA/Grade patterns
-    const gpaMatch = text.match(/(?:GPA|Grade Point Average|CGPA)[:\s]+(\d+\.\d+)/i);
-    if (gpaMatch) {
-      extracted.gpa = parseFloat(gpaMatch[1]);
+    // --- Graduation Year (separate field for blockchain) ---
+    const yearMatch = text.match(/\b(19|20)\d{2}\b/);
+    if (yearMatch) {
+      extracted.graduationYear = yearMatch[0];
     }
 
-    // Institution name (simple heuristic)
+    // --- GPA / CGPA ---
+    const gpaMatch = text.match(/(?:GPA|Grade Point Average|CGPA)[:\s]+(\d+\.\d+)/i);
+    if (gpaMatch) {
+      extracted.cgpa = parseFloat(gpaMatch[1]);
+    }
+
+    // --- Registration Number (new) ---
+    const regMatch = text.match(/(?:Registration|Roll|Student)\s*(?:No|Number)?[:\s]+([A-Z0-9\-]+)/i);
+    if (regMatch) {
+      extracted.registrationNumber = regMatch[1];
+    }
+
+    // --- Department (new) ---
+    // Try known department names or use "Department of ..." pattern
+    const deptMatch = text.match(/Department of\s+([A-Za-z\s]+)/i);
+    if (deptMatch) {
+      extracted.department = deptMatch[1].trim();
+    } else {
+      // Fallback: search for common department names
+      const departments = [
+        'Computer Science',
+        'Software Engineering',
+        'Information Technology',
+        'Electrical Engineering',
+        'Mechanical Engineering',
+        'Civil Engineering',
+        'Business Administration',
+        'Economics',
+        'Mathematics',
+        'Physics',
+        'Chemistry',
+        'Biology'
+      ];
+      for (const dept of departments) {
+        if (text.match(new RegExp(dept, 'i'))) {
+          extracted.department = dept;
+          break;
+        }
+      }
+    }
+
+    // --- Institution Name ---
     const lines = text.split('\n').filter(l => l.trim().length > 0);
     if (lines.length > 0) {
       const firstLines = lines.slice(0, 3).join(' ');
@@ -139,13 +184,13 @@ class OCRService {
       }
     }
 
-    // Certificate/Serial number
+    // --- Certificate/Serial Number ---
     const certMatch = text.match(/(?:certificate|serial|ref)[\s#.:]+([A-Z0-9\-]+)/i);
     if (certMatch) {
       extracted.certificateNumber = certMatch[1].trim();
     }
 
-    // Honors
+    // --- Honors ---
     const honorsPatterns = ['Summa Cum Laude', 'Magna Cum Laude', 'Cum Laude', 'With Distinction', 'With Honors'];
     for (const honor of honorsPatterns) {
       if (text.includes(honor)) {
@@ -157,7 +202,14 @@ class OCRService {
     return extracted;
   }
 
-  // ─── Validate Document Fields ─────────────────────────────────────────────
+  // ─── Generate SHA‑256 Hash from OCR Text ────────────────────────────────
+  generateDegreeHash(rawText) {
+    // Normalize whitespace and trim to avoid inconsistent hashes
+    const normalized = rawText.replace(/\s+/g, ' ').trim();
+    return crypto.createHash('sha256').update(normalized).digest('hex');
+  }
+
+  // ─── Validate Extracted Fields ────────────────────────────────────────────
   validateExtractedData(extractedData, requiredFields = []) {
     const missingFields = requiredFields.filter(field => !extractedData[field]);
     return {
