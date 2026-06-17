@@ -10,7 +10,7 @@ class BlockchainService {
     this.wallet = null;
     this.contract = null;
     this.isInitialized = false;
-    // No automatic initialization – call ensureConnected() before each operation
+    // Lazy initialization – call ensureConnected() before each operation
   }
 
   // ─── Lazy Initialization ─────────────────────────────────────────────
@@ -74,8 +74,7 @@ class BlockchainService {
         degreeHash
       );
 
-      // Add 20% buffer
-      const gasLimit = (gasEstimate * 120n) / 100n;
+      const gasLimit = (gasEstimate * 120n) / 100n; // 20% buffer
 
       const tx = await this.contract.issueDegree(
         degreeId,
@@ -130,19 +129,22 @@ class BlockchainService {
     await this.ensureConnected();
     try {
       const result = await this.contract.getDegree(degreeId);
-      // ⚠️ CRITICAL: Correct mapping – order matches your ABI
+      // ✅ Correct mapping – matches Solidity return order:
+      // 0: studentName, 1: registrationNumber, 2: department, 3: program,
+      // 4: cgpa, 5: graduationYear, 6: degreeHash, 7: degreeId,
+      // 8: issuerAddress, 9: timestamp, 10: isValid, 11: isRevoked
       return {
-        degreeId: result[0],
-        studentName: result[1],
-        registrationNumber: result[2],
-        department: result[3],
-        program: result[4],
-        cgpa: result[5],
-        graduationYear: result[6],
-        degreeHash: result[7],
+        studentName: result[0],
+        registrationNumber: result[1],
+        department: result[2],
+        program: result[3],
+        cgpa: result[4],
+        graduationYear: result[5],
+        degreeHash: result[6],
+        degreeId: result[7],
         issuerAddress: result[8],
-        timestamp: result[9] ? result[9].toString() : null,
-        exists: result[10],
+        timestamp: result[9].toString(),
+        isValid: result[10],
         isRevoked: result[11],
       };
     } catch (error) {
@@ -261,5 +263,4 @@ class BlockchainService {
   }
 }
 
-// ✅ Export as a singleton instance for easy use in controllers
 module.exports = new BlockchainService();
