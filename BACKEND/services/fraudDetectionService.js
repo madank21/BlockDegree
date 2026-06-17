@@ -1,19 +1,21 @@
+// services/fraudDetectionService.js
 const { logger } = require('../src/utils/logger');
 const { supabaseAdmin } = require('../database/supabase');
+// Import blockchain service (singleton) for hash validation
+const blockchainService = require('./blockchainService');
 
 class FraudDetectionService {
   constructor() {
     this.threshold = parseInt(process.env.FRAUD_SCORE_THRESHOLD) || 70;
   }
 
-  // ─── Analyze Document ─────────────────────────────────────────────────────
   async analyzeDocument(documentData, ocrData) {
     try {
       const checks = [];
       let fraudScore = 0;
       const flags = [];
 
-      // 1. Metadata consistency check
+      // 1. Metadata consistency
       const metaCheck = this.checkMetadataConsistency(documentData, ocrData);
       checks.push(metaCheck);
       if (!metaCheck.passed) {
@@ -21,7 +23,7 @@ class FraudDetectionService {
         flags.push(metaCheck.flag);
       }
 
-      // 2. Font/formatting anomaly check (simulated)
+      // 2. Formatting anomalies
       const formattingCheck = this.checkFormatting(ocrData);
       checks.push(formattingCheck);
       if (!formattingCheck.passed) {
@@ -29,7 +31,7 @@ class FraudDetectionService {
         flags.push(formattingCheck.flag);
       }
 
-      // 3. Institution name validation
+      // 3. Institution validation
       const institutionCheck = await this.validateInstitution(ocrData);
       checks.push(institutionCheck);
       if (!institutionCheck.passed) {
@@ -53,12 +55,22 @@ class FraudDetectionService {
         flags.push(duplicateCheck.flag);
       }
 
-      // 6. OCR confidence check
+      // 6. OCR confidence
       const ocrCheck = this.checkOCRConfidence(ocrData);
       checks.push(ocrCheck);
       if (!ocrCheck.passed) {
         fraudScore += ocrCheck.weight;
         flags.push(ocrCheck.flag);
+      }
+
+      // 7. 🔥 NEW: Blockchain hash validation (if degreeHash provided)
+      if (documentData.degreeHash) {
+        const blockchainCheck = await this.checkBlockchainHash(documentData.degreeHash);
+        checks.push(blockchainCheck);
+        if (!blockchainCheck.passed) {
+          fraudScore += blockchainCheck.weight;
+          flags.push(blockchainCheck.flag);
+        }
       }
 
       const isFraudulent = fraudScore >= this.threshold;
@@ -81,10 +93,10 @@ class FraudDetectionService {
     }
   }
 
-  // ─── Check Metadata Consistency ───────────────────────────────────────────
+  // ─── Individual Checks ──────────────────────────────────────────────────
+
   checkMetadataConsistency(documentData, ocrData) {
     const issues = [];
-
     if (ocrData.studentName && documentData.studentName) {
       const similarity = this.calculateStringSimilarity(
         ocrData.studentName.toLowerCase(),
@@ -94,7 +106,6 @@ class FraudDetectionService {
         issues.push('Name mismatch between OCR and submitted data');
       }
     }
-
     return {
       name: 'metadata_consistency',
       passed: issues.length === 0,
@@ -104,17 +115,14 @@ class FraudDetectionService {
     };
   }
 
-  // ─── Check Formatting ─────────────────────────────────────────────────────
   checkFormatting(ocrData) {
     const suspiciousPatterns = [
       /\b(lorem ipsum)\b/i,
-      /[^\x00-\x7F]{5,}/,      // Excessive non-ASCII
-      /(.)\1{10,}/,              // Repeated characters
+      /[^\x00-\x7F]{5,}/,
+      /(.)\1{10,}/,
     ];
-
     const text = ocrData.rawText || '';
     const hasSuspiciousContent = suspiciousPatterns.some(pattern => pattern.test(text));
-
     return {
       name: 'formatting_check',
       passed: !hasSuspiciousContent,
@@ -123,22 +131,18 @@ class FraudDetectionService {
     };
   }
 
-  // ─── Validate Institution ─────────────────────────────────────────────────
   async validateInstitution(ocrData) {
     try {
       if (!ocrData.institutionName) {
         return { name: 'institution_validation', passed: true, weight: 15, flag: null };
       }
-
       const { data } = await supabaseAdmin
         .from('users')
         .select('institution_name')
         .eq('role', 'university')
         .ilike('institution_name', `%${ocrData.institutionName}%`)
         .limit(1);
-
       const isKnownInstitution = data && data.length > 0;
-
       return {
         name: 'institution_validation',
         passed: isKnownInstitution,
@@ -150,23 +154,15 @@ class FraudDetectionService {
     }
   }
 
-  // ─── Validate Dates ───────────────────────────────────────────────────────
   validateDates(ocrData) {
     const issues = [];
-
     if (ocrData.graduationDate) {
       const gradDate = new Date(ocrData.graduationDate);
       const now = new Date();
       const minDate = new Date('1900-01-01');
-
-      if (gradDate > now) {
-        issues.push('Graduation date is in the future');
-      }
-      if (gradDate < minDate) {
-        issues.push('Graduation date is too old');
-      }
+      if (gradDate > now) issues.push('Graduation date is in the future');
+      if (gradDate < minDate) issues.push('Graduation date is too old');
     }
-
     return {
       name: 'date_validation',
       passed: issues.length === 0,
@@ -175,7 +171,6 @@ class FraudDetectionService {
     };
   }
 
-  // ─── Check Duplicates ─────────────────────────────────────────────────────
   async checkDuplicates(documentData) {
     try {
       const { data } = await supabaseAdmin
@@ -183,9 +178,7 @@ class FraudDetectionService {
         .select('id, user_id')
         .eq('file_hash', documentData.fileHash)
         .neq('user_id', documentData.userId);
-
       const isDuplicate = data && data.length > 0;
-
       return {
         name: 'duplicate_detection',
         passed: !isDuplicate,
@@ -198,12 +191,10 @@ class FraudDetectionService {
     }
   }
 
-  // ─── Check OCR Confidence ─────────────────────────────────────────────────
   checkOCRConfidence(ocrData) {
     const confidence = ocrData.confidence || 100;
     const threshold = parseInt(process.env.OCR_CONFIDENCE_THRESHOLD) || 75;
     const lowConfidence = confidence < threshold;
-
     return {
       name: 'ocr_confidence',
       passed: !lowConfidence,
@@ -213,7 +204,32 @@ class FraudDetectionService {
     };
   }
 
-  // ─── Calculate Risk Level ─────────────────────────────────────────────────
+  // ─── 🔥 NEW: Blockchain Hash Validation ──────────────────────────────
+  async checkBlockchainHash(degreeHash) {
+    try {
+      const result = await blockchainService.verifyDegree(degreeHash);
+      const existsOnChain = result.exists && result.isValid && !result.isRevoked;
+      return {
+        name: 'blockchain_hash_validation',
+        passed: existsOnChain,
+        weight: 50,
+        flag: existsOnChain ? null : `Degree hash not found or invalid on blockchain: ${degreeHash}`,
+        details: result,
+      };
+    } catch (error) {
+      logger.warn('Blockchain hash validation skipped:', error.message);
+      // If blockchain is unavailable, skip this check (pass) to avoid false positives
+      return {
+        name: 'blockchain_hash_validation',
+        passed: true,
+        weight: 50,
+        flag: null,
+        details: { error: error.message, skipped: true },
+      };
+    }
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────
   calculateRiskLevel(score) {
     if (score >= 70) return 'HIGH';
     if (score >= 40) return 'MEDIUM';
@@ -221,7 +237,6 @@ class FraudDetectionService {
     return 'MINIMAL';
   }
 
-  // ─── String Similarity (Levenshtein) ─────────────────────────────────────
   calculateStringSimilarity(str1, str2) {
     const maxLen = Math.max(str1.length, str2.length);
     if (maxLen === 0) return 1;

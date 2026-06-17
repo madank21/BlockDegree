@@ -9,7 +9,7 @@ require("dotenv").config();
  */
 const abiPath = path.join(
   __dirname,
-  "../../../blockchain/contractABI.json"
+  "../blockchain/contractABI.json"
 );
 
 if (!fs.existsSync(abiPath)) {

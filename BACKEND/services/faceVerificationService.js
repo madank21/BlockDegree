@@ -1,3 +1,4 @@
+// services/faceVerificationService.js
 const axios = require('axios');
 const fs = require('fs');
 const FormData = require('form-data');
@@ -10,18 +11,12 @@ class FaceVerificationService {
     this.apiKey = process.env.FACE_API_KEY;
   }
 
-  // ─── Detect Face in Image ─────────────────────────────────────────────────
   async detectFace(imagePath) {
     try {
-      // Simulate face detection (replace with actual API call)
       if (!fs.existsSync(imagePath)) {
         throw new Error('Image file not found');
       }
-
       const imageBuffer = fs.readFileSync(imagePath);
-      const base64Image = imageBuffer.toString('base64');
-
-      // Mock response for development
       if (process.env.NODE_ENV === 'development') {
         return {
           faceDetected: true,
@@ -31,19 +26,12 @@ class FaceVerificationService {
           quality: { brightness: 85, sharpness: 90 },
         };
       }
-
-      // Production: call actual face detection API
       const formData = new FormData();
       formData.append('image', imageBuffer, 'face.jpg');
-
       const response = await axios.post(`${this.apiUrl}/detect`, formData, {
-        headers: {
-          ...formData.getHeaders(),
-          'X-API-Key': this.apiKey,
-        },
+        headers: { ...formData.getHeaders(), 'X-API-Key': this.apiKey },
         timeout: 30000,
       });
-
       return response.data;
     } catch (error) {
       logger.error('Face detection error:', error.message);
@@ -51,31 +39,19 @@ class FaceVerificationService {
     }
   }
 
-  // ─── Compare Faces ────────────────────────────────────────────────────────
   async compareFaces(sourcePath, targetPath) {
     try {
       if (process.env.NODE_ENV === 'development') {
-        // Mock comparison
         const mockSimilarity = 85 + Math.random() * 15;
-        return {
-          isMatch: mockSimilarity > 80,
-          similarity: mockSimilarity,
-          confidence: 0.95,
-        };
+        return { isMatch: mockSimilarity > 80, similarity: mockSimilarity, confidence: 0.95 };
       }
-
       const formData = new FormData();
       formData.append('source', fs.readFileSync(sourcePath), 'source.jpg');
       formData.append('target', fs.readFileSync(targetPath), 'target.jpg');
-
       const response = await axios.post(`${this.apiUrl}/compare`, formData, {
-        headers: {
-          ...formData.getHeaders(),
-          'X-API-Key': this.apiKey,
-        },
+        headers: { ...formData.getHeaders(), 'X-API-Key': this.apiKey },
         timeout: 30000,
       });
-
       return {
         isMatch: response.data.similarity > 80,
         similarity: response.data.similarity,
@@ -87,28 +63,17 @@ class FaceVerificationService {
     }
   }
 
-  // ─── Liveness Detection ───────────────────────────────────────────────────
   async checkLiveness(imagePath) {
     try {
       if (process.env.NODE_ENV === 'development') {
-        return {
-          isLive: true,
-          score: 0.97,
-          spoofingDetected: false,
-        };
+        return { isLive: true, score: 0.97, spoofingDetected: false };
       }
-
       const formData = new FormData();
       formData.append('image', fs.readFileSync(imagePath), 'face.jpg');
-
       const response = await axios.post(`${this.apiUrl}/liveness`, formData, {
-        headers: {
-          ...formData.getHeaders(),
-          'X-API-Key': this.apiKey,
-        },
+        headers: { ...formData.getHeaders(), 'X-API-Key': this.apiKey },
         timeout: 30000,
       });
-
       return response.data;
     } catch (error) {
       logger.error('Liveness check error:', error.message);
@@ -116,26 +81,18 @@ class FaceVerificationService {
     }
   }
 
-  // ─── Extract Face Encoding ────────────────────────────────────────────────
   async extractEncoding(imagePath) {
     try {
       if (process.env.NODE_ENV === 'development') {
-        // Mock encoding (128-dimensional vector)
         const encoding = Array.from({ length: 128 }, () => Math.random() - 0.5);
         return JSON.stringify(encoding);
       }
-
       const formData = new FormData();
       formData.append('image', fs.readFileSync(imagePath), 'face.jpg');
-
       const response = await axios.post(`${this.apiUrl}/encode`, formData, {
-        headers: {
-          ...formData.getHeaders(),
-          'X-API-Key': this.apiKey,
-        },
+        headers: { ...formData.getHeaders(), 'X-API-Key': this.apiKey },
         timeout: 30000,
       });
-
       return JSON.stringify(response.data.encoding);
     } catch (error) {
       logger.error('Face encoding error:', error.message);
@@ -143,53 +100,27 @@ class FaceVerificationService {
     }
   }
 
-  // ─── Full Verification Pipeline ───────────────────────────────────────────
   async verifyIdentity(selfieImagePath, storedImagePath, userId) {
     try {
       logger.info(`Face verification started for user: ${userId}`);
-
-      // Step 1: Detect face in selfie
       const faceDetection = await this.detectFace(selfieImagePath);
       if (!faceDetection.faceDetected) {
-        return {
-          success: false,
-          isMatch: false,
-          reason: 'No face detected in submitted image',
-          confidence: 0,
-        };
+        return { success: false, isMatch: false, reason: 'No face detected in submitted image', confidence: 0 };
       }
-
-      // Step 2: Liveness check
       const liveness = await this.checkLiveness(selfieImagePath);
       if (!liveness.isLive) {
-        return {
-          success: false,
-          isMatch: false,
-          reason: 'Liveness check failed - possible spoofing detected',
-          livenessScore: liveness.score,
-          confidence: 0,
-        };
+        return { success: false, isMatch: false, reason: 'Liveness check failed - possible spoofing detected', livenessScore: liveness.score, confidence: 0 };
       }
-
-      // Step 3: Compare faces
       const comparison = await this.compareFaces(selfieImagePath, storedImagePath);
-
-      // Step 4: Log to database
       await supabaseAdmin.from('face_verifications').insert([{
         user_id: userId,
         confidence_score: comparison.similarity,
         is_match: comparison.isMatch,
         liveness_score: liveness.score,
         liveness_passed: liveness.isLive,
-        api_response: {
-          detection: faceDetection,
-          liveness,
-          comparison,
-        },
+        api_response: { detection: faceDetection, liveness, comparison },
       }]);
-
       logger.info(`Face verification completed for user ${userId}: ${comparison.isMatch ? 'MATCH' : 'NO MATCH'}`);
-
       return {
         success: true,
         isMatch: comparison.isMatch,
@@ -204,22 +135,14 @@ class FaceVerificationService {
     }
   }
 
-  // ─── Enroll User Face ─────────────────────────────────────────────────────
   async enrollFace(imagePath, userId) {
     try {
       const faceDetection = await this.detectFace(imagePath);
       if (!faceDetection.faceDetected) {
         throw new Error('No face detected in the enrollment image');
       }
-
       const encoding = await this.extractEncoding(imagePath);
-
-      // Save encoding to user record
-      await supabaseAdmin
-        .from('users')
-        .update({ face_encoding: encoding })
-        .eq('id', userId);
-
+      await supabaseAdmin.from('users').update({ face_encoding: encoding }).eq('id', userId);
       logger.info(`Face enrolled for user: ${userId}`);
       return { success: true, enrolled: true };
     } catch (error) {

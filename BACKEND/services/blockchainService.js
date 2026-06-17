@@ -1,3 +1,4 @@
+// services/blockchainService.js
 const { ethers } = require('ethers');
 const contractABI = require('../blockchain/contractABI.json');
 const { logger } = require('../src/utils/logger');
@@ -9,54 +10,59 @@ class BlockchainService {
     this.wallet = null;
     this.contract = null;
     this.isInitialized = false;
-    this.initialize();
+    // No automatic initialization – call ensureConnected() before each operation
   }
 
-  // ─── Initialize ─────────────────────────────────────────────────────────────
+  // ─── Lazy Initialization ─────────────────────────────────────────────
   async initialize() {
+    if (this.isInitialized) return;
+
+    const rpcUrl = process.env.SEPOLIA_RPC_URL;
+    const privateKey = process.env.PRIVATE_KEY;
+    const contractAddress = process.env.CONTRACT_ADDRESS;
+
+    if (!rpcUrl || !privateKey || !contractAddress) {
+      throw new Error('Missing blockchain environment variables: SEPOLIA_RPC_URL, PRIVATE_KEY, CONTRACT_ADDRESS');
+    }
+
     try {
-      this.provider = new ethers.JsonRpcProvider(process.env.BLOCKCHAIN_RPC_URL);
-      this.wallet = new ethers.Wallet(process.env.BLOCKCHAIN_PRIVATE_KEY, this.provider);
-      this.contract = new ethers.Contract(
-        process.env.CONTRACT_ADDRESS,
-        contractABI,
-        this.wallet
-      );
+      this.provider = new ethers.JsonRpcProvider(rpcUrl);
+      this.wallet = new ethers.Wallet(privateKey, this.provider);
+      this.contract = new ethers.Contract(contractAddress, contractABI, this.wallet);
 
       const network = await this.provider.getNetwork();
       logger.info(`✅ Blockchain connected: ${network.name} (chainId: ${network.chainId})`);
       this.isInitialized = true;
     } catch (error) {
       logger.error('❌ Blockchain initialization failed:', error.message);
+      throw new Error(`Blockchain initialization failed: ${error.message}`);
     }
   }
 
-  // ─── Ensure Connected ─────────────────────────────────────────────────────
-  ensureConnected() {
+  async ensureConnected() {
     if (!this.isInitialized) {
-      throw new Error('Blockchain service not initialized');
+      await this.initialize();
     }
   }
 
-  // ─── Issue Degree on Blockchain ───────────────────────────────────────────
+  // ─── Issue Degree ─────────────────────────────────────────────────────
   async issueDegree(degreeData) {
-    this.ensureConnected();
+    await this.ensureConnected();
+
+    const {
+      degreeId,
+      studentName,
+      registrationNumber,
+      department,
+      program,
+      cgpa,
+      graduationYear,
+      degreeHash,
+    } = degreeData;
+
+    logger.info(`Issuing degree on blockchain: ${degreeId}`);
 
     try {
-      const {
-        degreeId,
-        studentName,
-        registrationNumber,
-        department,
-        program,
-        cgpa,
-        graduationYear,
-        degreeHash,
-      } = degreeData;
-
-      logger.info(`Issuing degree on blockchain: ${degreeId}`);
-
-      // Estimate gas (optional but helpful)
       const gasEstimate = await this.contract.issueDegree.estimateGas(
         degreeId,
         studentName,
@@ -68,6 +74,9 @@ class BlockchainService {
         degreeHash
       );
 
+      // Add 20% buffer
+      const gasLimit = (gasEstimate * 120n) / 100n;
+
       const tx = await this.contract.issueDegree(
         degreeId,
         studentName,
@@ -77,20 +86,14 @@ class BlockchainService {
         cgpa,
         graduationYear,
         degreeHash,
-        { gasLimit: gasEstimate }
+        { gasLimit }
       );
 
       logger.info(`Blockchain tx submitted: ${tx.hash}`);
-
-      // Save pending transaction
       await this.savePendingTransaction(tx.hash, degreeId);
 
-      // Wait for confirmation
       const receipt = await tx.wait(1);
-
       logger.info(`Blockchain tx confirmed: ${tx.hash}, block: ${receipt.blockNumber}`);
-
-      // Update transaction status
       await this.updateTransactionStatus(tx.hash, 'confirmed', receipt);
 
       return {
@@ -105,14 +108,11 @@ class BlockchainService {
     }
   }
 
-  // ─── Verify Degree by Hash ────────────────────────────────────────────────
+  // ─── Verify Degree by Hash ────────────────────────────────────────────
   async verifyDegree(degreeHash) {
-    this.ensureConnected();
-
+    await this.ensureConnected();
     try {
       const result = await this.contract.verifyByHash(degreeHash);
-
-      // The contract returns: (bool exists, bool isValid, bool isRevoked, string degreeId)
       return {
         exists: result[0],
         isValid: result[1],
@@ -125,30 +125,24 @@ class BlockchainService {
     }
   }
 
-  // ─── Get Full Degree Details by ID ──────────────────────────────────────
+  // ─── Get Full Degree Details ──────────────────────────────────────────
   async getDegree(degreeId) {
-    this.ensureConnected();
-
+    await this.ensureConnected();
     try {
       const result = await this.contract.getDegree(degreeId);
-
-      // The contract returns:
-      // (string studentName, string registrationNumber, string department,
-      //  string program, string cgpa, string graduationYear, string degreeHash,
-      //  string degreeId, address issuerAddress, uint256 timestamp,
-      //  bool isValid, bool isRevoked)
+      // ⚠️ CRITICAL: Correct mapping – order matches your ABI
       return {
-        studentName: result[0],
-        registrationNumber: result[1],
-        department: result[2],
-        program: result[3],
-        cgpa: result[4],
-        graduationYear: result[5],
-        degreeHash: result[6],
-        degreeId: result[7],
+        degreeId: result[0],
+        studentName: result[1],
+        registrationNumber: result[2],
+        department: result[3],
+        program: result[4],
+        cgpa: result[5],
+        graduationYear: result[6],
+        degreeHash: result[7],
         issuerAddress: result[8],
-        timestamp: result[9].toString(),
-        isValid: result[10],
+        timestamp: result[9] ? result[9].toString() : null,
+        exists: result[10],
         isRevoked: result[11],
       };
     } catch (error) {
@@ -157,16 +151,12 @@ class BlockchainService {
     }
   }
 
-  // ─── Revoke Degree on Blockchain ──────────────────────────────────────────
+  // ─── Revoke Degree ────────────────────────────────────────────────────
   async revokeDegree(degreeId, reason) {
-    this.ensureConnected();
-
+    await this.ensureConnected();
     try {
-      // Your contract might not have a `reason` parameter – adjust accordingly.
-      // Assuming the contract is `revokeDegree(string degreeId)`
       const tx = await this.contract.revokeDegree(degreeId);
       const receipt = await tx.wait(1);
-
       return {
         txHash: tx.hash,
         blockNumber: receipt.blockNumber,
@@ -178,10 +168,9 @@ class BlockchainService {
     }
   }
 
-  // ─── Get Total Degrees Issued ─────────────────────────────────────────────
+  // ─── Total Degrees Issued ─────────────────────────────────────────────
   async getTotalDegreesIssued() {
-    this.ensureConnected();
-
+    await this.ensureConnected();
     try {
       const total = await this.contract.totalDegrees();
       return Number(total);
@@ -191,17 +180,15 @@ class BlockchainService {
     }
   }
 
-  // ─── Get Network Info ─────────────────────────────────────────────────────
+  // ─── Network Info ─────────────────────────────────────────────────────
   async getNetworkInfo() {
-    this.ensureConnected();
-
+    await this.ensureConnected();
     try {
       const [network, blockNumber, balance] = await Promise.all([
         this.provider.getNetwork(),
         this.provider.getBlockNumber(),
         this.provider.getBalance(this.wallet.address),
       ]);
-
       return {
         networkName: network.name,
         chainId: network.chainId.toString(),
@@ -216,16 +203,14 @@ class BlockchainService {
     }
   }
 
-  // ─── Get Transaction Details ──────────────────────────────────────────────
+  // ─── Transaction Details ──────────────────────────────────────────────
   async getTransaction(txHash) {
-    this.ensureConnected();
-
+    await this.ensureConnected();
     try {
       const [tx, receipt] = await Promise.all([
         this.provider.getTransaction(txHash),
         this.provider.getTransactionReceipt(txHash),
       ]);
-
       return {
         hash: tx.hash,
         blockNumber: tx.blockNumber,
@@ -242,7 +227,7 @@ class BlockchainService {
     }
   }
 
-  // ─── Save Pending Transaction ─────────────────────────────────────────────
+  // ─── Database Helpers ────────────────────────────────────────────────
   async savePendingTransaction(txHash, degreeId) {
     try {
       await supabaseAdmin.from('blockchain_transactions').insert([{
@@ -258,7 +243,6 @@ class BlockchainService {
     }
   }
 
-  // ─── Update Transaction Status ────────────────────────────────────────────
   async updateTransactionStatus(txHash, status, receipt = null) {
     try {
       const updateData = { status };
@@ -267,7 +251,6 @@ class BlockchainService {
         updateData.gas_used = Number(receipt.gasUsed);
         updateData.confirmed_at = new Date().toISOString();
       }
-
       await supabaseAdmin
         .from('blockchain_transactions')
         .update(updateData)
@@ -278,4 +261,5 @@ class BlockchainService {
   }
 }
 
-module.exports = BlockchainService;
+// ✅ Export as a singleton instance for easy use in controllers
+module.exports = new BlockchainService();

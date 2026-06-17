@@ -1,3 +1,4 @@
+// services/notificationService.js
 const nodemailer = require('nodemailer');
 const { logger } = require('../src/utils/logger');
 
@@ -33,7 +34,6 @@ class NotificationService {
     }
   }
 
-  // ─── Send Email ───────────────────────────────────────────────────────────
   async sendEmail(to, subject, html, text = '') {
     try {
       if (process.env.NODE_ENV === 'development') {
@@ -57,9 +57,7 @@ class NotificationService {
     }
   }
 
-  // ─── Email Templates ──────────────────────────────────────────────────────
-  
-  // Welcome / Email Verification
+  // ─── Templates ──────────────────────────────────────────────────────────
   async sendWelcomeEmail(user, verificationToken) {
     const verifyUrl = `${this.baseUrl}/verify-email?token=${verificationToken}`;
     const html = this.baseTemplate(`
@@ -76,7 +74,6 @@ class NotificationService {
     return this.sendEmail(user.email, 'Welcome to BlockDegree - Verify Your Email', html);
   }
 
-  // Password Reset
   async sendPasswordResetEmail(user, resetToken) {
     const resetUrl = `${this.baseUrl}/reset-password?token=${resetToken}`;
     const html = this.baseTemplate(`
@@ -93,7 +90,6 @@ class NotificationService {
     return this.sendEmail(user.email, 'BlockDegree - Password Reset Request', html);
   }
 
-  // Degree Issued
   async sendDegreeIssuedEmail(graduate, degree) {
     const verifyUrl = `${this.baseUrl}/verify/${degree.id}`;
     const html = this.baseTemplate(`
@@ -121,7 +117,6 @@ class NotificationService {
     );
   }
 
-  // Verification Complete
   async sendVerificationCompleteEmail(email, verification, degree) {
     const status = verification.status;
     const statusColor = status === 'verified' ? '#059669' : '#DC2626';
@@ -147,7 +142,6 @@ class NotificationService {
     );
   }
 
-  // Degree Revoked
   async sendDegreeRevokedEmail(graduate, degree, reason) {
     const html = this.baseTemplate(`
       <h2 style="color: #DC2626;">⚠️ Degree Revocation Notice</h2>
@@ -169,7 +163,6 @@ class NotificationService {
     );
   }
 
-  // ─── Base Template ─────────────────────────────────────────────────────────
   baseTemplate(content) {
     return `
       <!DOCTYPE html>
@@ -180,18 +173,13 @@ class NotificationService {
       </head>
       <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #F9FAFB;">
         <div style="background: white; border-radius: 12px; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <!-- Header -->
           <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #4F46E5; padding-bottom: 20px;">
             <h1 style="color: #4F46E5; margin: 0; font-size: 28px;">🎓 BlockDegree</h1>
             <p style="color: #6B7280; margin: 5px 0 0;">Blockchain-Verified Academic Credentials</p>
           </div>
-          
-          <!-- Content -->
           <div style="color: #1F2937; line-height: 1.6;">
             ${content}
           </div>
-          
-          <!-- Footer -->
           <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #E5E7EB; text-align: center; color: #9CA3AF; font-size: 12px;">
             <p>© ${new Date().getFullYear()} BlockDegree. All rights reserved.</p>
             <p>This email was sent automatically. Please do not reply to this email.</p>
