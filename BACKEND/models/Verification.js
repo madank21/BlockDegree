@@ -1,4 +1,5 @@
-// /models/Verification.js — Supabase version
+// /models/Verification.js
+// Verification Log Model — Supabase Query Wrapper
 
 const { getSupabaseAdmin } = require("../database/supabase");
 
@@ -6,31 +7,34 @@ const TABLE = "verification_logs";
 
 const Verification = {
 
+  // ── Create ────────────────────────────────────────────────────────────────
   async create(data) {
     const supabase = getSupabaseAdmin();
+
     const { data: log, error } = await supabase
       .from(TABLE)
       .insert({
-        computed_hash:       data.computedHash  || data.computed_hash  || null,
+        computed_hash:       data.computedHash       || data.computed_hash       || null,
         result:              data.result,
-        verifier_id:         data.verifierId    || data.verifier_id    || null,
-        verifier_ip:         data.verifierIp    || data.verifier_ip    || null,
-        degree_id:           data.degreeId      || data.degree_id      || null,
-        verification_method: data.method        || data.verification_method || null,
-        on_chain_record:     data.onChainRecord || {},
-        metadata:            data.metadata      || {},
+        verifier_id:         data.verifierId         || data.verifier_id         || null,
+        verifier_ip:         data.verifierIp         || data.verifier_ip         || null,
+        degree_id:           data.degreeId           || data.degree_id           || null,
+        verification_method: data.method             || data.verification_method || null,
+        on_chain_record:     data.onChainRecord      || {},
+        metadata:            data.metadata           || {},
         verified_at:         new Date().toISOString(),
       })
       .select("id, result, verified_at")
       .single();
 
     if (error) {
-      console.warn(`[Verification] Log insert failed: ${error.message}`);
+      console.warn(`[Verification] Log insert failed (non-fatal): ${error.message}`);
       return null;
     }
     return log;
   },
 
+  // ── Find many with pagination ─────────────────────────────────────────────
   async findMany({ page = 1, limit = 20, result, verifierIp } = {}) {
     const supabase = getSupabaseAdmin();
     const offset   = (parseInt(page) - 1) * parseInt(limit);
@@ -50,7 +54,7 @@ const Verification = {
     return { data: data || [], total: count || 0 };
   },
 
-  // For anomaly detection — recent verifications from an IP
+  // ── Get recent by IP (for anomaly detection) ──────────────────────────────
   async getRecentByIp(verifierIp, withinMinutes = 60) {
     const supabase = getSupabaseAdmin();
     const since    = new Date(Date.now() - withinMinutes * 60000).toISOString();
@@ -63,6 +67,31 @@ const Verification = {
 
     if (error) return [];
     return data || [];
+  },
+
+  // ── System report stats ───────────────────────────────────────────────────
+  async getSystemReport() {
+    const supabase = getSupabaseAdmin();
+    const today    = new Date().toISOString().split("T")[0];
+
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select("result, verified_at");
+
+    if (error) return {};
+    const rows = data || [];
+
+    return {
+      total:    rows.length,
+      today:    rows.filter((r) => r.verified_at?.startsWith(today)).length,
+      valid:    rows.filter((r) => r.result === "valid").length,
+      invalid:  rows.filter((r) => r.result === "invalid").length,
+      revoked:  rows.filter((r) => r.result === "revoked").length,
+      successRate:
+        rows.length > 0
+          ? ((rows.filter((r) => r.result === "valid").length / rows.length) * 100).toFixed(1)
+          : "0.0",
+    };
   },
 };
 
