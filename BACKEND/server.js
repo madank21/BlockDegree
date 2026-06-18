@@ -10,12 +10,14 @@ const PORT = parseInt(process.env.PORT) || 5000;
 const REQUIRED_ENV = [
   "JWT_SECRET",
   "SUPABASE_URL",
-  "SUPABASE_ANON_KEY",
+  "SUPABASE_PUBLISHABLE_KEY",
   "SUPABASE_SERVICE_KEY",
   "BLOCKCHAIN_RPC_URL",
   "PRIVATE_KEY",
   "CONTRACT_ADDRESS",
 ];
+
+console.log('SUPABASE_URL=', process.env.SUPABASE_URL);
 
 const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
 if (missing.length > 0) {
