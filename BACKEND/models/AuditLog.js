@@ -1,110 +1,54 @@
-const { supabaseAdmin } = require('../database/supabase');
+// /models/AuditLog.js — Supabase version
 
-class AuditLog {
-  static TABLE = 'audit_logs';
+const { getSupabaseAdmin } = require("../database/supabase");
 
-  // ─── Create ───────────────────────────────────────────────────────────────
-  static async create(logData) {
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .insert([logData])
-      .select()
+const TABLE = "audit_logs";
+
+const AuditLog = {
+
+  async create(data) {
+    const supabase = getSupabaseAdmin();
+    const { data: log, error } = await supabase
+      .from(TABLE)
+      .insert({
+        action:      data.action,
+        actor_id:    data.actorId    || data.actor_id    || null,
+        actor_role:  data.actorRole  || data.actor_role  || null,
+        target_id:   data.targetId   ? String(data.targetId)  : null,
+        target_type: data.targetType || data.target_type || null,
+        details:     data.details    || {},
+        ip_address:  data.ipAddress  || data.ip_address  || null,
+        created_at:  new Date().toISOString(),
+      })
+      .select("id, action, created_at")
       .single();
 
     if (error) {
-      console.error('Audit log creation failed:', error.message);
+      // Non-fatal — audit log failure must not break main flow
+      console.warn(`[AuditLog] Insert failed: ${error.message}`);
       return null;
     }
-    return data;
-  }
+    return log;
+  },
 
-  // ─── Find All ─────────────────────────────────────────────────────────────
-  static async findAll({
-    page = 1,
-    limit = 20,
-    userId,
-    action,
-    resourceType,
-    startDate,
-    endDate,
-  } = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
+  async findMany({ page = 1, limit = 20, action, actorId } = {}) {
+    const supabase = getSupabaseAdmin();
+    const offset   = (parseInt(page) - 1) * parseInt(limit);
 
-    let query = supabaseAdmin
-      .from(this.TABLE)
-      .select(`
-        *,
-        user:user_id(id, email, first_name, last_name, role)
-      `, { count: 'exact' });
+    let query = supabase
+      .from(TABLE)
+      .select("*", { count: "exact" });
 
-    if (userId) query = query.eq('user_id', userId);
-    if (action) query = query.eq('action', action);
-    if (resourceType) query = query.eq('resource_type', resourceType);
-    if (startDate) query = query.gte('created_at', startDate);
-    if (endDate) query = query.lte('created_at', endDate);
+    if (action)  query = query.eq("action",   action);
+    if (actorId) query = query.eq("actor_id", actorId);
 
-    const { data, error, count } = await query
-      .range(from, to)
-      .order('created_at', { ascending: false });
+    const { data, count, error } = await query
+      .order("created_at", { ascending: false })
+      .range(offset, offset + parseInt(limit) - 1);
 
-    if (error) throw new Error(error.message);
-    return { data, count, page, limit, totalPages: Math.ceil(count / limit) };
-  }
-
-  // ─── Find By User ─────────────────────────────────────────────────────────
-  static async findByUser(userId, { page = 1, limit = 20 } = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    const { data, error, count } = await supabaseAdmin
-      .from(this.TABLE)
-      .select('*', { count: 'exact' })
-      .eq('user_id', userId)
-      .range(from, to)
-      .order('created_at', { ascending: false });
-
-    if (error) throw new Error(error.message);
-    return { data, count, page, limit, totalPages: Math.ceil(count / limit) };
-  }
-
-  // ─── Get Security Events ──────────────────────────────────────────────────
-  static async getSecurityEvents({ page = 1, limit = 20 } = {}) {
-    const securityActions = ['login', 'logout', 'password_changed', 'face_verification'];
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    const { data, error, count } = await supabaseAdmin
-      .from(this.TABLE)
-      .select(`
-        *,
-        user:user_id(id, email, role)
-      `, { count: 'exact' })
-      .in('action', securityActions)
-      .range(from, to)
-      .order('created_at', { ascending: false });
-
-    if (error) throw new Error(error.message);
-    return { data, count, page, limit, totalPages: Math.ceil(count / limit) };
-  }
-
-  // ─── Helper: Log Action ───────────────────────────────────────────────────
-  static async log(action, options = {}) {
-    return this.create({
-      action,
-      user_id: options.userId || null,
-      resource_type: options.resourceType || null,
-      resource_id: options.resourceId || null,
-      old_data: options.oldData || null,
-      new_data: options.newData || null,
-      ip_address: options.ipAddress || null,
-      user_agent: options.userAgent || null,
-      request_id: options.requestId || null,
-      success: options.success !== undefined ? options.success : true,
-      error_message: options.errorMessage || null,
-      metadata: options.metadata || {},
-    });
-  }
-}
+    if (error) throw new Error(`AuditLog.findMany failed: ${error.message}`);
+    return { data: data || [], total: count || 0 };
+  },
+};
 
 module.exports = AuditLog;

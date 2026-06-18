@@ -1,33 +1,36 @@
-const { createClient } = require('@supabase/supabase-js');
-const ws = require('ws');
-const { logger } = require('../src/utils/logger');
+const { createClient } = require("@supabase/supabase-js");
+const { logger } = require("../src/utils/logger");
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+const SUPABASE_URL         = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY    = process.env.SUPABASE_ANON_KEY;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
-}
+if (!SUPABASE_URL)         throw new Error("SUPABASE_URL must be set in .env");
+if (!SUPABASE_ANON_KEY)    throw new Error("SUPABASE_ANON_KEY must be set in .env");
+if (!SUPABASE_SERVICE_KEY) throw new Error("SUPABASE_SERVICE_KEY must be set in .env");
 
-// Public client
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  realtime: {
-    transport: ws,   // 🔥 FIX HERE
-  },
-  auth: {
-    autoRefreshToken: true,
-    persistSession: false,
-  },
+const supabaseAnon = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { autoRefreshToken: false, persistSession: false },
 });
 
-// Admin client
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  realtime: {
-    transport: ws,   // 🔥 FIX HERE
-  },
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+  auth: { autoRefreshToken: false, persistSession: false },
 });
+
+const getSupabaseAnon  = () => supabaseAnon;
+const getSupabaseAdmin = () => supabaseAdmin;
+
+const checkSupabaseConnection = async () => {
+  try {
+    const { error } = await supabaseAdmin.from("users").select("id").limit(1);
+    if (error) throw error;
+    logger.info("[Supabase] Connection verified");
+    return true;
+  } catch (err) {
+    logger.error(`[Supabase] Connection check failed: ${err.message}`);
+    return false;
+  }
+};
+
+logger.info("[Supabase] Clients initialised");
+module.exports = { getSupabaseAnon, getSupabaseAdmin, checkSupabaseConnection };

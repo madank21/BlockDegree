@@ -1,133 +1,43 @@
-const { supabaseAdmin } = require('../database/supabase');
-const crypto = require('crypto');
-const fs = require('fs');
+const { getSupabaseAdmin } = require("../database/supabase");
+const TABLE = "ipfs_documents";
 
-class Document {
-  static TABLE = 'documents';
-
-  // ─── Generate File Hash ───────────────────────────────────────────────────
-  static generateFileHash(filePath) {
-    const fileBuffer = fs.readFileSync(filePath);
-    return '0x' + crypto.createHash('sha256').update(fileBuffer).digest('hex');
-  }
-
-  // ─── Create ───────────────────────────────────────────────────────────────
-  static async create(documentData) {
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .insert([documentData])
-      .select()
+const Document = {
+  async create(data) {
+    const supabase = getSupabaseAdmin();
+    const { data: doc, error } = await supabase
+      .from(TABLE)
+      .insert({
+        degree_id:     data.degreeId || data.degree_id || null,
+        user_id:       data.userId || data.user_id || null,
+        cid:           data.cid,
+        local_hash:    data.localHash || data.local_hash,
+        gateway_url:   data.gatewayUrl || data.gateway_url || null,
+        pinata_url:    data.pinataUrl || data.pinata_url || null,
+        file_size:     data.fileSize || data.file_size || null,
+        file_type:     data.fileType || data.file_type || null,
+        document_type: data.documentType || data.document_type || "degree",
+        is_pinned:     data.isPinned !== undefined ? data.isPinned : true,
+        created_at:    new Date().toISOString(),
+      })
+      .select("id, cid, gateway_url, created_at")
       .single();
+    if (error) throw new Error(`Document.create failed: ${error.message}`);
+    return doc;
+  },
 
-    if (error) throw new Error(error.message);
-    return data;
-  }
+  async findByDegreeId(degreeId) {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase.from(TABLE).select("*").eq("degree_id", degreeId).order("created_at", { ascending: false });
+    if (error) return [];
+    return data || [];
+  },
 
-  // ─── Find By ID ───────────────────────────────────────────────────────────
-  static async findById(id) {
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .select(`
-        *,
-        user:user_id(id, email, first_name, last_name),
-        degree:degree_id(id, degree_title, certificate_number)
-      `)
-      .eq('id', id)
-      .single();
-
+  async findByCID(cid) {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase.from(TABLE).select("*").eq("cid", cid).single();
     if (error) return null;
     return data;
-  }
-
-  // ─── Find By User ─────────────────────────────────────────────────────────
-  static async findByUser(userId, { page = 1, limit = 10, documentType } = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    let query = supabaseAdmin
-      .from(this.TABLE)
-      .select('*', { count: 'exact' })
-      .eq('user_id', userId);
-
-    if (documentType) query = query.eq('document_type', documentType);
-
-    const { data, error, count } = await query
-      .range(from, to)
-      .order('created_at', { ascending: false });
-
-    if (error) throw new Error(error.message);
-    return { data, count, page, limit, totalPages: Math.ceil(count / limit) };
-  }
-
-  // ─── Find By Degree ───────────────────────────────────────────────────────
-  static async findByDegree(degreeId) {
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .select('*')
-      .eq('degree_id', degreeId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw new Error(error.message);
-    return data;
-  }
-
-  // ─── Update ───────────────────────────────────────────────────────────────
-  static async update(id, updateData) {
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw new Error(error.message);
-    return data;
-  }
-
-  // ─── Delete ───────────────────────────────────────────────────────────────
-  static async delete(id) {
-    const { error } = await supabaseAdmin
-      .from(this.TABLE)
-      .delete()
-      .eq('id', id);
-
-    if (error) throw new Error(error.message);
-    return true;
-  }
-
-  // ─── Check Duplicate Hash ─────────────────────────────────────────────────
-  static async findByHash(hash) {
-    const { data } = await supabaseAdmin
-      .from(this.TABLE)
-      .select('id, file_name, user_id')
-      .eq('file_hash', hash)
-      .single();
-
-    return data;
-  }
-
-  // ─── Find All (Admin) ─────────────────────────────────────────────────────
-  static async findAll({ page = 1, limit = 10, isVerified, fraudScoreMin } = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    let query = supabaseAdmin
-      .from(this.TABLE)
-      .select(`
-        *,
-        user:user_id(id, email, first_name, last_name)
-      `, { count: 'exact' });
-
-    if (typeof isVerified === 'boolean') query = query.eq('is_verified', isVerified);
-    if (fraudScoreMin) query = query.gte('fraud_score', fraudScoreMin);
-
-    const { data, error, count } = await query
-      .range(from, to)
-      .order('created_at', { ascending: false });
-
-    if (error) throw new Error(error.message);
-    return { data, count, page, limit, totalPages: Math.ceil(count / limit) };
-  }
-}
+  },
+};
 
 module.exports = Document;

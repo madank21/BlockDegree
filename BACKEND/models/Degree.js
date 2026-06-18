@@ -1,226 +1,226 @@
-const { supabaseAdmin } = require('../database/supabase');
-const { v4: uuidv4 } = require('uuid');
-const crypto = require('crypto');
+// /models/Degree.js
+// ─────────────────────────────────────────────────────────────────────────────
+// Degree Model — Supabase Query Wrapper
+// ─────────────────────────────────────────────────────────────────────────────
 
-class Degree {
-  static TABLE = 'degrees';
+const { getSupabaseAdmin } = require("../database/supabase");
 
-  // ─── Generate Degree Hash ─────────────────────────────────────────────────
-  static generateHash(degreeData) {
-    const content = JSON.stringify({
-      studentName: degreeData.student_name,
-      studentId: degreeData.student_id,
-      degreeTitle: degreeData.degree_title,
-      fieldOfStudy: degreeData.field_of_study,
-      graduationDate: degreeData.graduation_date,
-      institutionId: degreeData.issuing_institution_id,
-      certificateNumber: degreeData.certificate_number,
-    });
-    return '0x' + crypto.createHash('sha256').update(content).digest('hex');
-  }
+const TABLE = "degrees";
 
-  // ─── Generate Certificate Number ──────────────────────────────────────────
-  static generateCertificateNumber() {
-    const year = new Date().getFullYear();
-    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-    return `BD-${year}-${random}`;
-  }
+// Standard columns returned in most queries
+const DEFAULT_COLUMNS = [
+  "id", "student_name", "student_id", "graduate_id", "graduate_email",
+  "degree_title", "field_of_study", "graduation_date", "gpa", "honors",
+  "institution_id", "institution_name", "issued_by",
+  "degree_hash", "certificate_number",
+  "status", "blockchain_sync_status",
+  "blockchain_tx_hash", "blockchain_block_number", "blockchain_timestamp",
+  "revocation_reason", "revoked_at", "revocation_tx_hash",
+  "qr_code_url", "ipfs_cid", "ipfs_gateway_url", "document_hash",
+  "metadata", "created_at", "updated_at",
+].join(", ");
 
-  // ─── Create ───────────────────────────────────────────────────────────────
-  static async create(degreeData) {
-    const certificate_number = this.generateCertificateNumber();
-    const degree_hash = this.generateHash({ ...degreeData, certificate_number });
+const Degree = {
 
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .insert([{ ...degreeData, certificate_number, degree_hash }])
-      .select(`
-        *,
-        graduate:graduate_id(id, email, first_name, last_name),
-        institution:issuing_institution_id(id, institution_name, email)
-      `)
-      .single();
+  // ── Create ────────────────────────────────────────────────────────────────
+  async create(data) {
+    const supabase = getSupabaseAdmin();
 
-    if (error) throw new Error(error.message);
-    return data;
-  }
-
-  // ─── Find By ID ───────────────────────────────────────────────────────────
-  static async findById(id) {
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .select(`
-        *,
-        graduate:graduate_id(id, email, first_name, last_name, phone),
-        institution:issuing_institution_id(id, institution_name, email)
-      `)
-      .eq('id', id)
-      .single();
-
-    if (error) return null;
-    return data;
-  }
-
-  // ─── Find By Hash ─────────────────────────────────────────────────────────
-  static async findByHash(hash) {
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .select(`
-        *,
-        graduate:graduate_id(id, email, first_name, last_name),
-        institution:issuing_institution_id(id, institution_name, email)
-      `)
-      .eq('degree_hash', hash)
-      .single();
-
-    if (error) return null;
-    return data;
-  }
-
-  // ─── Find By Certificate Number ───────────────────────────────────────────
-  static async findByCertificateNumber(certNumber) {
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .select(`
-        *,
-        graduate:graduate_id(id, email, first_name, last_name),
-        institution:issuing_institution_id(id, institution_name, email)
-      `)
-      .eq('certificate_number', certNumber)
-      .single();
-
-    if (error) return null;
-    return data;
-  }
-
-  // ─── Find By Graduate ─────────────────────────────────────────────────────
-  static async findByGraduate(graduateId, { page = 1, limit = 10 } = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    const { data, error, count } = await supabaseAdmin
-      .from(this.TABLE)
-      .select(`
-        *,
-        institution:issuing_institution_id(id, institution_name)
-      `, { count: 'exact' })
-      .eq('graduate_id', graduateId)
-      .range(from, to)
-      .order('created_at', { ascending: false });
-
-    if (error) throw new Error(error.message);
-    return { data, count, page, limit, totalPages: Math.ceil(count / limit) };
-  }
-
-  // ─── Find By Institution ──────────────────────────────────────────────────
-  static async findByInstitution(institutionId, { page = 1, limit = 10, status, search } = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    let query = supabaseAdmin
-      .from(this.TABLE)
-      .select(`
-        *,
-        graduate:graduate_id(id, email, first_name, last_name)
-      `, { count: 'exact' })
-      .eq('issuing_institution_id', institutionId);
-
-    if (status) query = query.eq('status', status);
-    if (search) {
-      query = query.or(`student_name.ilike.%${search}%,student_id.ilike.%${search}%,certificate_number.ilike.%${search}%`);
-    }
-
-    const { data, error, count } = await query
-      .range(from, to)
-      .order('created_at', { ascending: false });
-
-    if (error) throw new Error(error.message);
-    return { data, count, page, limit, totalPages: Math.ceil(count / limit) };
-  }
-
-  // ─── Find All ─────────────────────────────────────────────────────────────
-  static async findAll({ page = 1, limit = 10, status, search } = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    let query = supabaseAdmin
-      .from(this.TABLE)
-      .select(`
-        *,
-        graduate:graduate_id(id, email, first_name, last_name),
-        institution:issuing_institution_id(id, institution_name)
-      `, { count: 'exact' });
-
-    if (status) query = query.eq('status', status);
-    if (search) {
-      query = query.or(`student_name.ilike.%${search}%,degree_title.ilike.%${search}%,certificate_number.ilike.%${search}%`);
-    }
-
-    const { data, error, count } = await query
-      .range(from, to)
-      .order('created_at', { ascending: false });
-
-    if (error) throw new Error(error.message);
-    return { data, count, page, limit, totalPages: Math.ceil(count / limit) };
-  }
-
-  // ─── Update ───────────────────────────────────────────────────────────────
-  static async update(id, updateData) {
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw new Error(error.message);
-    return data;
-  }
-
-  // ─── Revoke ───────────────────────────────────────────────────────────────
-  static async revoke(id, revokedBy, reason) {
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .update({
-        is_revoked: true,
-        revocation_reason: reason,
-        revoked_at: new Date().toISOString(),
-        revoked_by: revokedBy,
-        status: 'rejected',
+    const { data: degree, error } = await supabase
+      .from(TABLE)
+      .insert({
+        student_name:          data.studentName       || data.student_name,
+        student_id:            data.studentId         || data.student_id,
+        graduate_id:           data.graduateId        || data.graduate_id        || null,
+        graduate_email:        data.graduateEmail     || data.graduate_email     || null,
+        degree_title:          data.degreeTitle       || data.degree_title,
+        field_of_study:        data.fieldOfStudy      || data.field_of_study,
+        graduation_date:       data.graduationDate    || data.graduation_date,
+        gpa:                   data.gpa               || null,
+        honors:                data.honors            || null,
+        institution_id:        data.institutionId     || data.institution_id,
+        institution_name:      data.institutionName   || data.institution_name   || null,
+        issued_by:             data.issuedBy          || data.issued_by          || null,
+        degree_hash:           data.degreeHash        || data.degree_hash,
+        status:                data.status            || "pending",
+        blockchain_sync_status: data.blockchainSyncStatus || "queued",
+        metadata:              data.metadata          || {},
+        created_at:            new Date().toISOString(),
+        updated_at:            new Date().toISOString(),
       })
-      .eq('id', id)
-      .select()
+      .select(DEFAULT_COLUMNS)
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(`Degree.create failed: ${error.message}`);
+    return degree;
+  },
+
+  // ── Find by ID ────────────────────────────────────────────────────────────
+  async findById(id) {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select(DEFAULT_COLUMNS)
+      .eq("id", id)
+      .single();
+    if (error) return null;
     return data;
-  }
+  },
 
-  // ─── Get Statistics ───────────────────────────────────────────────────────
-  static async getStats(institutionId = null) {
-    let query = supabaseAdmin
-      .from(this.TABLE)
-      .select('status, is_revoked, created_at');
+  // ── Find by hash ──────────────────────────────────────────────────────────
+  async findByHash(degreeHash) {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select(DEFAULT_COLUMNS)
+      .eq("degree_hash", degreeHash)
+      .maybeSingle();
+    if (error) return null;
+    return data;
+  },
 
-    if (institutionId) query = query.eq('issuing_institution_id', institutionId);
+  // ── Find by certificate number ────────────────────────────────────────────
+  async findByCertNumber(certNumber) {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select(
+        "degree_title, student_name, graduation_date, certificate_number, " +
+        "degree_hash, status, blockchain_tx_hash, ipfs_cid, ipfs_gateway_url"
+      )
+      .eq("certificate_number", certNumber)
+      .single();
+    if (error) return null;
+    return data;
+  },
+
+  // ── Find many (with filters + pagination) ─────────────────────────────────
+  async findMany({ page = 1, limit = 10, status, search, institutionId, studentId } = {}) {
+    const supabase = getSupabaseAdmin();
+    const offset   = (parseInt(page) - 1) * parseInt(limit);
+
+    let query = supabase
+      .from(TABLE)
+      .select(DEFAULT_COLUMNS, { count: "exact" });
+
+    if (institutionId) query = query.eq("institution_id", institutionId);
+    if (studentId)     query = query.eq("student_id",     studentId);
+    if (status)        query = query.eq("status",         status);
+
+    if (search) {
+      query = query.or(
+        `student_name.ilike.%${search}%,` +
+        `student_id.ilike.%${search}%,` +
+        `degree_title.ilike.%${search}%,` +
+        `field_of_study.ilike.%${search}%`
+      );
+    }
+
+    const { data, count, error } = await query
+      .order("created_at", { ascending: false })
+      .range(offset, offset + parseInt(limit) - 1);
+
+    if (error) throw new Error(`Degree.findMany failed: ${error.message}`);
+    return { data: data || [], total: count || 0 };
+  },
+
+  // ── Update ────────────────────────────────────────────────────────────────
+  async update(id, updates) {
+    const supabase = getSupabaseAdmin();
+
+    // Map camelCase → snake_case
+    const mapped = { updated_at: new Date().toISOString() };
+
+    const fieldMap = {
+      status:               "status",
+      blockchainSyncStatus: "blockchain_sync_status",
+      blockchainTxHash:     "blockchain_tx_hash",
+      blockchainBlockNumber:"blockchain_block_number",
+      blockchainTimestamp:  "blockchain_timestamp",
+      revocationReason:     "revocation_reason",
+      revokedAt:            "revoked_at",
+      revocationTxHash:     "revocation_tx_hash",
+      qrCodeUrl:            "qr_code_url",
+      ipfsCid:              "ipfs_cid",
+      ipfsGatewayUrl:       "ipfs_gateway_url",
+      documentHash:         "document_hash",
+      gpa:                  "gpa",
+      honors:               "honors",
+      metadata:             "metadata",
+    };
+
+    for (const [camel, snake] of Object.entries(fieldMap)) {
+      if (updates[camel] !== undefined) mapped[snake] = updates[camel];
+      if (updates[snake] !== undefined) mapped[snake] = updates[snake];
+    }
+
+    const { data, error } = await supabase
+      .from(TABLE)
+      .update(mapped)
+      .eq("id", id)
+      .select(DEFAULT_COLUMNS)
+      .single();
+
+    if (error) throw new Error(`Degree.update failed: ${error.message}`);
+    return data;
+  },
+
+  // ── Count with filter ─────────────────────────────────────────────────────
+  async count(filter = {}) {
+    const supabase = getSupabaseAdmin();
+    let query = supabase
+      .from(TABLE)
+      .select("id", { count: "exact", head: true });
+
+    for (const [key, val] of Object.entries(filter)) {
+      query = query.eq(key, val);
+    }
+
+    const { count, error } = await query;
+    if (error) return 0;
+    return count || 0;
+  },
+
+  // ── Aggregate stats ───────────────────────────────────────────────────────
+  async getStats(institutionId = null) {
+    const supabase = getSupabaseAdmin();
+    let query = supabase
+      .from(TABLE)
+      .select("status, blockchain_sync_status");
+
+    if (institutionId) query = query.eq("institution_id", institutionId);
 
     const { data, error } = await query;
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(`Degree.getStats failed: ${error.message}`);
 
-    const currentYear = new Date().getFullYear();
-
+    const rows = data || [];
     return {
-      total: data.length,
-      byStatus: {
-        pending: data.filter(d => d.status === 'pending').length,
-        verified: data.filter(d => d.status === 'verified').length,
-        rejected: data.filter(d => d.status === 'rejected').length,
-        flagged: data.filter(d => d.status === 'flagged').length,
-      },
-      revoked: data.filter(d => d.is_revoked).length,
-      thisYear: data.filter(d => new Date(d.created_at).getFullYear() === currentYear).length,
+      total:      rows.length,
+      issued:     rows.filter((r) => r.status === "issued").length,
+      pending:    rows.filter((r) => r.status === "pending").length,
+      revoked:    rows.filter((r) => r.status === "revoked").length,
+      queued:     rows.filter((r) => r.blockchain_sync_status === "queued").length,
+      processing: rows.filter((r) => r.blockchain_sync_status === "processing").length,
+      bcSuccess:  rows.filter((r) => r.blockchain_sync_status === "success").length,
+      bcFailed:   rows.filter((r) => r.blockchain_sync_status === "failed").length,
     };
-  }
-}
+  },
+
+  // ── Get recent degrees for anomaly detection ──────────────────────────────
+  async getRecentByInstitution(institutionId, withinMinutes = 60) {
+    const supabase = getSupabaseAdmin();
+    const since    = new Date(Date.now() - withinMinutes * 60000).toISOString();
+
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select("id, student_id, blockchain_sync_status, created_at")
+      .eq("institution_id", institutionId)
+      .gte("created_at", since)
+      .order("created_at", { ascending: true });
+
+    if (error) return [];
+    return data || [];
+  },
+};
 
 module.exports = Degree;
