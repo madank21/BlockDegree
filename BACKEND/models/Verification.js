@@ -1,150 +1,69 @@
-const { supabaseAdmin } = require('../database/supabase');
-const crypto = require('crypto');
+// /models/Verification.js — Supabase version
 
-class Verification {
-  static TABLE = 'verifications';
+const { getSupabaseAdmin } = require("../database/supabase");
 
-  // ─── Generate Verification Code ───────────────────────────────────────────
-  static generateCode() {
-    return 'VRF-' + crypto.randomBytes(6).toString('hex').toUpperCase();
-  }
+const TABLE = "verification_logs";
 
-  // ─── Create ───────────────────────────────────────────────────────────────
-  static async create(verificationData) {
-    const verification_code = this.generateCode();
-    const expires_at = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+const Verification = {
 
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .insert([{ ...verificationData, verification_code, expires_at }])
-      .select(`
-        *,
-        degree:degree_id(
-          id, degree_title, student_name, certificate_number, graduation_date,
-          institution:issuing_institution_id(institution_name)
-        )
-      `)
+  async create(data) {
+    const supabase = getSupabaseAdmin();
+    const { data: log, error } = await supabase
+      .from(TABLE)
+      .insert({
+        computed_hash:       data.computedHash  || data.computed_hash  || null,
+        result:              data.result,
+        verifier_id:         data.verifierId    || data.verifier_id    || null,
+        verifier_ip:         data.verifierIp    || data.verifier_ip    || null,
+        degree_id:           data.degreeId      || data.degree_id      || null,
+        verification_method: data.method        || data.verification_method || null,
+        on_chain_record:     data.onChainRecord || {},
+        metadata:            data.metadata      || {},
+        verified_at:         new Date().toISOString(),
+      })
+      .select("id, result, verified_at")
       .single();
 
-    if (error) throw new Error(error.message);
-    return data;
-  }
+    if (error) {
+      console.warn(`[Verification] Log insert failed: ${error.message}`);
+      return null;
+    }
+    return log;
+  },
 
-  // ─── Find By ID ───────────────────────────────────────────────────────────
-  static async findById(id) {
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .select(`
-        *,
-        degree:degree_id(
-          *,
-          graduate:graduate_id(id, email, first_name, last_name),
-          institution:issuing_institution_id(id, institution_name, email)
-        ),
-        requester:requested_by(id, email, first_name, last_name, institution_name)
-      `)
-      .eq('id', id)
-      .single();
+  async findMany({ page = 1, limit = 20, result, verifierIp } = {}) {
+    const supabase = getSupabaseAdmin();
+    const offset   = (parseInt(page) - 1) * parseInt(limit);
 
-    if (error) return null;
-    return data;
-  }
+    let query = supabase
+      .from(TABLE)
+      .select("*", { count: "exact" });
 
-  // ─── Find By Code ─────────────────────────────────────────────────────────
-  static async findByCode(code) {
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .select(`
-        *,
-        degree:degree_id(
-          *,
-          graduate:graduate_id(id, email, first_name, last_name),
-          institution:issuing_institution_id(id, institution_name, email)
-        )
-      `)
-      .eq('verification_code', code)
-      .single();
+    if (result)     query = query.eq("result",      result);
+    if (verifierIp) query = query.eq("verifier_ip", verifierIp);
 
-    if (error) return null;
-    return data;
-  }
+    const { data, count, error } = await query
+      .order("verified_at", { ascending: false })
+      .range(offset, offset + parseInt(limit) - 1);
 
-  // ─── Find By Degree ───────────────────────────────────────────────────────
-  static async findByDegree(degreeId, { page = 1, limit = 10 } = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
+    if (error) throw new Error(`Verification.findMany failed: ${error.message}`);
+    return { data: data || [], total: count || 0 };
+  },
 
-    const { data, error, count } = await supabaseAdmin
-      .from(this.TABLE)
-      .select('*', { count: 'exact' })
-      .eq('degree_id', degreeId)
-      .range(from, to)
-      .order('created_at', { ascending: false });
+  // For anomaly detection — recent verifications from an IP
+  async getRecentByIp(verifierIp, withinMinutes = 60) {
+    const supabase = getSupabaseAdmin();
+    const since    = new Date(Date.now() - withinMinutes * 60000).toISOString();
 
-    if (error) throw new Error(error.message);
-    return { data, count, page, limit, totalPages: Math.ceil(count / limit) };
-  }
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select("id, computed_hash, result, verified_at")
+      .eq("verifier_ip", verifierIp)
+      .gte("verified_at", since);
 
-  // ─── Update ───────────────────────────────────────────────────────────────
-  static async update(id, updateData) {
-    const { data, error } = await supabaseAdmin
-      .from(this.TABLE)
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw new Error(error.message);
-    return data;
-  }
-
-  // ─── Find All ─────────────────────────────────────────────────────────────
-  static async findAll({ page = 1, limit = 10, status, requestedBy } = {}) {
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-
-    let query = supabaseAdmin
-      .from(this.TABLE)
-      .select(`
-        *,
-        degree:degree_id(id, degree_title, student_name, certificate_number),
-        requester:requested_by(id, email, institution_name)
-      `, { count: 'exact' });
-
-    if (status) query = query.eq('status', status);
-    if (requestedBy) query = query.eq('requested_by', requestedBy);
-
-    const { data, error, count } = await query
-      .range(from, to)
-      .order('created_at', { ascending: false });
-
-    if (error) throw new Error(error.message);
-    return { data, count, page, limit, totalPages: Math.ceil(count / limit) };
-  }
-
-  // ─── Get Stats ────────────────────────────────────────────────────────────
-  static async getStats(userId = null) {
-    let query = supabaseAdmin
-      .from(this.TABLE)
-      .select('status, blockchain_verified, face_verified, fraud_check_passed, created_at');
-
-    if (userId) query = query.eq('requested_by', userId);
-
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-
-    return {
-      total: data.length,
-      byStatus: {
-        pending: data.filter(v => v.status === 'pending').length,
-        verified: data.filter(v => v.status === 'verified').length,
-        rejected: data.filter(v => v.status === 'rejected').length,
-        flagged: data.filter(v => v.status === 'flagged').length,
-      },
-      blockchainVerified: data.filter(v => v.blockchain_verified).length,
-      faceVerified: data.filter(v => v.face_verified).length,
-    };
-  }
-}
+    if (error) return [];
+    return data || [];
+  },
+};
 
 module.exports = Verification;
