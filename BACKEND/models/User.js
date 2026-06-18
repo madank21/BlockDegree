@@ -1,8 +1,7 @@
 // /models/User.js
 // ─────────────────────────────────────────────────────────────────────────────
 // User Model — Supabase Query Wrapper
-// Provides a clean interface matching the original MongoDB-style calls
-// but executing against Supabase PostgreSQL
+// No Mongoose. No MongoDB. Pure Supabase PostgreSQL.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const bcrypt = require("bcryptjs");
@@ -11,13 +10,21 @@ const { getSupabaseAdmin } = require("../database/supabase");
 
 const TABLE = "users";
 
+// Columns returned by default — face_descriptor intentionally excluded
+const PUBLIC_COLUMNS =
+  "id, name, email, role, student_id, institution_id, institution_name, " +
+  "wallet_address, is_active, email_verified, avatar_url, " +
+  "face_registered_at, last_login, metadata, created_at, updated_at";
+
 const User = {
 
-  // ── Create a new user ─────────────────────────────────────────────────────
+  // ── Create ────────────────────────────────────────────────────────────────
   async create(data) {
-    const supabase = getSupabaseAdmin();
-
-    const passwordHash = await bcrypt.hash(data.password || data.passwordHash, 12);
+    const supabase     = getSupabaseAdmin();
+    const passwordHash = await bcrypt.hash(
+      data.password || data.passwordHash,
+      12
+    );
 
     const { data: user, error } = await supabase
       .from(TABLE)
@@ -25,17 +32,18 @@ const User = {
         name:             data.name,
         email:            data.email.toLowerCase().trim(),
         password_hash:    passwordHash,
-        role:             data.role || "student",
-        student_id:       data.studentId        || data.student_id   || null,
-        institution_id:   data.institutionId    || data.institution_id || null,
-        institution_name: data.institutionName  || data.institution_name || null,
-        wallet_address:   data.walletAddress    || data.wallet_address || null,
+        role:             data.role             || "student",
+        student_id:       data.studentId        || data.student_id        || null,
+        institution_id:   data.institutionId    || data.institution_id    || null,
+        institution_name: data.institutionName  || data.institution_name  || null,
+        wallet_address:   data.walletAddress    || data.wallet_address    || null,
         is_active:        true,
         email_verified:   false,
+        metadata:         data.metadata         || {},
         created_at:       new Date().toISOString(),
         updated_at:       new Date().toISOString(),
       })
-      .select("id, name, email, role, student_id, institution_id, institution_name, is_active, created_at")
+      .select(PUBLIC_COLUMNS)
       .single();
 
     if (error) throw new Error(`User.create failed: ${error.message}`);
@@ -43,16 +51,11 @@ const User = {
   },
 
   // ── Find by ID ────────────────────────────────────────────────────────────
-  async findById(id, includePassword = false, includeFace = false) {
+  async findById(id) {
     const supabase = getSupabaseAdmin();
-
-    let columns = "id, name, email, role, student_id, institution_id, institution_name, wallet_address, is_active, email_verified, avatar_url, last_login, face_registered_at, created_at, updated_at";
-    if (includePassword) columns += ", password_hash";
-    if (includeFace)     columns += ", face_descriptor, face_descriptor_hash";
-
     const { data, error } = await supabase
       .from(TABLE)
-      .select(columns)
+      .select(PUBLIC_COLUMNS)
       .eq("id", id)
       .single();
 
@@ -60,12 +63,12 @@ const User = {
     return data;
   },
 
-  // ── Find by email (with password for login) ───────────────────────────────
+  // ── Find by email (without password by default) ───────────────────────────
   async findByEmail(email, includePassword = false) {
     const supabase = getSupabaseAdmin();
-
-    let columns = "id, name, email, role, student_id, institution_id, institution_name, wallet_address, is_active, email_verified, face_registered_at, created_at";
-    if (includePassword) columns += ", password_hash";
+    const columns  = includePassword
+      ? PUBLIC_COLUMNS + ", password_hash"
+      : PUBLIC_COLUMNS;
 
     const { data, error } = await supabase
       .from(TABLE)
@@ -85,47 +88,49 @@ const User = {
       .select("id, name, email, role, student_id, institution_id, is_active")
       .eq("student_id", studentId)
       .single();
+
     if (error) return null;
     return data;
   },
 
-  // ── Update user ───────────────────────────────────────────────────────────
+  // ── Update ────────────────────────────────────────────────────────────────
   async update(id, updates) {
     const supabase = getSupabaseAdmin();
+    const payload  = { updated_at: new Date().toISOString() };
 
-    // Map camelCase to snake_case
-    const mapped = {};
-    if (updates.name)            mapped.name             = updates.name;
-    if (updates.email)           mapped.email            = updates.email.toLowerCase();
-    if (updates.isActive  !== undefined) mapped.is_active = updates.isActive;
-    if (updates.lastLogin)       mapped.last_login       = updates.lastLogin;
-    if (updates.avatarUrl)       mapped.avatar_url       = updates.avatarUrl;
-    if (updates.walletAddress)   mapped.wallet_address   = updates.walletAddress;
-    if (updates.emailVerified !== undefined) mapped.email_verified = updates.emailVerified;
+    // Explicit field mapping — camelCase or snake_case both accepted
+    if (updates.name             !== undefined) payload.name             = updates.name;
+    if (updates.isActive         !== undefined) payload.is_active        = updates.isActive;
+    if (updates.is_active        !== undefined) payload.is_active        = updates.is_active;
+    if (updates.lastLogin        !== undefined) payload.last_login       = updates.lastLogin;
+    if (updates.last_login       !== undefined) payload.last_login       = updates.last_login;
+    if (updates.avatarUrl        !== undefined) payload.avatar_url       = updates.avatarUrl;
+    if (updates.walletAddress    !== undefined) payload.wallet_address   = updates.walletAddress;
+    if (updates.emailVerified    !== undefined) payload.email_verified   = updates.emailVerified;
+    if (updates.metadata         !== undefined) payload.metadata         = updates.metadata;
 
-    // Face descriptor updates
+    // Face descriptor update
     if (updates.faceDescriptor) {
-      mapped.face_descriptor      = JSON.stringify(updates.faceDescriptor);
-      mapped.face_descriptor_hash = crypto
+      payload.face_descriptor      = JSON.stringify(updates.faceDescriptor);
+      payload.face_descriptor_hash = crypto
         .createHash("sha256")
         .update(JSON.stringify(updates.faceDescriptor))
         .digest("hex");
-      mapped.face_registered_at   = new Date().toISOString();
+      payload.face_registered_at   = new Date().toISOString();
     }
 
-    if (updates.deleteFace) {
-      mapped.face_descriptor      = null;
-      mapped.face_descriptor_hash = null;
-      mapped.face_registered_at   = null;
+    // Face descriptor deletion (GDPR)
+    if (updates.deleteFace === true) {
+      payload.face_descriptor      = null;
+      payload.face_descriptor_hash = null;
+      payload.face_registered_at   = null;
     }
-
-    mapped.updated_at = new Date().toISOString();
 
     const { data, error } = await supabase
       .from(TABLE)
-      .update(mapped)
+      .update(payload)
       .eq("id", id)
-      .select("id, name, email, role, is_active, updated_at")
+      .select(PUBLIC_COLUMNS)
       .single();
 
     if (error) throw new Error(`User.update failed: ${error.message}`);
@@ -137,18 +142,18 @@ const User = {
     return bcrypt.compare(candidatePassword, passwordHash);
   },
 
-  // ── Check email exists ────────────────────────────────────────────────────
+  // ── Email exists check ────────────────────────────────────────────────────
   async emailExists(email) {
     const supabase = getSupabaseAdmin();
     const { data } = await supabase
       .from(TABLE)
       .select("id")
-      .eq("email", email.toLowerCase())
+      .eq("email", email.toLowerCase().trim())
       .maybeSingle();
     return !!data;
   },
 
-  // ── Get face descriptor (sensitive field — explicit select) ───────────────
+  // ── Get face descriptor (sensitive — explicit select only) ────────────────
   async getFaceDescriptor(userId) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
@@ -156,6 +161,7 @@ const User = {
       .select("face_descriptor, face_descriptor_hash, face_registered_at")
       .eq("id", userId)
       .single();
+
     if (error || !data?.face_descriptor) return null;
 
     return {
@@ -173,6 +179,32 @@ const User = {
       .select("id", { count: "exact", head: true })
       .eq("role", role)
       .eq("is_active", true);
+
+    if (error) return 0;
+    return count || 0;
+  },
+
+  // ── Count users with face registered ─────────────────────────────────────
+  async countWithFace() {
+    const supabase = getSupabaseAdmin();
+    const { count, error } = await supabase
+      .from(TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("is_active", true)
+      .not("face_descriptor", "is", null);
+
+    if (error) return 0;
+    return count || 0;
+  },
+
+  // ── Total active users ────────────────────────────────────────────────────
+  async countTotal() {
+    const supabase = getSupabaseAdmin();
+    const { count, error } = await supabase
+      .from(TABLE)
+      .select("id", { count: "exact", head: true })
+      .eq("is_active", true);
+
     if (error) return 0;
     return count || 0;
   },
