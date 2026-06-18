@@ -22,7 +22,7 @@ async function initWorker() {
   }
 
   const worker = new Worker(
-    "mintingQueue", // ✅ FIXED: queue name standardized
+    "mintingQueue", // queue name standardized
 
     async (job) => {
       const { degreeId } = job.data;
@@ -30,7 +30,9 @@ async function initWorker() {
       logger.info(`[Worker] Job ${job.id}: degree=${degreeId}`);
       await job.updateProgress(10);
 
-      // Fetch from Supabase
+      // ==============================
+      // 0. FETCH DEGREE
+      // ==============================
       const degree = await Degree.findById(degreeId);
       if (!degree) {
         throw new Error(`Degree ${degreeId} not found in Supabase`);
@@ -84,31 +86,44 @@ async function initWorker() {
       await job.updateProgress(70);
 
       // ==============================
-      // 3. IPFS UPLOAD (NON-FATAL)
+      // 3. IPFS UPLOAD (SAFE GUARD ADDED)
       // ==============================
-      try {
-        const ipfsResult = await ipfsService.uploadDegreeMetadata({
-          degreeId: degree.id,
-          studentName: degree.student_name,
-          studentId: degree.student_id,
-          degreeTitle: degree.degree_title,
-          fieldOfStudy: degree.field_of_study,
-          graduationDate: degree.graduation_date,
-          gpa: degree.gpa,
-          institutionId: degree.institution_id,
-          institutionName: degree.institution_name,
-          degreeHash: degree.degree_hash,
-          txHash: result.txHash,
-        });
 
-        await Degree.update(degreeId, {
-          ipfsCid: ipfsResult.cid,
-          ipfsGatewayUrl: ipfsResult.gatewayUrl,
-        });
+      let ipfsCid = null;
+      let ipfsGatewayUrl = null;
 
-        logger.info(`[Worker] IPFS uploaded: ${ipfsResult.cid}`);
-      } catch (e) {
-        logger.error(`[Worker] IPFS failed (non-fatal): ${e.message}`);
+      const metadata = {
+        degreeId: degree.id,
+        studentName: degree.student_name,
+        studentId: degree.student_id,
+        degreeTitle: degree.degree_title,
+        fieldOfStudy: degree.field_of_study,
+        graduationDate: degree.graduation_date,
+        gpa: degree.gpa,
+        institutionId: degree.institution_id,
+        institutionName: degree.institution_name,
+        degreeHash: degree.degree_hash,
+        txHash: result.txHash,
+      };
+
+      if (ipfsService?.uploadDegreeMetadata) {
+        try {
+          const ipfsResult = await ipfsService.uploadDegreeMetadata(metadata);
+
+          ipfsCid = ipfsResult.cid;
+          ipfsGatewayUrl = ipfsResult.gatewayUrl;
+
+          await Degree.update(degreeId, {
+            ipfsCid,
+            ipfsGatewayUrl,
+          });
+
+          logger.info(`[Worker] IPFS uploaded: ${ipfsCid}`);
+        } catch (err) {
+          logger.error(`[Worker] IPFS failed (non-fatal): ${err.message}`);
+        }
+      } else {
+        logger.warn("[Worker] IPFS service not available — skipping upload");
       }
 
       await job.updateProgress(85);
@@ -127,8 +142,8 @@ async function initWorker() {
         );
 
         await Degree.update(degreeId, { qrCodeUrl: qr });
-      } catch (e) {
-        logger.error(`[Worker] QR failed (non-fatal): ${e.message}`);
+      } catch (err) {
+        logger.error(`[Worker] QR failed (non-fatal): ${err.message}`);
       }
 
       // ==============================
@@ -146,9 +161,7 @@ async function initWorker() {
 
       await job.updateProgress(100);
 
-      logger.info(
-        `[Worker] Minted ${degreeId}: TX=${result.txHash}`
-      );
+      logger.info(`[Worker] Minted ${degreeId}: TX=${result.txHash}`);
 
       return {
         txHash: result.txHash,
@@ -158,7 +171,7 @@ async function initWorker() {
     },
 
     {
-      connection: redisClient, // ✅ FIXED: proper Redis connection
+      connection: redisClient,
       concurrency: 3,
       limiter: {
         max: 10,
