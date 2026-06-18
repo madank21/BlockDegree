@@ -1,39 +1,55 @@
-const app = require('./app');
-const { logger } = require('./src/utils/logger');
+// /server.js — Supabase only (no MongoDB connection)
+require("dotenv").config();
 
-const PORT = process.env.PORT || 5000;
+const app = require("./app");
+const { logger } = require("./src/utils/logger");
+const { checkSupabaseConnection } = require("./database/supabase");
 
-const server = app.listen(PORT, () => {
-  logger.info(`🚀 BlockDegree Server running on port ${PORT}`);
-  logger.info(`📡 Environment: ${process.env.NODE_ENV}`);
-  logger.info(`🔗 API: http://localhost:${PORT}/api/v1`);
-});
+const PORT = parseInt(process.env.PORT) || 5000;
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received. Shutting down gracefully...');
-  server.close(() => {
-    logger.info('Process terminated.');
-    process.exit(0);
-  });
-});
+const REQUIRED_ENV = [
+  "JWT_SECRET",
+  "SUPABASE_URL",
+  "SUPABASE_ANON_KEY",
+  "SUPABASE_SERVICE_KEY",
+  "BLOCKCHAIN_RPC_URL",
+  "PRIVATE_KEY",
+  "CONTRACT_ADDRESS",
+];
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT received. Shutting down gracefully...');
-  server.close(() => {
-    logger.info('Process terminated.');
-    process.exit(0);
-  });
-});
-
-process.on('unhandledRejection', (err) => {
-  logger.error('Unhandled Promise Rejection:', err);
-  server.close(() => process.exit(1));
-});
-
-process.on('uncaughtException', (err) => {
-  logger.error('Uncaught Exception:', err);
+const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
+if (missing.length > 0) {
+  console.error(`\n❌ Missing environment variables:\n   ${missing.join("\n   ")}\n`);
   process.exit(1);
-});
+}
 
-module.exports = server;
+const startServer = async () => {
+  const connected = await checkSupabaseConnection();
+  if (!connected) {
+    logger.warn("[Server] Supabase connection check failed — verify credentials in .env");
+  }
+
+  const server = app.listen(PORT, () => {
+    logger.info(`
+╔══════════════════════════════════════╗
+║     BlockDegree API — v3.0          ║
+║  DB:   Supabase (PostgreSQL)        ║
+║  Port: ${String(PORT).padEnd(28)}║
+║  Env:  ${(process.env.NODE_ENV || "development").padEnd(28)}║
+╚══════════════════════════════════════╝
+    `);
+  });
+
+  const shutdown = (sig) => {
+    logger.info(`[Server] ${sig} — shutting down`);
+    server.close(() => { logger.info("[Server] Closed"); process.exit(0); });
+    setTimeout(() => process.exit(1), 30000);
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT",  () => shutdown("SIGINT"));
+  process.on("unhandledRejection", (r) => logger.error("[Server] Unhandled rejection:", r));
+  process.on("uncaughtException",  (e) => { logger.error(`[Server] Uncaught: ${e.message}`); process.exit(1); });
+};
+
+startServer();

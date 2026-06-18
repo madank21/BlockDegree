@@ -1,156 +1,118 @@
-// services/faceVerificationService.js
-const axios = require('axios');
-const fs = require('fs');
-const FormData = require('form-data');
-const { logger } = require('../src/utils/logger');
-const { supabaseAdmin } = require('../database/supabase');
+// /services/faceVerificationService.js — Supabase only
+const crypto = require("crypto");
+const User   = require("../models/User");
+const { getSupabaseAdmin } = require("../database/supabase");
+const { logger } = require("../src/utils/logger");
+
+const MATCH_THRESHOLD = parseFloat(process.env.FACE_MATCH_THRESHOLD) || 0.6;
+const HIGH_CONF       = 0.4;
+const DIMENSIONS      = 128;
+
+const euclidean = (d1, d2) =>
+  Math.sqrt(d1.reduce((s, v, i) => s + Math.pow(v - d2[i], 2), 0));
+
+const cosine = (d1, d2) => {
+  const dot  = d1.reduce((s, v, i) => s + v * d2[i], 0);
+  const mag1 = Math.sqrt(d1.reduce((s, v) => s + v * v, 0));
+  const mag2 = Math.sqrt(d2.reduce((s, v) => s + v * v, 0));
+  return dot / (mag1 * mag2);
+};
 
 class FaceVerificationService {
-  constructor() {
-    this.apiUrl = process.env.FACE_API_URL;
-    this.apiKey = process.env.FACE_API_KEY;
+
+  static async registerDescriptor(userId, descriptor) {
+    if (!Array.isArray(descriptor) || descriptor.length !== DIMENSIONS)
+      throw new Error(`Expected ${DIMENSIONS}-dim descriptor, got ${descriptor?.length}`);
+
+    const isValid = descriptor.every((v) => typeof v === "number" && isFinite(v) && Math.abs(v) <= 5);
+    if (!isValid) throw new Error("Descriptor contains invalid values");
+
+    await User.update(userId, { faceDescriptor: descriptor });
+    logger.info(`[Face] Descriptor registered: ${userId}`);
+
+    return {
+      success: true, userId, dimensions: DIMENSIONS,
+      registeredAt: new Date().toISOString(),
+    };
   }
 
-  async detectFace(imagePath) {
-    try {
-      if (!fs.existsSync(imagePath)) {
-        throw new Error('Image file not found');
-      }
-      const imageBuffer = fs.readFileSync(imagePath);
-      if (process.env.NODE_ENV === 'development') {
-        return {
-          faceDetected: true,
-          confidence: 0.98,
-          boundingBox: { top: 0.1, left: 0.2, width: 0.6, height: 0.6 },
-          landmarks: [],
-          quality: { brightness: 85, sharpness: 90 },
-        };
-      }
-      const formData = new FormData();
-      formData.append('image', imageBuffer, 'face.jpg');
-      const response = await axios.post(`${this.apiUrl}/detect`, formData, {
-        headers: { ...formData.getHeaders(), 'X-API-Key': this.apiKey },
-        timeout: 30000,
-      });
-      return response.data;
-    } catch (error) {
-      logger.error('Face detection error:', error.message);
-      throw new Error(`Face detection failed: ${error.message}`);
+  static async verifyDescriptor(userId, liveDescriptor) {
+    if (!Array.isArray(liveDescriptor) || liveDescriptor.length !== DIMENSIONS)
+      throw new Error(`Invalid live descriptor dimensions: ${liveDescriptor?.length}`);
+
+    const stored = await User.getFaceDescriptor(userId);
+    if (!stored?.descriptor || stored.descriptor.length !== DIMENSIONS) {
+      return { verified: false, confidence: 0, hasDescriptor: false, message: "No face registered" };
     }
+
+    const distance   = euclidean(stored.descriptor, liveDescriptor);
+    const similarity = cosine(stored.descriptor, liveDescriptor);
+    const confidence = Math.max(0, Math.round((1 - distance / MATCH_THRESHOLD) * 100));
+    const isMatch    = distance < MATCH_THRESHOLD;
+
+    logger.info(`[Face] distance=${distance.toFixed(4)}, confidence=${confidence}%, match=${isMatch}`);
+
+    const supabase = getSupabaseAdmin();
+    await supabase.from("face_verification_logs").insert({
+      user_id: userId, distance: parseFloat(distance.toFixed(4)),
+      confidence, is_match: isMatch, threshold: MATCH_THRESHOLD,
+      verified_at: new Date().toISOString(),
+    }).catch((e) => logger.warn(`[Face] Log failed: ${e.message}`));
+
+    return {
+      verified: isMatch, confidence,
+      distance: parseFloat(distance.toFixed(4)),
+      similarity: parseFloat(similarity.toFixed(4)),
+      threshold: MATCH_THRESHOLD,
+      isHighConfidence: distance < HIGH_CONF,
+      hasDescriptor: true,
+      descriptorRegisteredAt: stored.registeredAt,
+      message: isMatch
+        ? `Identity verified — ${confidence}% confidence`
+        : `Mismatch — ${confidence}% confidence`,
+      metadata: { algorithm: "Euclidean Distance — face-api.js 128-dim", dimensions: DIMENSIONS },
+    };
   }
 
-  async compareFaces(sourcePath, targetPath) {
-    try {
-      if (process.env.NODE_ENV === 'development') {
-        const mockSimilarity = 85 + Math.random() * 15;
-        return { isMatch: mockSimilarity > 80, similarity: mockSimilarity, confidence: 0.95 };
-      }
-      const formData = new FormData();
-      formData.append('source', fs.readFileSync(sourcePath), 'source.jpg');
-      formData.append('target', fs.readFileSync(targetPath), 'target.jpg');
-      const response = await axios.post(`${this.apiUrl}/compare`, formData, {
-        headers: { ...formData.getHeaders(), 'X-API-Key': this.apiKey },
-        timeout: 30000,
-      });
-      return {
-        isMatch: response.data.similarity > 80,
-        similarity: response.data.similarity,
-        confidence: response.data.confidence,
-      };
-    } catch (error) {
-      logger.error('Face comparison error:', error.message);
-      throw new Error(`Face comparison failed: ${error.message}`);
-    }
+  static async hasDescriptor(userId) {
+    const stored = await User.getFaceDescriptor(userId);
+    return {
+      hasDescriptor: !!(stored?.descriptor?.length === DIMENSIONS),
+      registeredAt:  stored?.registeredAt || null,
+    };
   }
 
-  async checkLiveness(imagePath) {
-    try {
-      if (process.env.NODE_ENV === 'development') {
-        return { isLive: true, score: 0.97, spoofingDetected: false };
-      }
-      const formData = new FormData();
-      formData.append('image', fs.readFileSync(imagePath), 'face.jpg');
-      const response = await axios.post(`${this.apiUrl}/liveness`, formData, {
-        headers: { ...formData.getHeaders(), 'X-API-Key': this.apiKey },
-        timeout: 30000,
-      });
-      return response.data;
-    } catch (error) {
-      logger.error('Liveness check error:', error.message);
-      throw new Error(`Liveness check failed: ${error.message}`);
-    }
+  static async deleteDescriptor(userId) {
+    await User.update(userId, { deleteFace: true });
+    logger.info(`[Face] Descriptor deleted: ${userId}`);
+    return { success: true, message: "Face descriptor permanently deleted" };
   }
 
-  async extractEncoding(imagePath) {
-    try {
-      if (process.env.NODE_ENV === 'development') {
-        const encoding = Array.from({ length: 128 }, () => Math.random() - 0.5);
-        return JSON.stringify(encoding);
-      }
-      const formData = new FormData();
-      formData.append('image', fs.readFileSync(imagePath), 'face.jpg');
-      const response = await axios.post(`${this.apiUrl}/encode`, formData, {
-        headers: { ...formData.getHeaders(), 'X-API-Key': this.apiKey },
-        timeout: 30000,
-      });
-      return JSON.stringify(response.data.encoding);
-    } catch (error) {
-      logger.error('Face encoding error:', error.message);
-      throw new Error(`Face encoding failed: ${error.message}`);
-    }
-  }
+  static async getVerificationStats() {
+    const [total, withFace] = await Promise.all([
+      User.countTotal(),
+      User.countWithFace(),
+    ]);
 
-  async verifyIdentity(selfieImagePath, storedImagePath, userId) {
-    try {
-      logger.info(`Face verification started for user: ${userId}`);
-      const faceDetection = await this.detectFace(selfieImagePath);
-      if (!faceDetection.faceDetected) {
-        return { success: false, isMatch: false, reason: 'No face detected in submitted image', confidence: 0 };
-      }
-      const liveness = await this.checkLiveness(selfieImagePath);
-      if (!liveness.isLive) {
-        return { success: false, isMatch: false, reason: 'Liveness check failed - possible spoofing detected', livenessScore: liveness.score, confidence: 0 };
-      }
-      const comparison = await this.compareFaces(selfieImagePath, storedImagePath);
-      await supabaseAdmin.from('face_verifications').insert([{
-        user_id: userId,
-        confidence_score: comparison.similarity,
-        is_match: comparison.isMatch,
-        liveness_score: liveness.score,
-        liveness_passed: liveness.isLive,
-        api_response: { detection: faceDetection, liveness, comparison },
-      }]);
-      logger.info(`Face verification completed for user ${userId}: ${comparison.isMatch ? 'MATCH' : 'NO MATCH'}`);
-      return {
-        success: true,
-        isMatch: comparison.isMatch,
-        confidence: comparison.similarity,
-        livenessScore: liveness.score,
-        livenessDetected: liveness.isLive,
-        threshold: 80,
-      };
-    } catch (error) {
-      logger.error('Identity verification error:', error);
-      throw error;
-    }
-  }
+    const supabase = getSupabaseAdmin();
+    const { data: logs } = await supabase
+      .from("face_verification_logs")
+      .select("is_match");
 
-  async enrollFace(imagePath, userId) {
-    try {
-      const faceDetection = await this.detectFace(imagePath);
-      if (!faceDetection.faceDetected) {
-        throw new Error('No face detected in the enrollment image');
-      }
-      const encoding = await this.extractEncoding(imagePath);
-      await supabaseAdmin.from('users').update({ face_encoding: encoding }).eq('id', userId);
-      logger.info(`Face enrolled for user: ${userId}`);
-      return { success: true, enrolled: true };
-    } catch (error) {
-      logger.error('Face enrollment error:', error);
-      throw error;
-    }
+    const logRows = logs || [];
+    const matched = logRows.filter((l) => l.is_match).length;
+
+    return {
+      totalUsers:              total,
+      usersWithFaceRegistered: withFace,
+      coveragePercent: total > 0 ? ((withFace / total) * 100).toFixed(1) : "0.0",
+      totalVerifications: logRows.length,
+      successfulMatches:  matched,
+      matchRate: logRows.length > 0 ? ((matched / logRows.length) * 100).toFixed(1) : "0.0",
+      threshold:  MATCH_THRESHOLD,
+      algorithm:  "Euclidean Distance — face-api.js 128-dim descriptors",
+    };
   }
 }
 
-const faceVerificationService = new FaceVerificationService();
-module.exports = faceVerificationService;
+module.exports = FaceVerificationService;
