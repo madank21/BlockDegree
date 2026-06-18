@@ -74,7 +74,7 @@ async function initWorker() {
       // 2. UPDATE SUPABASE (BLOCKCHAIN RESULT)
       // ==============================
       await Degree.update(degreeId, {
-        blockchainTxHash: result.txHash,
+        blockchain_tx_hash: result.txHash,
         blockchainBlockNumber: result.blockNumber,
         blockchainTimestamp: result.timestamp,
         status: "issued",

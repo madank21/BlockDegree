@@ -75,7 +75,7 @@ const getBlockchainTransactions = asyncHandler(async (req, res) => {
   });
 });
 
-// ─── Re-register Degree on Blockchain ─────────────────────────────────────────
+// ─── Re-register Degree on Blockchain (FIXED) ─────────────────────────────────
 const reregisterDegree = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
@@ -93,15 +93,24 @@ const reregisterDegree = asyncHandler(async (req, res) => {
   }
 
   try {
+    // ✅ SAFE MAPPED VERSION (FIXED CONTRACT)
     const blockchainResult = await blockchainService.issueDegree({
-      degreeHash: degree.degree_hash,
-      graduateAddress: null,
-      studentName: degree.student_name,
-      degreeTitle: degree.degree_title,
-      institutionName: degree.institution?.institution_name || 'Unknown',
-      graduationDate: degree.graduation_date,
-      certificateNumber: degree.certificate_number,
       degreeId: degree.id,
+      degreeHash: degree.degree_hash,
+
+      studentName: degree.student_name,
+      registrationNumber: degree.registration_number,
+      department: degree.department,
+      program: degree.program,
+
+      cgpa: degree.cgpa,
+      graduationYear: degree.graduation_year,
+
+      degreeTitle: degree.degree_title,
+      institutionName: degree.institution?.institution_name || "Unknown",
+      graduationDate: degree.graduation_date,
+
+      certificateNumber: degree.certificate_number,
     });
 
     await Degree.update(id, {
@@ -116,6 +125,7 @@ const reregisterDegree = asyncHandler(async (req, res) => {
       txHash: blockchainResult.txHash,
       blockNumber: blockchainResult.blockNumber,
     }, 'Degree registered on blockchain successfully');
+
   } catch (error) {
     logger.error('Re-registration failed:', error);
     return sendError(res, `Blockchain registration failed: ${error.message}`, 500);
