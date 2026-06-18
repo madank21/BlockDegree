@@ -1,4 +1,9 @@
-const { createClient } = require("redis");
+let ipfsService;
+try {
+  ipfsService = require("../services/ipfsService");
+} catch (err) {
+  console.warn("IPFS service not found — continuing without IPFS");
+}
 
 const redisClient = createClient({
   url: process.env.REDIS_URL || "redis://localhost:6379",
