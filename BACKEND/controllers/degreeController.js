@@ -43,45 +43,36 @@ const issueDegree = asyncHandler(async (req, res) => {
   });
 
   try {
-  const blockchainResult =
-    await blockchainService.issueDegree({
-  degreeId: String(degree.id),
+    const blockchainResult = await blockchainService.issueDegree({
+      degreeId: String(degree.id),
+      studentName: degree.studentName,
+      registrationNumber: degree.studentId,
+      department: degree.fieldOfStudy,
+      program: degree.degreeTitle,
+      cgpa: String(degree.gpa || "0"),
+      graduationYear: String(
+        new Date(degree.graduationDate).getFullYear()
+      ),
+      degreeHash: degree.degreeHash
+    });
 
-  studentName: degree.student_name,
-
-  registrationNumber: degree.student_id,
-
-  department: degree.field_of_study,
-
-  program: degree.degree_title,
-
-  cgpa: String(degree.gpa || "0"),
-
-  graduationYear: String(
-      new Date(degree.graduation_date).getFullYear()
-  ),
-
-  degreeHash: degree.degree_hash
-});
-
-    await Degree.update(degree.id, {
+    const updatedDegree = await Degree.update(degree.id, {
       blockchain_tx_hash: blockchainResult.txHash,
       blockchain_sync_status: "success",
     });
+  } catch (err) {
+    logger.error(err);
 
-} catch (err) {
-  logger.error(err);
+    await Degree.update(degree.id, {
+      blockchain_sync_status: "failed"
+    });
 
-  await Degree.update(degree.id, {
-    blockchain_sync_status: "failed"
-  });
-
-  return sendError(
-    res,
-    `Blockchain minting failed: ${err.message}`,
-    500
-  );
-}
+    return sendError(
+      res,
+      `Blockchain minting failed: ${err.message}`,
+      500
+    );
+  }
 
   await AuditLog.create({
     action: "DEGREE_ISSUED", actorId: req.user.id, actorRole: req.user.role,
@@ -91,15 +82,22 @@ const issueDegree = asyncHandler(async (req, res) => {
   });
 
   const verificationUrl   = `${process.env.FRONTEND_URL}/verify/${degree.id}/${degreeHash}`;
-  const certificateNumber = degree.certificate_number || "PENDING_BATCH";
+  const certificateNumber = degree.certificateNumber || "PENDING_BATCH";
 
   return sendCreated(res, {
     degree: {
-      id: degree.id, studentName: degree.student_name, studentId: degree.student_id,
-      degreeTitle: degree.degree_title, fieldOfStudy: degree.field_of_study,
-      graduationDate: degree.graduation_date, degreeHash: degree.degree_hash,
-      certificateNumber, status: degree.status,
-      blockchainStatus , verificationUrl, issuedAt: degree.created_at,
+      id: degree.id,
+      studentName: degree.studentName,
+      studentId: degree.studentId,
+      degreeTitle: degree.degreeTitle,
+      fieldOfStudy: degree.fieldOfStudy,
+      graduationDate: degree.graduationDate,
+      degreeHash: degree.degreeHash,
+      certificateNumber,
+      status: degree.status,
+      blockchainStatus: degree.blockchainSyncStatus,
+      verificationUrl,
+      issuedAt: degree.createdAt,
     },
   }, "Degree issuance initiated — blockchain minting in progress");
 });
@@ -123,9 +121,9 @@ const getDegreeById = asyncHandler(async (req, res) => {
   const degree = await Degree.findById(req.params.id);
   if (!degree) return sendNotFound(res, "Degree");
 
-  if (req.user.role === "student" && degree.student_id !== req.user.student_id)
+  if (req.user.role === "student" && degree.studentId !== req.user.student_id)
     return sendForbidden(res, "Access denied");
-  if (req.user.role === "university" && degree.institution_id !== (req.user.institution_id || req.user.id))
+  if (req.user.role === "university" && degree.institutionId !== (req.user.institution_id || req.user.id))
     return sendForbidden(res, "Access denied");
 
   return sendSuccess(res, { degree });
@@ -136,25 +134,25 @@ const getDegreeQR = asyncHandler(async (req, res) => {
   const degree = await Degree.findById(req.params.id);
   if (!degree) return sendNotFound(res, "Degree");
 
-  if (degree.qr_code_url) {
+  if (degree.qrCodeUrl) {
     return sendSuccess(res, {
-      qrCode: degree.qr_code_url,
-      verificationUrl: `${process.env.FRONTEND_URL}/verify/${degree.id}/${degree.degree_hash}`,
-      certificateNumber: degree.certificate_number || "PENDING_BATCH",
+      qrCode: degree.qrCodeUrl,
+      verificationUrl: `${process.env.FRONTEND_URL}/verify/${degree.id}/${degree.degreeHash}`,
+      certificateNumber: degree.certificateNumber || "PENDING_BATCH",
     });
   }
 
-  if (!degree.blockchain_tx_hash) {
+  if (!degree.blockchainTxHash) {
     return sendError(res, "QR not yet available — minting in progress", 202);
   }
 
-  const verificationUrl = `${process.env.FRONTEND_URL}/verify/${degree.id}/${degree.degree_hash}`;
+  const verificationUrl = `${process.env.FRONTEND_URL}/verify/${degree.id}/${degree.degreeHash}`;
   const qrDataUrl = await QRService.generateDegreeQR(
-    String(degree.id), degree.degree_hash, degree.blockchain_tx_hash, verificationUrl
+    String(degree.id), degree.degreeHash, degree.blockchainTxHash, verificationUrl
   );
   await Degree.update(degree.id, { qrCodeUrl: qrDataUrl });
 
-  return sendSuccess(res, { qrCode: qrDataUrl, verificationUrl, certificateNumber: degree.certificate_number || "PENDING_BATCH" });
+  return sendSuccess(res, { qrCode: qrDataUrl, verificationUrl, certificateNumber: degree.certificateNumber || "PENDING_BATCH" });
 });
 
 // POST /api/v1/degrees/:id/revoke
@@ -165,7 +163,7 @@ const revokeDegree = asyncHandler(async (req, res) => {
   if (degree.status === "revoked") return sendError(res, "Already revoked", 400);
 
   let blockchainRevocation = null;
-  if (degree.blockchain_sync_status === "success") {
+  if (degree.blockchainSyncStatus === "success") {
     try {
       blockchainRevocation = await blockchainService.revokeDegree(String(degree.id));
     } catch (err) {
@@ -185,9 +183,11 @@ const revokeDegree = asyncHandler(async (req, res) => {
     ipAddress: req.ip,
   });
 
-  if (degree.graduate_email) {
-    notificationService.sendDegreeRevokedEmail(degree.graduate_email, {
-      studentName: degree.student_name, degreeTitle: degree.degree_title, reason,
+  if (degree.graduateEmail) {
+    notificationService.sendDegreeRevokedEmail(degree.graduateEmail, {
+      studentName: degree.studentName,
+      degreeTitle: degree.degreeTitle,
+      reason,
     }).catch(() => {});
   }
 
@@ -207,12 +207,15 @@ const getPublicCertificate = asyncHandler(async (req, res) => {
   if (!degree) return sendNotFound(res, "Certificate");
 
   return sendSuccess(res, {
-    degreeTitle: degree.degree_title, studentName: degree.student_name,
-    graduationDate: degree.graduation_date, certificateNumber: degree.certificate_number,
-    degreeHash: degree.degree_hash, status: degree.status,
-    transactionHash: degree.blockchain_tx_hash,
-    ipfsCID: degree.ipfs_cid,
-    ipfsUrl: degree.ipfs_cid ? `https://ipfs.io/ipfs/${degree.ipfs_cid}` : null,
+    degreeTitle: degree.degreeTitle,
+    studentName: degree.studentName,
+    graduationDate: degree.graduationDate,
+    certificateNumber: degree.certificateNumber,
+    degreeHash: degree.degreeHash,
+    status: degree.status,
+    transactionHash: degree.blockchainTxHash,
+    ipfsCID: degree.ipfsCid,
+    ipfsUrl: degree.ipfsCid ? `https://ipfs.io/ipfs/${degree.ipfsCid}` : null,
   });
 });
 
