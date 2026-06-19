@@ -3,7 +3,6 @@ const asyncHandler = require("express-async-handler");
 const Degree              = require("../models/Degree");
 const AuditLog            = require("../models/AuditLog");
 const { generateDegreeHash }  = require("../src/utils/hash");
-const { mintingQueue }        = require("../queues/mintingQueue");
 const blockchainService       = require("../services/blockchainService");
 const QRService               = require("../services/qrService");
 const notificationService     = require("../services/notificationService");
@@ -39,17 +38,50 @@ const issueDegree = asyncHandler(async (req, res) => {
     institution_name: institutionName,
     issued_by: req.user.id,
     degree_hash: degreeHash,
-    status: "pending",
-    blockchain_sync_status: "queued",
+    status: "issued",
+    blockchain_sync_status: "processing"
   });
 
   try {
-    await mintingQueue.add("mint-degree", { degreeId: degree.id }, { jobId: `mint-${degree.id}`, priority: 1 });
-    logger.info(`[Degree] Job enqueued: ${degree.id}`);
-  } catch (qErr) {
-    logger.error(`[Degree] Queue error: ${qErr.message}`);
-    await Degree.update(degree.id, { blockchainSyncStatus: "queue_error" });
-  }
+  const blockchainResult =
+    await blockchainService.issueDegree({
+  degreeId: String(degree.id),
+
+  studentName: degree.student_name,
+
+  registrationNumber: degree.student_id,
+
+  department: degree.field_of_study,
+
+  program: degree.degree_title,
+
+  cgpa: String(degree.gpa || "0"),
+
+  graduationYear: String(
+      new Date(degree.graduation_date).getFullYear()
+  ),
+
+  degreeHash: degree.degree_hash
+});
+
+    await Degree.update(degree.id, {
+      blockchain_tx_hash: blockchainResult.txHash,
+      blockchain_sync_status: "success",
+    });
+
+} catch (err) {
+  logger.error(err);
+
+  await Degree.update(degree.id, {
+    blockchain_sync_status: "failed"
+  });
+
+  return sendError(
+    res,
+    `Blockchain minting failed: ${err.message}`,
+    500
+  );
+}
 
   await AuditLog.create({
     action: "DEGREE_ISSUED", actorId: req.user.id, actorRole: req.user.role,
@@ -67,7 +99,7 @@ const issueDegree = asyncHandler(async (req, res) => {
       degreeTitle: degree.degree_title, fieldOfStudy: degree.field_of_study,
       graduationDate: degree.graduation_date, degreeHash: degree.degree_hash,
       certificateNumber, status: degree.status,
-      blockchainStatus: "processing", verificationUrl, issuedAt: degree.created_at,
+      blockchainStatus , verificationUrl, issuedAt: degree.created_at,
     },
   }, "Degree issuance initiated — blockchain minting in progress");
 });
