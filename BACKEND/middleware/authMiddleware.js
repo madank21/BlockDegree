@@ -4,6 +4,7 @@ const User = require("../models/User");
 const { sendUnauthorized } = require("../src/utils/response");
 const { logger } = require("../src/utils/logger");
 
+// ─── Strict Authentication (requires valid token) ─────────────────────────────
 const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -28,4 +29,37 @@ const authenticate = async (req, res, next) => {
   }
 };
 
-module.exports = { authenticate };
+// ─── Optional Authentication (proceeds even without/invalid token) ─────────────
+const optionalAuthenticate = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  // If no token, just continue with req.user = null
+  if (!authHeader?.startsWith("Bearer ")) {
+    req.user = null;
+    return next();
+  }
+
+  const token = authHeader.split(" ")[1];
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (user && user.is_active) {
+      req.user = user;   // attach user if valid and active
+    } else {
+      req.user = null;   // user not found or inactive → treat as unauthenticated
+    }
+  } catch (error) {
+    // Token invalid/expired → still continue, but user is null
+    req.user = null;
+    // Optionally log the error silently (not critical)
+    if (error.name !== 'TokenExpiredError' && error.name !== 'JsonWebTokenError') {
+      logger.warn(`[OptionalAuth] ${error.message}`);
+    }
+  }
+  next();
+};
+
+// ─── Exports ────────────────────────────────────────────────────────────────────
+module.exports = {
+  authenticate,
+  optionalAuthenticate,
+};
