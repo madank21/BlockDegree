@@ -51,7 +51,10 @@ const loginValidators = [
 
 // ─── Degree Validators ────────────────────────────────────────────────────────
 const degreeCreateValidators = [
-  body('graduate_id').isUUID().withMessage('Valid graduate ID is required'),
+  body('graduate_id')
+  .optional({ nullable: true })
+  .isUUID()
+  .withMessage('Valid graduate ID is required'),
   body('student_name').trim().notEmpty().isLength({ min: 2, max: 255 })
     .withMessage('Student name is required'),
   body('student_id').trim().notEmpty().isLength({ min: 2, max: 100 })
