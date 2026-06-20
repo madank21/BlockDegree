@@ -1,12 +1,15 @@
 const express = require('express');
 const router = express.Router();
 
+// Import all controller functions (names now match)
 const {
-  enrollFace,
+  registerFace,
   verifyFace,
   detectFace,
+  getFaceStatus,
+  deleteFaceDescriptor,
   getFaceVerificationHistory,
-  removeFaceEnrollment,
+  getFaceStats,
 } = require('../controllers/faceController');
 
 const { authenticate } = require('../middleware/authMiddleware');
@@ -15,28 +18,35 @@ const { paginationValidators } = require('../src/utils/validators');
 
 router.use(authenticate);
 
+// ─── All endpoints ──────────────────────────────────────────────────
+
 router.post(
   '/enroll',
-  uploadFace.single('face'),
+  uploadFace.single('face'),      // accepts image OR JSON descriptor
   handleUploadError,
-  enrollFace
+  registerFace
 );
 
 router.post(
   '/verify',
-  uploadFace.single('selfie'),
+  uploadFace.single('selfie'),    // accepts image OR JSON descriptor + userId
   handleUploadError,
   verifyFace
 );
 
 router.post(
   '/detect',
-  uploadFace.single('image'),
+  uploadFace.single('image'),     // requires image
   handleUploadError,
   detectFace
 );
 
+router.get('/status', getFaceStatus);
+
+router.delete('/enrollment', deleteFaceDescriptor);
+
 router.get('/history', paginationValidators, getFaceVerificationHistory);
-router.delete('/enrollment', removeFaceEnrollment);
+
+router.get('/stats', getFaceStats);
 
 module.exports = router;
