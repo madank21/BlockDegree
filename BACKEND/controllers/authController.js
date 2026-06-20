@@ -15,7 +15,7 @@ const {
 const { logger } = require("../src/utils/logger");
 
 // Import Supabase admin and notification service (adjust paths as needed)
-const { getSupabaseAdmin } = require("../config/supabase");
+const { getSupabaseAdmin } = require("../database/supabase");
 const notificationService = require("../services/notificationService");
 
 // ─── Token Generation ──────────────────────────────────────────────────────────

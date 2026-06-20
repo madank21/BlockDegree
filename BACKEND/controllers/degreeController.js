@@ -219,4 +219,43 @@ const getPublicCertificate = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { issueDegree, getDegrees, getDegreeById, getDegreeQR, revokeDegree, getDegreeStats, getPublicCertificate };
+// PATCH /api/v1/degrees/:id
+const updateDegree = asyncHandler(async (req, res) => {
+  const { gpa, honors, metadata } = req.body;
+  const degree = await Degree.findById(req.params.id);
+  if (!degree) return sendNotFound(res, "Degree");
+
+  // Only certain fields can be updated
+  const updates = {};
+  if (gpa !== undefined) updates.gpa = gpa;
+  if (honors !== undefined) updates.honors = honors;
+  if (metadata !== undefined) updates.metadata = metadata;
+
+  if (Object.keys(updates).length === 0) {
+    return sendError(res, "No valid fields to update", 400);
+  }
+
+  const updatedDegree = await Degree.update(degree.id, updates);
+
+  await AuditLog.create({
+    action: "DEGREE_UPDATED",
+    actorId: req.user.id,
+    actorRole: req.user.role,
+    targetId: degree.id,
+    details: updates,
+    ipAddress: req.ip,
+  });
+
+  return sendSuccess(res, { degree: updatedDegree }, "Degree updated");
+});
+
+module.exports = {
+  issueDegree,
+  getDegrees,
+  getDegreeById,
+  getDegreeQR,
+  revokeDegree,
+  getDegreeStats,
+  getPublicCertificate,
+  updateDegree,
+};

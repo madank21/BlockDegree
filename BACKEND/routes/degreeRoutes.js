@@ -3,13 +3,13 @@ const router = express.Router();
 
 const {
   issueDegree,
-  getAllDegrees,
+  getDegrees,                    // was getAllDegrees
   getDegreeById,
-  getDegreeQRCode,
-  updateDegree,
+  getDegreeQR,                   // was getDegreeQRCode
+  updateDegree,                  // now exists
   revokeDegree,
   getDegreeStats,
-  getDegreePublic,
+  getPublicCertificate,          // was getDegreePublic
 } = require('../controllers/degreeController');
 
 const { authenticate, optionalAuthenticate } = require('../middleware/authMiddleware');
@@ -22,15 +22,15 @@ const {
 const { body } = require('express-validator');
 
 // ─── Public Routes ─────────────────────────────────────────────────────────────
-router.get('/public/:certNumber', getDegreePublic);
+router.get('/public/:certNumber', getPublicCertificate);
 
 // ─── Protected Routes ──────────────────────────────────────────────────────────
 router.use(authenticate);
 
-router.get('/', paginationValidators, getAllDegrees);
+router.get('/', paginationValidators, getDegrees);
 router.get('/stats', getDegreeStats);
 router.get('/:id', ...uuidParamValidator(), getDegreeById);
-router.get('/:id/qr', ...uuidParamValidator(), getDegreeQRCode);
+router.get('/:id/qr', ...uuidParamValidator(), getDegreeQR);
 
 // University and Admin only
 router.post('/', 
