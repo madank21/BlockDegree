@@ -6,7 +6,6 @@ const { getSupabaseAdmin } = require("../database/supabase");
 const TABLE = "verification_logs";
 
 const Verification = {
-
   // ── Create ────────────────────────────────────────────────────────────────
   async create(data) {
     const supabase = getSupabaseAdmin();
@@ -92,6 +91,71 @@ const Verification = {
           ? ((rows.filter((r) => r.result === "valid").length / rows.length) * 100).toFixed(1)
           : "0.0",
     };
+  },
+
+  // ── Find by ID ────────────────────────────────────────────────────────────
+  async findById(id) {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error) return null;
+    return data;
+  },
+
+  // ── Find by verification code ────────────────────────────────────────────
+  // Assumes a column "code" (or "verification_code") exists in the table.
+  async findByCode(code) {
+    const supabase = getSupabaseAdmin();
+    // Try multiple possible column names (adjust to your actual schema)
+    let { data, error } = await supabase
+      .from(TABLE)
+      .select("*")
+      .eq("code", code)
+      .maybeSingle();
+
+    if (error && error.message.includes("column")) {
+      // fallback to "verification_code" if "code" not found
+      const result = await supabase
+        .from(TABLE)
+        .select("*")
+        .eq("verification_code", code)
+        .maybeSingle();
+      return result.data || null;
+    }
+
+    if (error) return null;
+    return data;
+  },
+
+  // ── Update by ID ──────────────────────────────────────────────────────────
+  async update(id, updates) {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from(TABLE)
+      .update(updates)
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) throw new Error(`Verification.update failed: ${error.message}`);
+    return data;
+  },
+
+  // ── Find by degree ID ────────────────────────────────────────────────────
+  async findByDegree(degreeId) {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select("*")
+      .eq("degree_id", degreeId)
+      .order("verified_at", { ascending: false });
+
+    if (error) return [];
+    return data || [];
   },
 };
 

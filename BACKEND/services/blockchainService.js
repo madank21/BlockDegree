@@ -2,7 +2,7 @@
 const { ethers } = require('ethers');
 const contractABI = require('../blockchain/contractABI.json');
 const { logger } = require('../src/utils/logger');
-const { supabaseAdmin } = require('../database/supabase');
+const { getSupabaseAdmin } = require('../database/supabase');
 
 class BlockchainService {
   constructor() {
@@ -232,7 +232,8 @@ class BlockchainService {
   // ─── Database Helpers ────────────────────────────────────────────────
   async savePendingTransaction(txHash, degreeId) {
     try {
-      await supabaseAdmin.from('blockchain_transactions').insert([{
+      const supabase = getSupabaseAdmin();
+      await supabase.from('blockchain_transactions').insert([{
         tx_hash: txHash,
         from_address: this.wallet.address,
         contract_address: process.env.CONTRACT_ADDRESS,
@@ -247,13 +248,14 @@ class BlockchainService {
 
   async updateTransactionStatus(txHash, status, receipt = null) {
     try {
+      const supabase = getSupabaseAdmin();
       const updateData = { status };
       if (receipt) {
         updateData.block_number = receipt.blockNumber;
         updateData.gas_used = Number(receipt.gasUsed);
         updateData.confirmed_at = new Date().toISOString();
       }
-      await supabaseAdmin
+      await supabase
         .from('blockchain_transactions')
         .update(updateData)
         .eq('tx_hash', txHash);
