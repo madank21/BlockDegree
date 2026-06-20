@@ -17,7 +17,7 @@ class BlockchainService {
   async initialize() {
     if (this.isInitialized) return;
 
-    const rpcUrl = process.env.SEPOLIA_RPC_URL;
+    const rpcUrl = process.env.BLOCKCHAIN_RPC_URL;
     const privateKey = process.env.PRIVATE_KEY;
     const contractAddress = process.env.CONTRACT_ADDRESS;
 
