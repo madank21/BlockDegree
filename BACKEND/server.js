@@ -106,12 +106,12 @@ const initializeServices = async () => {
   }
 
   // 3. Register queue (so workers can pick jobs)
-  try {
-    require("./queues/mintingQueue");
-    logger.info("[Server] Minting queue initialized");
-  } catch (err) {
-    logger.warn("[Server] Minting queue not loaded:", err.message);
-  }
+  // try {
+  //   //require("./queues/mintingQueue");
+  //   logger.info("[Server] Minting queue initialized");
+  // } catch (err) {
+  //   logger.warn("[Server] Minting queue not loaded:", err.message);
+  // }
 
   // 4. Blockchain sanity log (no secrets)
   if (process.env.BLOCKCHAIN_RPC_URL) {

@@ -18,7 +18,7 @@ const degreeRoutes = require('./routes/degreeRoutes');
 const documentRoutes = require('./routes/documentRoutes');
 const verificationRoutes = require('./routes/verificationRoutes');
 const blockchainRoutes = require('./routes/blockchainRoutes');
-const faceRoutes = require('./routes/faceRoutes');
+//const faceRoutes = require('./routes/faceRoutes');
 
 const app = express();
 
@@ -126,7 +126,7 @@ app.use('/api/v1/degrees', degreeRoutes);
 app.use('/api/v1/documents', documentRoutes);
 app.use('/api/v1/verification', verificationRoutes);
 app.use('/api/v1/blockchain', blockchainRoutes);
-app.use('/api/v1/face', faceRoutes);
+//app.use('/api/v1/face', faceRoutes);
 
 // ─── Error Handling ────────────────────────────────────────────────────────────
 app.use(notFound);
