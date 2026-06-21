@@ -9,7 +9,6 @@ interface RegisterProps {
 }
 
 export default function Register({ onNavigate }: RegisterProps) {
-  // Get the store's setUser method to sync the user state after registration
   const { setUser } = useStore();
 
   const [name, setName] = useState('');
@@ -20,7 +19,6 @@ export default function Register({ onNavigate }: RegisterProps) {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Validation helpers
   const emailValid = email.endsWith('@iqra.edu.pk');
   const emailHasRegNo = email.includes(`.${regNo}@`) && regNo.length > 0;
 
@@ -29,7 +27,6 @@ export default function Register({ onNavigate }: RegisterProps) {
     setError('');
     setSuccess(false);
 
-    // Validation
     if (!emailValid) {
       setError('Please use an official @iqra.edu.pk email address.');
       return;
@@ -41,35 +38,43 @@ export default function Register({ onNavigate }: RegisterProps) {
 
     setLoading(true);
     try {
-      const response = await authApi.register({
+      const payload = {
         name,
         email,
         registrationNumber: regNo,
         password,
-        role: 'student', // default role
-      });
+        role: 'student',
+      };
 
-      // Unwrap response: try 'data' field first, then fallback to top level
-      const data = response.data || response;
-      const accessToken = data.accessToken || data.token;
-      const user = data.user;
+      const response = await authApi.register(payload);
+      
+      // ✅ response is directly { accessToken, refreshToken, user }
+      const accessToken = response.accessToken;
+      const user = response.user;
 
       if (!accessToken || !user) {
         throw new Error('Invalid server response: missing token or user');
       }
 
-      // Store token and update store
       setToken(accessToken);
       setUser(user);
-
-      // Registration successful – show success and redirect
       setSuccess(true);
-      setTimeout(() => {
-        // Navigate to the student dashboard (or login page, depending on your flow)
-        onNavigate('dashboard');
-      }, 1500);
+      setTimeout(() => onNavigate('dashboard'), 1500);
     } catch (err: any) {
-      setError(err.message || 'Registration failed. Please try again.');
+      let message = err.message || 'Registration failed. Please try again.';
+      
+      if (err.response?.data) {
+        const serverData = err.response.data;
+        if (serverData.errors && Array.isArray(serverData.errors)) {
+          message = serverData.errors.map((e: any) => e.msg).join('. ');
+        } else if (serverData.message) {
+          message = serverData.message;
+        } else if (typeof serverData === 'string') {
+          message = serverData;
+        }
+      }
+      
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -102,10 +107,10 @@ export default function Register({ onNavigate }: RegisterProps) {
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-red-400 text-sm"
+            className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-start gap-2 text-red-400 text-sm"
           >
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{error}</span>
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span className="whitespace-pre-wrap">{error}</span>
           </motion.div>
         )}
 
@@ -121,7 +126,6 @@ export default function Register({ onNavigate }: RegisterProps) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Full Name */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Full Name</label>
             <div className="relative">
@@ -137,7 +141,6 @@ export default function Register({ onNavigate }: RegisterProps) {
             </div>
           </div>
 
-          {/* Registration Number */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Registration Number</label>
             <div className="relative">
@@ -154,7 +157,6 @@ export default function Register({ onNavigate }: RegisterProps) {
             <p className="text-xs text-gray-500 mt-1">Your university registration number.</p>
           </div>
 
-          {/* Email */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Email Address</label>
             <div className="relative">
@@ -173,7 +175,6 @@ export default function Register({ onNavigate }: RegisterProps) {
             )}
           </div>
 
-          {/* Password */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Password</label>
             <div className="relative">
@@ -188,7 +189,9 @@ export default function Register({ onNavigate }: RegisterProps) {
                 minLength={6}
               />
             </div>
-            <p className="text-xs text-gray-500 mt-1">At least 6 characters.</p>
+            <p className="text-xs text-gray-500 mt-1">
+              At least 8 characters, with uppercase, lowercase, number and special character.
+            </p>
           </div>
 
           <button

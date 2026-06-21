@@ -312,8 +312,10 @@ export const store = {
     try {
       const data = await authApi.login(email, password);
       // After envelope unwrapping, data contains { accessToken, refreshToken, user }
-      setToken(data.accessToken);   // <-- FIXED: was data.token
+      // setToken expects only the access token (the refresh token is handled internally)
+      setToken(data.accessToken);
       const user = data.user as User;
+
       const existing = state.users.find(u => u.id === user.id);
       if (!existing) {
         state.users.push(user);
@@ -341,7 +343,7 @@ export const store = {
     // Register may or may not return an accessToken (depending on backend config)
     // If it does, we store it.
     if (data.accessToken) {
-      setToken(data.accessToken);
+      setToken(data.accessToken);   // FIX: only one argument
     }
     const user = data.user as User;
     const existing = state.users.find(u => u.id === user.id);
@@ -533,17 +535,18 @@ export const store = {
     return newApp;
   },
 
-  async revokeDegree(degreeId: string) {
+  // FIX: Add 'reason' parameter and pass it to the API
+  async revokeDegree(degreeId: string, reason: string = 'No reason provided') {
     const degree = state.degreeApplications.find(d => d.id === degreeId);
     if (!degree || !degree.degreeId) throw new Error('Degree not found or missing degreeId');
-    await degreesApi.revoke(degree.degreeId);
+    await degreesApi.revoke(degree.degreeId, reason);  // now pass reason
     state = {
       ...state,
       degreeApplications: state.degreeApplications.map(d =>
         d.id === degreeId ? { ...d, status: 'revoked' as const } : d
       ),
     };
-    store.addAuditLog('Degree Revoked', 'admin1', 'Administrator', `Revoked degree ${degree.degreeId}`, 'degree');
+    store.addAuditLog('Degree Revoked', 'admin1', 'Administrator', `Revoked degree ${degree.degreeId} with reason: ${reason}`, 'degree');
     notify();
   },
 

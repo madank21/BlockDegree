@@ -34,15 +34,10 @@ const generateTokens = (userId, role) => ({
 
 // ─── Helper: build user response object ──────────────────────────────────────
 const buildUserResponse = (user) => {
-  // user is the raw DB row with first_name, last_name, etc.
-  // Compute full name for frontend compatibility
-  const fullName = user.first_name && user.last_name
-    ? `${user.first_name} ${user.last_name}`.trim()
-    : user.name || ''; // fallback if name exists
-
+  // user is the raw DB row – we assume it has a `name` column
   return {
     id: user.id,
-    name: fullName,
+    name: user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || '',
     email: user.email,
     role: user.role,
     studentId: user.student_id || null,
@@ -58,83 +53,137 @@ const buildUserResponse = (user) => {
 
 // POST /api/v1/auth/register
 const register = asyncHandler(async (req, res) => {
-  // Accept both 'name' (from frontend) and optionally first_name/last_name
   const {
     name,
     email,
     password,
     role = "student",
     student_id,
-    registrationNumber, // frontend sends this
+    registrationNumber,
     institution_name,
   } = req.body;
 
+  console.log(`[REGISTER] Incoming payload:`, {
+    name,
+    email,
+    passwordProvided: !!password,
+    role,
+    student_id,
+    registrationNumber,
+    institution_name,
+  });
+
   // Check if email already exists
   const exists = await User.emailExists(email);
-  if (exists) return sendError(res, "Email already registered", 409);
-
-  // Split full name into first and last
-  let firstName = '';
-  let lastName = '';
-  if (name) {
-    const parts = name.trim().split(/\s+/);
-    firstName = parts[0] || '';
-    lastName = parts.slice(1).join(' ') || '';
-  } else {
-    // Fallback: if first_name and last_name are provided directly
-    firstName = req.body.first_name || '';
-    lastName = req.body.last_name || '';
+  if (exists) {
+    console.log(`[REGISTER] Email already exists: ${email}`);
+    return sendError(res, "Email already registered", 409);
   }
+
+  // Determine the full name: use provided 'name' or combine first_name/last_name if sent separately
+  let fullName = name || '';
+  if (!fullName && req.body.first_name && req.body.last_name) {
+    fullName = `${req.body.first_name} ${req.body.last_name}`.trim();
+  }
+  // If still empty, use a placeholder
+  if (!fullName) fullName = email.split('@')[0];
 
   // Determine student_id: use provided student_id or registrationNumber
   const studentId = student_id || registrationNumber || null;
 
-  // Create user (User.create should accept all these fields)
-  const user = await User.create({
-    first_name: firstName,
-    last_name: lastName,
+  console.log(`[REGISTER] Creating user with:`, {
+    name: fullName,
     email,
-    password,          // User.create will hash it
     role,
     student_id: studentId,
-    institution_name: institution_name || null,
+    institution_name,
     is_active: true,
   });
 
-  // Log the registration
-  await AuditLog.create({
-    action: "USER_REGISTERED",
-    actorId: user.id,
-    actorRole: role,
-    details: { email, role },
-  });
+  try {
+    // User.create should accept { name, email, password, role, student_id, institution_name, is_active }
+    const user = await User.create({
+      name: fullName,
+      email,
+      password,          // User.create must hash it
+      role,
+      student_id: studentId,
+      institution_name: institution_name || null,
+      is_active: true,
+    });
 
-  const { accessToken, refreshToken } = generateTokens(user.id, user.role);
-  logger.info(`[Auth] Registered: ${email} (${role})`);
+    console.log(`[REGISTER] User created successfully:`, {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    });
 
-  // Build response with computed name
-  const userResponse = buildUserResponse(user);
+    // Log the registration
+    await AuditLog.create({
+      action: "USER_REGISTERED",
+      actorId: user.id,
+      actorRole: role,
+      details: { email, role },
+    });
 
-  return sendCreated(res, {
-    user: userResponse,
-    accessToken,
-    refreshToken,
-  }, "Registration successful");
+    const { accessToken, refreshToken } = generateTokens(user.id, user.role);
+    logger.info(`[Auth] Registered: ${email} (${role})`);
+
+    const userResponse = buildUserResponse(user);
+
+    console.log(`[REGISTER] Registration successful for ${email}`);
+
+    return sendCreated(res, {
+      user: userResponse,
+      accessToken,
+      refreshToken,
+    }, "Registration successful");
+  } catch (error) {
+    console.error(`[REGISTER] Error creating user:`, error.message);
+    console.error(error.stack);
+    // Re-throw to let the asyncHandler catch and send a 500
+    throw new Error(`User creation failed: ${error.message}`);
+  }
 });
 
 // POST /api/v1/auth/login
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  const user = await User.findByEmail(email, true);
-  if (!user) return sendUnauthorized(res, "Invalid email or password");
-  if (!user.is_active) return sendUnauthorized(res, "Account deactivated");
+  console.log(`[LOGIN] Attempt for email: ${email}`);
 
+  const user = await User.findByEmail(email, true);
+  if (!user) {
+    console.log(`[LOGIN] User not found: ${email}`);
+    return sendUnauthorized(res, "Invalid email or password");
+  }
+
+  console.log(`[LOGIN] User found:`, {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    is_active: user.is_active,
+    password_hash_exists: !!user.password_hash,
+  });
+
+  if (!user.is_active) {
+    console.log(`[LOGIN] User account deactivated: ${email}`);
+    return sendUnauthorized(res, "Account deactivated");
+  }
+
+  // Compare password
   const isValid = await User.comparePassword(password, user.password_hash);
-  if (!isValid) return sendUnauthorized(res, "Invalid email or password");
+  console.log(`[LOGIN] Password comparison result: ${isValid}`);
+
+  if (!isValid) {
+    console.log(`[LOGIN] Invalid password for: ${email}`);
+    return sendUnauthorized(res, "Invalid email or password");
+  }
 
   // Update last login asynchronously (fire-and-forget)
-  User.update(user.id, { last_login: new Date().toISOString() }).catch(() => {});
+  User.update(user.id, { last_login: new Date().toISOString() }).catch((err) => {
+    console.error(`[LOGIN] Failed to update last_login for ${user.id}:`, err.message);
+  });
 
   await AuditLog.create({
     action: "USER_LOGIN",
@@ -148,6 +197,8 @@ const login = asyncHandler(async (req, res) => {
 
   const userResponse = buildUserResponse(user);
 
+  console.log(`[LOGIN] Login successful for ${email}`);
+
   return sendSuccess(res, {
     user: userResponse,
     accessToken,
@@ -157,8 +208,6 @@ const login = asyncHandler(async (req, res) => {
 
 // GET /api/v1/auth/me
 const getMe = asyncHandler(async (req, res) => {
-  // req.user is attached by authMiddleware; it may already have first_name/last_name
-  // But to be safe, fetch fresh from DB
   const user = await User.findById(req.user.id);
   if (!user) return sendError(res, "User not found", 404);
 
@@ -185,8 +234,6 @@ const refreshToken = asyncHandler(async (req, res) => {
 // POST /api/v1/auth/logout
 const logout = async (req, res, next) => {
   try {
-    // JWT is stateless; client drops the token.
-    // Optionally: blacklist the token in Redis here.
     logger.info('User logged out', {
       userId: req.user?.id,
       requestId: req.requestId,
@@ -204,7 +251,8 @@ const logout = async (req, res, next) => {
 // PATCH /api/v1/auth/me
 const updateProfile = async (req, res, next) => {
   try {
-    const allowedFields = ['first_name', 'last_name', 'phone', 'organization'];
+    // Update allowed fields; adjust to match your actual columns
+    const allowedFields = ['name', 'phone', 'organization', 'institution_name'];
     const updates = {};
     allowedFields.forEach((f) => {
       if (req.body[f] !== undefined) updates[f] = req.body[f];
@@ -270,7 +318,6 @@ const forgotPassword = async (req, res, next) => {
     }
 
     const user = await User.findByEmail(email);
-    // Always return 200 to prevent email enumeration
     if (!user) {
       return res.status(200).json({
         success: true,
@@ -279,7 +326,7 @@ const forgotPassword = async (req, res, next) => {
     }
 
     const token = crypto.randomBytes(32).toString('hex');
-    const expires = new Date(Date.now() + 3600000).toISOString(); // 1 hour
+    const expires = new Date(Date.now() + 3600000).toISOString();
 
     await User.update(user.id, {
       password_reset_token: token,

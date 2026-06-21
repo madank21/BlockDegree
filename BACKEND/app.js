@@ -131,7 +131,7 @@ app.use('/api/v1/degrees', degreeRoutes);
 app.use('/api/v1/documents', documentRoutes);
 app.use('/api/v1/verification', verificationRoutes);
 app.use('/api/v1/blockchain', blockchainRoutes);
-app.use('/api/v1/face', faceRoutes);
+//app.use('/api/v1/face', faceRoutes);
 
 // ─── Error Handling ────────────────────────────────────────────────────────────
 app.use(notFound);

@@ -2,6 +2,8 @@
 const jwt  = require("jsonwebtoken");
 const User = require("../models/User");
 const { logger } = require("../src/utils/logger");
+// (intentionally not using sendUnauthorized; authMiddleware returns raw res.status(401)...)
+// const { sendUnauthorized } = require("../src/utils/response");
 
 // ─── Strict Authentication (requires valid token) ─────────────────────────────
 const authenticate = async (req, res, next) => {
