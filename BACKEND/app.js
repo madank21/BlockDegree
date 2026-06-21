@@ -20,7 +20,8 @@ const verificationRoutes = require('./routes/verificationRoutes');
 const blockchainRoutes = require('./routes/blockchainRoutes');
 const faceRoutes = require('./routes/faceRoutes');
 const fraudRoutes = require('./routes/fraudRoutes');
-
+const userRoutes = require('./routes/userRoutes');
+const auditRoutes = require('./routes/auditRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const app = express();
 
@@ -40,9 +41,9 @@ app.use(helmet({
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use(cors({
   origin: [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
-    'http://localhost:3001',
-  ],
+  "http://localhost:3000",
+  "http://localhost:5173"
+],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
@@ -75,7 +76,8 @@ app.use('/api/', globalLimiter);
 app.use('/api/v1/auth', authLimiter);
 app.use('/api/v1/admin', adminRoutes);  
 app.use('/api/v1/fraud', fraudRoutes);
-
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/audit-logs', auditRoutes);
 
 // ─── Compression ───────────────────────────────────────────────────────────────
 app.use(compression());

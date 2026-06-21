@@ -68,11 +68,21 @@ export default function DegreeManagement() {
     }
   };
 
+  // ---- UPDATED: revoke now asks for a reason ----
   const handleRevoke = async (id: string) => {
-    if (!confirm('Revoke this degree attestation?')) return;
+    // Prompt for reason
+    const reason = prompt('Please enter the reason for revoking this degree (minimum 10 characters):');
+    if (reason === null) return; // user cancelled
+    if (reason.trim().length < 10) {
+      alert('Reason must be at least 10 characters long.');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to revoke this degree?\nReason: "${reason.trim()}"`)) return;
+
     try {
       setProcessing(id);
-      await degreesApi.revoke(id);
+      await degreesApi.revoke(id, reason.trim());
       await fetchDegrees();
     } catch (err: any) {
       alert(`Revocation failed: ${err.message}`);
