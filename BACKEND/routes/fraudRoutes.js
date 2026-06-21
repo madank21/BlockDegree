@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const fraudController = require('../controllers/fraudController');
 const { authenticate } = require('../middleware/authMiddleware');
-const { authorizeRoles } = require('../middleware/roleMiddleware');
+const { authorize } = require('../middleware/roleMiddleware');
 
 // All fraud routes require authentication and admin role
 router.use(authenticate);
-router.use(authorizeRoles('admin'));
+router.use(authorize('admin'));
 
 // Get all fraud reports (with optional filters)
 router.get('/reports', fraudController.getReports);

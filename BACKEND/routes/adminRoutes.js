@@ -3,12 +3,12 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const { authenticate } = require('../middleware/authMiddleware');
-const { authorizeRoles } = require('../middleware/roleMiddleware');
+const { authorize } = require('../middleware/roleMiddleware');
 const upload = require('../middleware/uploadMiddleware'); // if you have a multer setup
 
 // All routes require authentication and admin role
 router.use(authenticate);
-router.use(authorizeRoles('admin'));
+router.use(authorize('admin'));
 
 // Stats & Integrity
 router.get('/stats', adminController.getStats);

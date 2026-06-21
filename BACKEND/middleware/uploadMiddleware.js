@@ -1,3 +1,4 @@
+// BACKEND/middleware/uploadMiddleware.js
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -54,6 +55,17 @@ const faceStorage = multer.diskStorage({
   },
 });
 
+// ─── NEW: Import storage (for admin import of JSON files) ────────────────────
+const importStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, './uploads/temp');  // temporary storage
+  },
+  filename: (req, file, cb) => {
+    const uniqueName = `import-${uuidv4()}${path.extname(file.originalname)}`;
+    cb(null, uniqueName);
+  },
+});
+
 // ─── File Filters ──────────────────────────────────────────────────────────────
 
 const documentFilter = (req, file, cb) => {
@@ -79,6 +91,16 @@ const imageFilter = (req, file, cb) => {
     cb(null, true);
   } else {
     cb(new Error('Only image files (JPEG, PNG, WebP) are allowed.'), false);
+  }
+};
+
+// ─── NEW: Import filter – only JSON ──────────────────────────────────────────
+const importFilter = (req, file, cb) => {
+  const allowedTypes = ['application/json'];
+  if (allowedTypes.includes(file.mimetype) || file.originalname.endsWith('.json')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only JSON files are allowed for import.'), false);
   }
 };
 
@@ -113,6 +135,16 @@ const uploadFace = multer({
   },
 });
 
+// ─── NEW: Import multer instance ──────────────────────────────────────────────
+const uploadImport = multer({
+  storage: importStorage,
+  fileFilter: importFilter,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB – larger for big exports
+    files: 1,
+  },
+});
+
 // ─── Error Handler ─────────────────────────────────────────────────────────────
 
 const handleUploadError = (err, req, res, next) => {
@@ -143,6 +175,7 @@ module.exports = {
   uploadDocument,
   uploadAvatar,
   uploadFace,
+  uploadImport,           // <-- new export
   handleUploadError,
   cleanupFile,
 };
