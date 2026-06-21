@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../useStore';
 import { Camera, CheckCircle2, ScanFace, Shield, User, AlertTriangle, RefreshCw, X } from 'lucide-react';
+// ✅ Correct import: default object containing postForm, request, etc.
 import api from '../api/api';
 
 export default function FaceVerification() {
@@ -15,7 +16,7 @@ export default function FaceVerification() {
   const [faceDetected, setFaceDetected] = useState(false);
   const [analysisDetails, setAnalysisDetails] = useState<string[]>([]);
   const [permissionStatus, setPermissionStatus] = useState<'prompt' | 'granted' | 'denied'>('prompt');
-  
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -23,6 +24,7 @@ export default function FaceVerification() {
 
   if (!currentUser) return null;
 
+  // Load CNIC image from user documents
   useEffect(() => {
     const cnicDoc = currentUser.documents?.find(d => d.type === 'cnic');
     if (cnicDoc && (cnicDoc as any).fileUrl) {
@@ -32,6 +34,7 @@ export default function FaceVerification() {
 
   const alreadyVerified = currentUser.verificationStatus === 'face_verified' || currentUser.verificationStatus === 'approved';
 
+  // Check camera permissions
   useEffect(() => {
     checkCameraPermissions();
   }, []);
@@ -48,6 +51,7 @@ export default function FaceVerification() {
     }
   };
 
+  // Start camera
   const startCamera = async () => {
     setCameraError(null);
     setStage('permission');
@@ -58,18 +62,18 @@ export default function FaceVerification() {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
+        video: {
           facingMode: 'user',
           width: { ideal: 640 },
           height: { ideal: 480 }
         },
         audio: false
       });
-      
+
       streamRef.current = stream;
       setStage('camera');
       setPermissionStatus('granted');
-      
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         try {
@@ -87,7 +91,7 @@ export default function FaceVerification() {
       }
     } catch (err: any) {
       console.error('Camera error:', err);
-      
+
       if (err.name === 'NotAllowedError') {
         setPermissionStatus('denied');
         setCameraError(
@@ -100,7 +104,7 @@ export default function FaceVerification() {
       } else {
         setCameraError('Failed to access camera. Please check your device settings.');
       }
-      
+
       setStage('ready');
     }
   };
@@ -116,29 +120,29 @@ export default function FaceVerification() {
     }
   }, []);
 
-  // --- Full implementation of detectFace ---
+  // Simple face detection (kept for UI feedback)
   const detectFace = (imageData: ImageData): { detected: boolean; x: number; y: number; width: number; height: number } => {
     const data = imageData.data;
     const width = imageData.width;
     const height = imageData.height;
-    
+
     let skinPixels = 0;
     let minX = width, maxX = 0, minY = height, maxY = 0;
-    
+
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const idx = (y * width + x) * 4;
         const r = data[idx];
         const g = data[idx + 1];
         const b = data[idx + 2];
-        
+
         const isSkin = (
           r > 95 && g > 40 && b > 20 &&
           r > g && r > b &&
           Math.abs(r - g) > 15 &&
           r - g > 15 && r - b > 15
         );
-        
+
         if (isSkin) {
           skinPixels++;
           if (x < minX) minX = x;
@@ -148,16 +152,16 @@ export default function FaceVerification() {
         }
       }
     }
-    
+
     const totalPixels = width * height;
     const skinRatio = skinPixels / totalPixels;
     const faceWidth = maxX - minX;
     const faceHeight = maxY - minY;
-    
-    const detected = skinRatio > 0.05 && skinRatio < 0.5 && 
-                    faceWidth > width * 0.15 && faceHeight > height * 0.15 &&
-                    faceWidth < width * 0.8 && faceHeight < height * 0.8;
-    
+
+    const detected = skinRatio > 0.05 && skinRatio < 0.5 &&
+      faceWidth > width * 0.15 && faceHeight > height * 0.15 &&
+      faceWidth < width * 0.8 && faceHeight < height * 0.8;
+
     return {
       detected,
       x: minX,
@@ -167,70 +171,64 @@ export default function FaceVerification() {
     };
   };
 
-  // --- Full startFaceDetection ---
   const startFaceDetection = () => {
     const detect = () => {
       if (!videoRef.current || !canvasRef.current) return;
-      
+
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
-      
+
       if (!ctx || video.readyState !== 4) {
         animationRef.current = requestAnimationFrame(detect);
         return;
       }
-      
+
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       ctx.drawImage(video, 0, 0);
-      
+
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const faceResult = detectFace(imageData);
-      
+
       setFaceDetected(faceResult.detected);
-      
+
       if (faceResult.detected) {
         ctx.strokeStyle = '#22c55e';
         ctx.lineWidth = 3;
         ctx.strokeRect(faceResult.x, faceResult.y, faceResult.width, faceResult.height);
       }
-      
+
       animationRef.current = requestAnimationFrame(detect);
     };
-    
+
     detect();
   };
 
-  // --- Full capturePhoto ---
   const capturePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return;
-    
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d')!;
-    
+
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
-    
+
     const imageData = canvas.toDataURL('image/jpeg', 0.9);
     setCapturedImage(imageData);
     setStage('captured');
     stopCamera();
   };
 
-  // --- Full analyzeAndCompare (unchanged, already had complete logic) ---
+  // --- Updated analyzeAndCompare: uses api.postForm ---
   const analyzeAndCompare = async () => {
     setStage('analyzing');
     setAnalysisDetails([]);
 
     try {
-      const { loadFaceModels, getFaceDescriptor, compareFaces, analyzeImageQuality } = await import('../lib/faceVerification');
-
-      setAnalysisDetails(prev => [...prev, '⏳ Loading face recognition models...']);
-      await loadFaceModels();
-      setAnalysisDetails(prev => [...prev, '✓ Face recognition models loaded (ssdMobilenet + Facenet)']);
+      setAnalysisDetails(prev => [...prev, '⏳ Preparing selfie for verification...']);
 
       if (!canvasRef.current) {
         setAnalysisDetails(prev => [...prev, '✗ Capture canvas not available']);
@@ -239,96 +237,50 @@ export default function FaceVerification() {
         return;
       }
 
-      const { quality, issues } = await analyzeImageQuality(canvasRef.current);
-      setAnalysisDetails(prev => [...prev, `📊 Image quality: ${quality}/100`]);
-      if (issues.length > 0) {
-        issues.forEach((issue: string) => {
-          setAnalysisDetails(prev => [...prev, `⚠️  ${issue}`]);
-        });
+      // Get the selfie image as a blob
+      const canvas = canvasRef.current;
+      const selfieBlob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((blob) => resolve(blob!), 'image/jpeg', 0.9);
+      });
+
+      setAnalysisDetails(prev => [...prev, '✓ Selfie captured, sending to backend for verification...']);
+
+      // Get CNIC image blob
+      let cnicBlob: Blob | null = null;
+      if (cnicImage) {
+        try {
+          const response = await fetch(cnicImage);
+          cnicBlob = await response.blob();
+        } catch (e) {
+          setAnalysisDetails(prev => [...prev, '⚠️ Could not retrieve CNIC image, sending selfie only']);
+        }
       }
 
-      const selfieDescriptor = await getFaceDescriptor(canvasRef.current);
-      if (!selfieDescriptor) {
-        setAnalysisDetails(prev => [...prev, '✗ No face detected in selfie. Please retake photo.']);
-        setResult('failed');
-        setStage('result');
-        return;
+      // Prepare FormData
+      const formData = new FormData();
+      formData.append('selfie', selfieBlob, 'selfie.jpg');
+      if (cnicBlob) {
+        formData.append('cnic', cnicBlob, 'cnic.jpg');
       }
-      setAnalysisDetails(prev => [...prev, '✓ Selfie face detected and encoded (128-dimensional vector)']);
+      formData.append('userId', currentUser.id);
 
-      setStage('comparing');
+      setAnalysisDetails(prev => [...prev, '📤 Uploading to backend...']);
 
-      const requiredDocs = (currentUser.documents || []).filter(d => d.type === 'cnic');
-      const cnicDoc = requiredDocs[0];
+      // ✅ Use api.postForm for multipart upload
+      const response = await api.postForm<{ match: boolean; confidence: number; details?: string }>(
+        '/face/verify',
+        formData
+      );
 
-      if (!cnicDoc) {
-        setAnalysisDetails(prev => [...prev, '⚠️  No CNIC document on file. Please upload CNIC first.']);
-        setResult('failed');
-        setStage('result');
-        return;
-      }
+      setAnalysisDetails(prev => [...prev, '✅ Verification completed.']);
 
-      if (cnicDoc.validationStatus !== 'valid') {
-        const reason = cnicDoc.validationErrors?.length
-          ? `: ${cnicDoc.validationErrors[0]}`
-          : '';
-        setAnalysisDetails(prev => [...prev, `✗ CNIC data validation not passed${reason}. Re-validate or re-upload CNIC.`]);
-        setResult('failed');
-        setStage('result');
-        return;
-      }
-
-      setAnalysisDetails(prev => [...prev, '✓ CNIC validation passed — proceeding to face comparison']);
-
-      const { extractFaceFromDataURL } = await import('../lib/faceVerification');
-
-      const cnicDataUrl = (cnicDoc as any).fileUrl as string | undefined;
-      if (!cnicDataUrl) {
-        setAnalysisDetails(prev => [...prev, '✗ CNIC face reference not available (CNIC.fileUrl missing). Re-upload CNIC to enable face verification.']);
-        setResult('failed');
-        setStage('result');
-        return;
-      }
-
-      let cnicDescriptor = null;
-      try {
-        cnicDescriptor = await extractFaceFromDataURL(cnicDataUrl);
-      } catch {
-        cnicDescriptor = null;
-      }
-
-      if (!cnicDescriptor) {
-        setAnalysisDetails(prev => [...prev, '⚠️  CNIC photo cannot be processed (no face detected). Please re-upload.']);
-        setResult('failed');
-        setStage('result');
-        return;
-      }
-
-      setAnalysisDetails(prev => [...prev, '✓ CNIC reference face extracted and encoded']);
-
-      const comparison = compareFaces(selfieDescriptor, cnicDescriptor);
-      setConfidence(comparison.confidence);
-    
-      setAnalysisDetails(prev => [...prev, `✓ Computing Euclidean distance metric`]);
-      setAnalysisDetails(prev => [...prev, `📏 Distance: ${comparison.distance.toFixed(4)} (threshold: 0.60)`]);
-      setAnalysisDetails(prev => [...prev, `📊 Confidence score: ${comparison.confidence}%`]);
-
-      if (comparison.match) {
+      setConfidence(response.confidence);
+      if (response.match) {
         setResult('match');
-        setAnalysisDetails(prev => [...prev, '✅ VERIFICATION PASSED — Faces match!']);
-        await api.post('/face/verify', {
-          result: 'match',
-          confidence: comparison.confidence,
-          userId: currentUser.id,
-        });
+        setAnalysisDetails(prev => [...prev, `✅ VERIFICATION PASSED — ${response.confidence}% confidence`]);
       } else {
         setResult('failed');
-        setAnalysisDetails(prev => [...prev, `❌ VERIFICATION FAILED — Distance ${comparison.distance.toFixed(4)} > 0.60`]);
-        await api.post('/face/verify', {
-          result: 'failed',
-          confidence: comparison.confidence,
-          userId: currentUser.id,
-        });
+        setAnalysisDetails(prev => [...prev, `❌ VERIFICATION FAILED — ${response.confidence}% confidence`]);
       }
     } catch (err) {
       console.error('Face verification error:', err);
@@ -340,6 +292,7 @@ export default function FaceVerification() {
     setStage('result');
   };
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopCamera();
@@ -377,7 +330,7 @@ export default function FaceVerification() {
     );
   }
 
-  // --- JSX (unchanged, no errors) ---
+  // --- JSX (unchanged) ---
   return (
     <div className="space-y-6">
       <div>
@@ -618,7 +571,7 @@ export default function FaceVerification() {
               {[
                 { label: 'Open Camera', desc: 'WebRTC camera access', done: stage !== 'ready' },
                 { label: 'Capture Selfie', desc: 'Take a clear photo', done: stage === 'captured' || stage === 'analyzing' || stage === 'comparing' || stage === 'result' },
-                { label: 'Analyze Face', desc: 'Extract facial features', done: stage === 'comparing' || stage === 'result' },
+                { label: 'Analyze Face', desc: 'Extract facial features (backend)', done: stage === 'comparing' || stage === 'result' },
                 { label: 'Compare Faces', desc: 'Match with CNIC photo', done: stage === 'result' },
               ].map((step, i) => (
                 <div key={i} className="flex items-center gap-3">

@@ -74,8 +74,10 @@ export default function EmployerDashboard({ onNavigate }: Props) {
         <motion.button
           whileHover={{ scale: 1.02 }}
           className="bg-gray-900/50 border border-gray-800 hover:border-purple-500/30 rounded-xl p-8 text-center group transition"
-          onClick={() => onNavigate('verify')}
-            onClick={() => setShowQRScanner(true)}
+          onClick={() => {
+              onNavigate('verify');
+              setShowQRScanner(true);
+            }}
         >
           <QrCode className="w-12 h-12 text-purple-400 mx-auto mb-4 group-hover:scale-110 transition" />
           <h3 className="text-lg font-semibold mb-2">QR Code Scan</h3>

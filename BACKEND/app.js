@@ -19,7 +19,9 @@ const documentRoutes = require('./routes/documentRoutes');
 const verificationRoutes = require('./routes/verificationRoutes');
 const blockchainRoutes = require('./routes/blockchainRoutes');
 //const faceRoutes = require('./routes/faceRoutes');
+const fraudRoutes = require('./routes/fraudRoutes');
 
+const adminRoutes = require('./routes/adminRoutes');
 const app = express();
 
 // ─── Security Middleware ───────────────────────────────────────────────────────
@@ -69,7 +71,8 @@ const authLimiter = rateLimit({
 
 app.use('/api/', globalLimiter);
 app.use('/api/v1/auth', authLimiter);
-
+app.use('/api/v1/admin', adminRoutes);  
+app.use('/api/v1/fraud', fraudRoutes);
 // ─── Body Parsing ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

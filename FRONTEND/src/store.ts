@@ -12,8 +12,6 @@ import {
   setToken,
   clearToken,
 } from '@/api/api';
-import { BackupManager, StorageManager } from './lib/dataPersistence';
-import { hashPassword, hashPasswordWithSalt, verifyPassword } from './lib/auth';
 
 // Browser-local store (cached copy of backend data)
 const STORAGE_KEY = 'blockdegree_store';
@@ -33,7 +31,8 @@ function generateId(): string {
 }
 
 // ============================================================
-// SAMPLE DATA (full definitions to match User type)
+// SAMPLE DATA (used only as fallback when localStorage is empty)
+// All password hashes are dummy values – real auth is via backend.
 // ============================================================
 
 const sampleStudents: User[] = [
@@ -41,7 +40,7 @@ const sampleStudents: User[] = [
     id: 'student1',
     name: 'Madan Kumar',
     email: 'madan.70618@iqra.edu.pk',
-    passwordHash: hashPasswordWithSalt('demo123', 'demo-student1'),
+    passwordHash: 'demo-hash', // dummy
     registrationNumber: '70618',
     role: 'student',
     verificationStatus: 'approved',
@@ -64,7 +63,7 @@ const sampleStudents: User[] = [
     id: 'student2',
     name: 'Ayesha Khan',
     email: 'ayesha.70425@iqra.edu.pk',
-    passwordHash: hashPasswordWithSalt('demo123', 'demo-student2'),
+    passwordHash: 'demo-hash',
     registrationNumber: '70425',
     role: 'student',
     verificationStatus: 'documents_uploaded',
@@ -84,7 +83,7 @@ const sampleStudents: User[] = [
     id: 'student3',
     name: 'Ahmed Raza',
     email: 'ahmed.70312@iqra.edu.pk',
-    passwordHash: hashPasswordWithSalt('demo123', 'demo-student3'),
+    passwordHash: 'demo-hash',
     registrationNumber: '70312',
     role: 'student',
     verificationStatus: 'face_verified',
@@ -105,7 +104,7 @@ const sampleStudents: User[] = [
     id: 'student4',
     name: 'Fatima Zahra',
     email: 'fatima.70189@iqra.edu.pk',
-    passwordHash: hashPasswordWithSalt('demo123', 'demo-student4'),
+    passwordHash: 'demo-hash',
     registrationNumber: '70189',
     role: 'student',
     verificationStatus: 'approved',
@@ -129,7 +128,7 @@ const sampleAdmin: User = {
   id: 'admin1',
   name: 'Dr. Abdullah Shah',
   email: 'admin@iqra.edu.pk',
-  passwordHash: hashPasswordWithSalt('demo123', 'demo-admin1'),
+  passwordHash: 'demo-hash',
   registrationNumber: 'ADM001',
   role: 'admin',
   verificationStatus: 'approved',
@@ -141,7 +140,7 @@ const sampleEmployer: User = {
   id: 'employer1',
   name: 'TechCorp HR',
   email: 'hr@techcorp.com',
-  passwordHash: hashPasswordWithSalt('demo123', 'demo-employer1'),
+  passwordHash: 'demo-hash',
   registrationNumber: 'EMP001',
   role: 'employer',
   verificationStatus: 'approved',
@@ -264,10 +263,8 @@ function getInitialState(): AppState {
 }
 
 function migrateState(input: AppState): AppState {
-  const users = (input.users || []).map(user => ({
-    ...user,
-    passwordHash: user.passwordHash || hashPasswordWithSalt('demo123', `legacy-${user.id}`),
-  }));
+  // No need to compute passwordHash – just keep whatever is there
+  const users = input.users || [];
   const currentUser = input.currentUser
     ? users.find(user => user.id === input.currentUser?.id) || null
     : null;
@@ -484,11 +481,8 @@ export const store = {
 
   // ---------- DEGREE APPLICATIONS (uses backend API) ----------
   async applyForDegree(app: Omit<DegreeApplication, 'id' | 'status' | 'appliedAt' | 'fraudScore'>) {
-    // Backend expects degree data
     const result = await degreesApi.issue({
       studentName: app.studentName,
-      // If your DegreeApplication type has studentEmail, you can add it; otherwise derive from user
-      // We'll omit studentEmail for now – the backend may not require it if it's derived from the authenticated user.
       registrationNumber: app.registrationNumber,
       department: app.department,
       program: app.program,
@@ -496,9 +490,7 @@ export const store = {
       cgpa: app.cgpa,
       admissionYear: app.admissionYear,
       graduationYear: app.graduationYear,
-      // add other fields as needed
     });
-    // result contains degreeHash, qrCodeUrl, degreeId
     const newApp: DegreeApplication = {
       id: result.degreeId,
       studentId: app.studentId,
@@ -516,7 +508,7 @@ export const store = {
       blockchainHash: result.degreeHash,
       degreeId: result.degreeId,
       qrCodeData: result.qrCodeUrl,
-      fraudScore: 100, // backend may compute fraud score
+      fraudScore: 100,
     };
     state = { ...state, degreeApplications: [...state.degreeApplications, newApp] };
     store.addAuditLog('Degree Issued', app.studentId, app.studentName, `Issued ${app.degreeTitle}`, 'degree');
@@ -524,7 +516,6 @@ export const store = {
     return newApp;
   },
 
-  // ---------- DEGREE REVOCATION (uses backend API) ----------
   async revokeDegree(degreeId: string) {
     const degree = state.degreeApplications.find(d => d.id === degreeId);
     if (!degree || !degree.degreeId) throw new Error('Degree not found or missing degreeId');
@@ -596,7 +587,6 @@ export const store = {
       return { isValid: false, errors };
     }
     // Simple validation logic (can be expanded)
-    // … (keep your existing validation)
     const isValid = errors.length === 0;
     state = {
       ...state,
@@ -656,40 +646,45 @@ export const store = {
     notify();
   },
 
-  // Data Persistence (unchanged)
+  // ---------- DATA PERSISTENCE (stubbed – no longer used) ----------
   createDataBackup() {
-    return BackupManager.createBackup();
+    console.warn('Local backup is disabled. All data is stored on the backend.');
+    return null;
   },
 
   restoreFromBackup() {
-    return BackupManager.restoreBackup();
+    console.warn('Local restore is disabled. All data is stored on the backend.');
+    return null;
   },
 
   exportAllData() {
-    BackupManager.exportAllData();
+    console.warn('Export is disabled. Data is available via backend APIs.');
   },
 
   importData(file: File) {
-    return BackupManager.importData(file);
+    console.warn('Import is disabled. Data is managed via backend APIs.');
+    return null;
   },
 
   getStorageStats() {
-    return StorageManager.getStorageStats();
+    return { total: 0, used: 0, documents: 0 };
   },
 
   getStoragePercentage() {
-    return StorageManager.getStoragePercentage();
+    return 0;
   },
 
   getStorageWarning() {
-    return StorageManager.getStorageWarning();
+    return null;
   },
 
   clearOldDocuments(daysOld: number = 90) {
-    return StorageManager.clearOldDocuments(daysOld);
+    console.warn('Clear old local documents is disabled.');
+    return 0;
   },
 
   verifyDataIntegrity() {
-    return StorageManager.verifyDataIntegrity();
+    console.warn('Local data integrity check is disabled.');
+    return { valid: true, errors: [] };
   },
 };

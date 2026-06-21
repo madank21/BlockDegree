@@ -1,51 +1,88 @@
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useStore } from '../useStore';
-import { runFraudChecks } from '../lib/fraudDetection';
-import {
-  AlertTriangle, Shield, CheckCircle2, XCircle, Activity
-} from 'lucide-react';
+import api from '../api/api';  // ✅ default import gives you the object with .get, .post, etc. // <-- changed to default import
+import { AlertTriangle, Shield, CheckCircle2, XCircle, Activity } from 'lucide-react';
+
+interface FraudReport {
+  id: string;
+  type: string;
+  description: string;
+  severity: 'high' | 'medium' | 'low' | 'safe';
+  studentName: string;
+  timestamp: string;
+  resolved: boolean;
+}
+
+interface FraudStats {
+  unresolvedCount: number;
+  resolvedCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  duplicateCnicCount: number;
+  fraudulentDocCount: number;
+  safetyScore: number;
+  totalApplications: number;
+}
+
+interface FraudCheck {
+  applicationId: string;
+  studentName: string;
+  score: number;
+  severity: 'high' | 'medium' | 'safe';
+  flags: string[];
+}
+
+const severityConfig = {
+  high: { color: 'text-red-400', bg: 'bg-red-400/10 border-red-400/20', icon: XCircle },
+  medium: { color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/20', icon: AlertTriangle },
+  safe: { color: 'text-green-400', bg: 'bg-green-400/10 border-green-400/20', icon: CheckCircle2 },
+};
 
 export default function FraudDetection() {
-  // TODO: Replace these store selectors with API calls once backend provides:
-  //       GET /api/v1/fraud/reports, GET /api/v1/users, GET /api/v1/applications
-  const { fraudReports, users, degreeApplications } = useStore();
+  const [reports, setReports] = useState<FraudReport[]>([]);
+  const [stats, setStats] = useState<FraudStats | null>(null);
+  const [checks, setChecks] = useState<FraudCheck[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const severityConfig = {
-    high: { color: 'text-red-400', bg: 'bg-red-400/10 border-red-400/20', icon: XCircle },
-    medium: { color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/20', icon: AlertTriangle },
-    safe: { color: 'text-green-400', bg: 'bg-green-400/10 border-green-400/20', icon: CheckCircle2 },
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      // ✅ Use api.get<T>() – no function call on the object itself
+      const [reportsData, statsData, checksData] = await Promise.all([
+        api.get<FraudReport[]>('/fraud/reports'),
+        api.get<FraudStats>('/fraud/stats'),
+        api.get<FraudCheck[]>('/fraud/checks'),
+      ]);
+      setReports(reportsData);
+      setStats(statsData);
+      setChecks(checksData);
+    } catch (err) {
+      // 👇 Fix unknown error
+      setError(err instanceof Error ? err.message : 'Failed to fetch fraud data');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const liveChecks = degreeApplications.map(application => {
-    const user = users.find(candidate => candidate.id === application.studentId);
-    return runFraudChecks(
-      user,
-      users,
-      application,
-      degreeApplications.filter(candidate => candidate.id !== application.id),
-    );
-  });
-  const averageSafetyScore = liveChecks.length > 0
-    ? Math.round(liveChecks.reduce((sum, check) => sum + check.score, 0) / liveChecks.length)
-    : 100;
-  const duplicateCnicCount = users.filter((user, index) =>
-    !!user.cnicNumber && users.findIndex(candidate => candidate.cnicNumber === user.cnicNumber) !== index,
-  ).length;
-  const fraudulentDocumentCount = users.flatMap(user => user.documents || []).filter(doc => doc.yoloStatus === 'fraudulent').length;
-  const duplicateDegreeCount = liveChecks.filter(check =>
-    check.flags.some(flag => flag.toLowerCase().includes('another active degree')),
-  ).length;
-  const invalidAcademicDataCount = liveChecks.filter(check =>
-    check.flags.some(flag => flag.toLowerCase().includes('cgpa') || flag.toLowerCase().includes('duration')),
-  ).length;
+  useEffect(() => {
+    fetchData();
+  }, []);
 
+  if (loading) return <div className="p-6">Loading fraud detection data...</div>;
+  if (error) return <div className="p-6 text-red-500">Error: {error}</div>;
+  if (!stats) return null;
+
+  // Compute detection types using stats
   const detectionTypes = [
-    { type: 'Fake Documents', desc: 'Documents flagged by validation checks', count: fraudulentDocumentCount },
-    { type: 'Data Mismatch', desc: 'Application data needs admin review', count: liveChecks.filter(check => check.severity !== 'safe').length },
-    { type: 'Duplicate Accounts', desc: 'Same CNIC across multiple accounts', count: duplicateCnicCount },
-    { type: 'Duplicate Degrees', desc: 'Multiple degree requests for same program', count: duplicateDegreeCount },
-    { type: 'Invalid Academic Data', desc: 'CGPA or study duration anomalies', count: invalidAcademicDataCount },
-    { type: 'High Risk Applications', desc: 'Applications with a score below 40', count: liveChecks.filter(check => check.severity === 'high').length },
+    { type: 'Fake Documents', desc: 'Documents flagged by validation checks', count: stats.fraudulentDocCount },
+    { type: 'Data Mismatch', desc: 'Application data needs admin review', count: checks.filter(c => c.severity !== 'safe').length },
+    { type: 'Duplicate Accounts', desc: 'Same CNIC across multiple accounts', count: stats.duplicateCnicCount },
+    { type: 'Duplicate Degrees', desc: 'Multiple degree requests for same program', count: checks.filter(c => c.flags.some(f => f.toLowerCase().includes('another active degree'))).length },
+    { type: 'Invalid Academic Data', desc: 'CGPA or study duration anomalies', count: checks.filter(c => c.flags.some(f => f.toLowerCase().includes('cgpa') || f.toLowerCase().includes('duration'))).length },
+    { type: 'High Risk Applications', desc: 'Applications with a score below 40', count: checks.filter(c => c.severity === 'high').length },
   ];
 
   return (
@@ -65,7 +102,7 @@ export default function FraudDetection() {
           <div className="relative w-24 h-24 mx-auto mb-4">
             <svg className="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
               <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
-              <circle cx="50" cy="50" r="40" fill="none" stroke="url(#safeGrad)" strokeWidth="8" strokeDasharray={`${(averageSafetyScore / 100) * 251} 251`} strokeLinecap="round" />
+              <circle cx="50" cy="50" r="40" fill="none" stroke="url(#safeGrad)" strokeWidth="8" strokeDasharray={`${(stats.safetyScore / 100) * 251} 251`} strokeLinecap="round" />
               <defs>
                 <linearGradient id="safeGrad" x1="0%" y1="0%" x2="100%">
                   <stop offset="0%" stopColor="#22c55e" />
@@ -74,7 +111,7 @@ export default function FraudDetection() {
               </defs>
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-2xl font-bold text-green-400">{averageSafetyScore}</span>
+              <span className="text-2xl font-bold text-green-400">{stats.safetyScore}</span>
             </div>
           </div>
           <p className="font-semibold text-green-400">System Safety Score</p>
@@ -88,11 +125,11 @@ export default function FraudDetection() {
           className="bg-gray-900/50 border border-gray-800 rounded-xl p-6"
         >
           <AlertTriangle className="w-8 h-8 text-red-400 mb-3" />
-          <p className="text-3xl font-bold text-red-400">{fraudReports.filter(f => !f.resolved).length}</p>
+          <p className="text-3xl font-bold text-red-400">{stats.unresolvedCount}</p>
           <p className="text-sm text-gray-400 mt-1">Unresolved Alerts</p>
           <div className="mt-3 text-xs text-gray-500">
-            <span className="text-red-400">{fraudReports.filter(f => f.severity === 'high').length} high</span> •{' '}
-            <span className="text-yellow-400">{fraudReports.filter(f => f.severity === 'medium').length} medium</span>
+            <span className="text-red-400">{stats.highCount} high</span> •{' '}
+            <span className="text-yellow-400">{stats.mediumCount} medium</span>
           </div>
         </motion.div>
 
@@ -103,7 +140,7 @@ export default function FraudDetection() {
           className="bg-gray-900/50 border border-gray-800 rounded-xl p-6"
         >
           <Shield className="w-8 h-8 text-green-400 mb-3" />
-          <p className="text-3xl font-bold text-green-400">{fraudReports.filter(f => f.resolved).length}</p>
+          <p className="text-3xl font-bold text-green-400">{stats.resolvedCount}</p>
           <p className="text-sm text-gray-400 mt-1">Resolved Cases</p>
           <div className="mt-3 text-xs text-gray-500">All flagged cases reviewed and handled</div>
         </motion.div>
@@ -136,8 +173,8 @@ export default function FraudDetection() {
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
         <h3 className="font-semibold mb-4">Recent Fraud Reports</h3>
         <div className="space-y-3">
-          {fraudReports.map(report => {
-            const config = severityConfig[report.severity];
+          {reports.map(report => {
+            const config = severityConfig[report.severity as keyof typeof severityConfig] || severityConfig.safe;
             return (
               <motion.div
                 key={report.id}

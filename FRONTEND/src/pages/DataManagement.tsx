@@ -1,271 +1,299 @@
-import { useState, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { useStore } from '../useStore';
-import { Download, Upload, RefreshCw, Trash2, HardDrive, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { store } from '../store'; // ✅ fixed import
 
-export default function DataManagement() {
-  const { getStorageStats, getStorageWarning, createDataBackup, restoreFromBackup, exportAllData, importData, clearOldDocuments, verifyDataIntegrity } = useStore();
+const DataManagement: React.FC = () => {
+  const [stats, setStats] = useState<{ total: number; used: number; documents: number }>({
+    total: 0,
+    used: 0,
+    documents: 0,
+  });
+  const [integrityResult, setIntegrityResult] = useState<{ valid: boolean; errors: string[] } | null>(null);
+  const [backupInfo, setBackupInfo] = useState<{ lastBackup: string | null }>({ lastBackup: null });
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-  const stats = getStorageStats();
-  const warning = getStorageWarning();
-  const storagePercentage = Math.round((stats.totalSize / (5 * 1024 * 1024)) * 100);
-  const integrity = verifyDataIntegrity();
+  const [dataSizes, setDataSizes] = useState({
+    userDataSize: 0,
+    documentDataSize: 0,
+    degreeDataSize: 0,
+  });
 
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  const refreshStats = () => {
+    const storageStats = store.getStorageStats();
+    setStats(storageStats);
+
+    const state = store.getState();
+    const userStr = JSON.stringify(state.users);
+    // ✅ added type annotation to prevent implicit any
+    const docStr = JSON.stringify(state.users.flatMap((u: any) => u.documents || []));
+    const degreeStr = JSON.stringify(state.degreeApplications);
+
+    setDataSizes({
+      userDataSize: new Blob([userStr]).size,
+      documentDataSize: new Blob([docStr]).size,
+      degreeDataSize: new Blob([degreeStr]).size,
+    });
+
+    const lastBackup = localStorage.getItem('last_backup_time') || null;
+    setBackupInfo({ lastBackup });
+  };
+
+  const runIntegrityCheck = () => {
+    const result = store.verifyDataIntegrity();
+    if (result) {
+      setIntegrityResult(result);
+    } else {
+      setIntegrityResult({ valid: false, errors: ['Integrity check returned null'] });
+    }
   };
 
   const handleBackup = () => {
     setLoading(true);
-    const result = createDataBackup();
-    if (result.success) {
-      setMessage({ type: 'success', text: `✓ Backup created successfully (${formatBytes(result.size)})` });
-    } else {
-      setMessage({ type: 'error', text: 'Failed to create backup' });
+    try {
+      const backup = store.createDataBackup();
+      if (backup) {
+        localStorage.setItem('last_backup_time', new Date().toISOString());
+        setBackupInfo({ lastBackup: new Date().toISOString() });
+        setMessage({ type: 'success', text: 'Backup created successfully!' });
+        refreshStats();
+      } else {
+        setMessage({ type: 'error', text: 'Failed to create backup.' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: `Error: ${(error as Error).message}` });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleRestore = () => {
-    if (confirm('⚠️  This will overwrite current data. Are you sure?')) {
+    if (window.confirm('Restoring will overwrite current data. Are you sure?')) {
       setLoading(true);
-      const success = restoreFromBackup();
-      if (success) {
-        setMessage({ type: 'success', text: '✓ Data restored from backup' });
-        window.location.reload();
-      } else {
-        setMessage({ type: 'error', text: 'Failed to restore backup' });
+      try {
+        const restored = store.restoreFromBackup();
+        if (restored) {
+          setMessage({ type: 'success', text: 'Data restored successfully!' });
+          refreshStats();
+          runIntegrityCheck();
+        } else {
+          setMessage({ type: 'error', text: 'No backup found to restore.' });
+        }
+      } catch (error) {
+        setMessage({ type: 'error', text: `Error: ${(error as Error).message}` });
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
   };
 
   const handleExport = () => {
-    setLoading(true);
-    exportAllData();
-    setMessage({ type: 'success', text: '✓ Data exported to JSON file' });
-    setLoading(false);
+    try {
+      store.exportAllData();
+      setMessage({ type: 'success', text: 'Data exported successfully!' });
+    } catch (error) {
+      setMessage({ type: 'error', text: `Export failed: ${(error as Error).message}` });
+    }
   };
 
-  const handleImportClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (!file) return;
-
     setLoading(true);
-    const success = await importData(file);
-    if (success) {
-      setMessage({ type: 'success', text: '✓ Data imported successfully' });
-      window.location.reload();
-    } else {
-      setMessage({ type: 'error', text: 'Failed to import data' });
+    try {
+      store.importData(file);
+      setMessage({ type: 'success', text: 'Data imported successfully!' });
+      refreshStats();
+      runIntegrityCheck();
+    } catch (error) {
+      setMessage({ type: 'error', text: `Import failed: ${(error as Error).message}` });
+    } finally {
+      setLoading(false);
+      event.target.value = '';
     }
-    setLoading(false);
   };
 
-  const handleClearOldDocuments = () => {
-    if (confirm('Delete documents older than 90 days?')) {
-      setLoading(true);
-      const deleted = clearOldDocuments(90);
-      setMessage({ type: 'success', text: `✓ Deleted ${deleted} old documents` });
-      setLoading(false);
+  const handleClearOldDocs = () => {
+    if (window.confirm('Delete documents older than 90 days?')) {
+      const count = store.clearOldDocuments(90);
+      setMessage({ type: 'info', text: `Removed ${count} old document(s).` });
+      refreshStats();
     }
   };
+
+  useEffect(() => {
+    refreshStats();
+    runIntegrityCheck();
+  }, []);
+
+  const percentageUsed = stats.total > 0 ? (stats.used / stats.total) * 100 : 0;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Data Management</h2>
-        <p className="text-gray-400 mt-1">Backup, restore, and manage your account data safely</p>
-      </div>
+    <div className="p-6 max-w-7xl mx-auto">
+      <h1 className="text-3xl font-bold mb-6 text-gray-800">Data Management</h1>
 
-      {/* Storage Status */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold flex items-center gap-2">
-            <HardDrive className="w-5 h-5 text-blue-400" />
-            Storage Usage
-          </h3>
-          <span className="text-sm text-gray-400">{storagePercentage}% used</span>
-        </div>
-
-        <div className="space-y-3">
-          <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden">
-            <div 
-              className={`h-full transition-all ${
-                storagePercentage > 90 ? 'bg-red-500' : 
-                storagePercentage > 70 ? 'bg-yellow-500' : 
-                'bg-blue-500'
-              }`}
-              style={{ width: `${Math.min(storagePercentage, 100)}%` }}
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-3 text-sm">
-            <div>
-              <p className="text-gray-400">User Data</p>
-              <p className="font-semibold">{formatBytes(stats.userDataSize)}</p>
-            </div>
-            <div>
-              <p className="text-gray-400">Documents</p>
-              <p className="font-semibold">{formatBytes(stats.documentDataSize)}</p>
-            </div>
-            <div>
-              <p className="text-gray-400">Degrees</p>
-              <p className="font-semibold">{formatBytes(stats.degreeDataSize)}</p>
-            </div>
-          </div>
-
-          {warning && (
-            <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-yellow-400">{warning}</p>
-            </div>
-          )}
-        </div>
-      </motion.div>
-
-      {/* Data Integrity */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-        <h3 className="font-semibold mb-3">Data Integrity</h3>
-        <div className={`p-3 rounded-lg border ${
-          integrity.isValid 
-            ? 'bg-green-500/10 border-green-500/20' 
-            : 'bg-red-500/10 border-red-500/20'
-        }`}>
-          <div className="flex items-center gap-2">
-            {integrity.isValid ? (
-              <CheckCircle2 className="w-5 h-5 text-green-400" />
-            ) : (
-              <AlertTriangle className="w-5 h-5 text-red-400" />
-            )}
-            <span className={integrity.isValid ? 'text-green-400' : 'text-red-400'}>
-              {integrity.isValid ? '✓ All data is valid and consistent' : '✗ Data integrity issues detected'}
-            </span>
-          </div>
-          {integrity.errors.length > 0 && (
-            <div className="mt-2 space-y-1">
-              {integrity.errors.map((err, i) => (
-                <p key={i} className="text-xs text-red-400">{err}</p>
-              ))}
-            </div>
-          )}
-        </div>
-      </motion.div>
-
-      {/* Backup & Restore Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <motion.button
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          onClick={handleBackup}
-          disabled={loading}
-          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl p-6 transition flex flex-col items-center gap-2"
-        >
-          <RefreshCw className={`w-6 h-6 ${loading ? 'animate-spin' : ''}`} />
-          <span className="font-medium">Create Backup</span>
-          <span className="text-xs text-blue-200">{stats.lastBackup ? `Last: ${new Date(stats.lastBackup).toLocaleDateString()}` : 'No backup yet'}</span>
-        </motion.button>
-
-        <motion.button
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          onClick={handleRestore}
-          disabled={loading || !stats.lastBackup}
-          className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl p-6 transition flex flex-col items-center gap-2"
-        >
-          <Upload className="w-6 h-6" />
-          <span className="font-medium">Restore Backup</span>
-          <span className="text-xs text-purple-200">Overwrites current data</span>
-        </motion.button>
-
-        <motion.button
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          onClick={handleExport}
-          disabled={loading}
-          className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white rounded-xl p-6 transition flex flex-col items-center gap-2"
-        >
-          <Download className="w-6 h-6" />
-          <span className="font-medium">Export to JSON</span>
-          <span className="text-xs text-green-200">Save as file</span>
-        </motion.button>
-
-        <motion.button
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          onClick={handleImportClick}
-          disabled={loading}
-          className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl p-6 transition flex flex-col items-center gap-2"
-        >
-          <Upload className="w-6 h-6" />
-          <span className="font-medium">Import from JSON</span>
-          <span className="text-xs text-indigo-200">Load file</span>
-        </motion.button>
-
-        <motion.button
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          onClick={handleClearOldDocuments}
-          disabled={loading}
-          className="col-span-1 md:col-span-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white rounded-xl p-4 transition flex items-center justify-center gap-2"
-        >
-          <Trash2 className="w-5 h-5" />
-          <span className="font-medium">Clear Old Documents (90+ days)</span>
-        </motion.button>
-      </div>
-
-      {/* File Input (hidden) */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".json"
-        onChange={handleImportFile}
-        className="hidden"
-      />
-
-      {/* Messages */}
       {message && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          className={`p-4 rounded-lg flex items-center gap-2 ${
+        <div
+          className={`mb-4 p-4 rounded-md ${
             message.type === 'success'
-              ? 'bg-green-500/10 border border-green-500/20 text-green-400'
-              : 'bg-red-500/10 border border-red-500/20 text-red-400'
+              ? 'bg-green-100 text-green-800 border border-green-300'
+              : message.type === 'error'
+              ? 'bg-red-100 text-red-800 border border-red-300'
+              : 'bg-blue-100 text-blue-800 border border-blue-300'
           }`}
         >
-          {message.type === 'success' ? (
-            <CheckCircle2 className="w-5 h-5" />
-          ) : (
-            <AlertTriangle className="w-5 h-5" />
-          )}
           {message.text}
-        </motion.div>
+          <button
+            onClick={() => setMessage(null)}
+            className="float-right text-gray-600 hover:text-gray-900"
+          >
+            ✕
+          </button>
+        </div>
       )}
 
-      {/* Information */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 text-sm text-gray-400">
-        <h4 className="font-semibold text-white mb-2">Data Management Tips</h4>
-        <ul className="space-y-1 list-disc list-inside">
-          <li>Regular backups protect against data loss</li>
-          <li>Export data before clearing old documents</li>
-          <li>Data is stored locally in your browser's localStorage</li>
-          <li>Maximum storage: ~5MB per domain</li>
-          <li>Clearing browser data will erase all stored information</li>
-        </ul>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {/* Storage Usage */}
+        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+          <h2 className="text-xl font-semibold mb-4 text-gray-700">Storage Usage</h2>
+          <div className="space-y-3">
+            <div>
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>Used: {(stats.used / 1024 / 1024).toFixed(2)} MB</span>
+                <span>Total: {(stats.total / 1024 / 1024).toFixed(2)} MB</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
+                <div
+                  className={`h-2.5 rounded-full ${percentageUsed > 80 ? 'bg-red-600' : 'bg-blue-600'}`}
+                  style={{ width: `${Math.min(percentageUsed, 100)}%` }}
+                />
+              </div>
+              <p className="text-sm text-gray-500 mt-1">{stats.documents} documents stored</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-sm">
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <span className="block text-gray-600">Users</span>
+                <span className="font-semibold">{(dataSizes.userDataSize / 1024).toFixed(1)} KB</span>
+              </div>
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <span className="block text-gray-600">Documents</span>
+                <span className="font-semibold">{(dataSizes.documentDataSize / 1024).toFixed(1)} KB</span>
+              </div>
+              <div className="bg-gray-50 p-2 rounded text-center">
+                <span className="block text-gray-600">Degrees</span>
+                <span className="font-semibold">{(dataSizes.degreeDataSize / 1024).toFixed(1)} KB</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Data Integrity */}
+        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+          <h2 className="text-xl font-semibold mb-4 text-gray-700">Data Integrity</h2>
+          {integrityResult ? (
+            <div>
+              <div className="flex items-center mb-3">
+                <span className={`inline-block w-3 h-3 rounded-full mr-2 ${integrityResult.valid ? 'bg-green-500' : 'bg-red-500'}`} />
+                <span className="font-medium">
+                  {integrityResult.valid ? '✓ Data is valid' : '✗ Integrity check failed'}
+                </span>
+              </div>
+              {!integrityResult.valid && integrityResult.errors.length > 0 && (
+                <div className="bg-red-50 p-3 rounded border border-red-200 text-sm text-red-700 max-h-32 overflow-auto">
+                  {integrityResult.errors.map((err, i) => (
+                    <div key={i}>• {err}</div>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={runIntegrityCheck}
+                className="mt-3 text-sm text-blue-600 hover:text-blue-800"
+              >
+                Run check again
+              </button>
+            </div>
+          ) : (
+            <p className="text-gray-500">No integrity data available.</p>
+          )}
+        </div>
+
+        {/* Backup Info */}
+        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+          <h2 className="text-xl font-semibold mb-4 text-gray-700">Backup & Restore</h2>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              Last backup:{' '}
+              {backupInfo.lastBackup
+                ? new Date(backupInfo.lastBackup).toLocaleString()
+                : 'Never'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleBackup}
+                disabled={loading}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loading ? 'Working...' : 'Create Backup'}
+              </button>
+              <button
+                onClick={handleRestore}
+                disabled={loading}
+                className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
+              >
+                Restore Backup
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Advanced Actions */}
+      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-8">
+        <h2 className="text-xl font-semibold mb-4 text-gray-700">Advanced Actions</h2>
+        <div className="flex flex-wrap gap-4 items-center">
+          <button
+            onClick={handleExport}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+          >
+            Export All Data (JSON)
+          </button>
+          <label className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 cursor-pointer">
+            Import Data
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleImport}
+              className="hidden"
+            />
+          </label>
+          <button
+            onClick={handleClearOldDocs}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          >
+            Clear Old Documents (90 days)
+          </button>
+          <button
+            onClick={() => {
+              if (window.confirm('Reset all data? This cannot be undone!')) {
+                store.resetData();
+                refreshStats();
+                runIntegrityCheck();
+                setMessage({ type: 'info', text: 'Data has been reset.' });
+              }
+            }}
+            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+          >
+            Reset All Data
+          </button>
+        </div>
+      </div>
+
+      {percentageUsed > 80 && (
+        <div className="bg-red-50 border border-red-200 p-4 rounded-md text-red-800">
+          ⚠️ Storage is {percentageUsed.toFixed(0)}% full. Consider clearing old documents or exporting data.
+        </div>
+      )}
     </div>
   );
-}
+};
+
+export default DataManagement;
