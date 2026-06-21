@@ -1,31 +1,47 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../useStore';
 import { QRCodeSVG } from 'qrcode.react';
-
 import {
   GraduationCap, Printer, CheckCircle2, Link2,
   X, Eye
 } from 'lucide-react';
-
 import DegreeCertificate from '../components/DegreeCertificate';
+import { degreesApi } from '../api/api'; // new import
 
 export default function MyDegrees() {
-  const { currentUser, degreeApplications } = useStore();
+  const { currentUser } = useStore();
+  const [degrees, setDegrees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedDegree, setSelectedDegree] = useState<string | null>(null);
-  const [copied] = useState(false);
-
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  // Fetch degrees on mount
+  useEffect(() => {
+    const fetchDegrees = async () => {
+      try {
+        const data = await degreesApi.list();
+        // data.degrees is the array
+        setDegrees(data.degrees || []);
+      } catch (err) {
+        console.error('Failed to fetch degrees:', err);
+        setDegrees([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDegrees();
+  }, []);
+
   if (!currentUser) return null;
 
-  // Filter degrees based on search and status
-  const myDegrees = degreeApplications
-    .filter(d => d.studentId === currentUser.id)
+  // Filter degrees: only current user's degrees, then by search and status
+  const myDegrees = degrees
+    .filter(d => d.studentId === currentUser.id) // or maybe d.studentId === currentUser.id
     .filter(d =>
-      d.degreeTitle.toLowerCase().includes(search.toLowerCase()) ||
-      d.department.toLowerCase().includes(search.toLowerCase())
+      d.degreeTitle?.toLowerCase().includes(search.toLowerCase()) ||
+      d.department?.toLowerCase().includes(search.toLowerCase())
     )
     .filter(d =>
       statusFilter === 'all' ? true : d.status === statusFilter
@@ -37,7 +53,7 @@ export default function MyDegrees() {
   const getVerificationUrl = (degreeId: string) =>
     `${window.location.origin}/verify/${degreeId}`;
 
-  // Print only the certificate (opens new window)
+  // Print certificate function (unchanged)
   const printCertificate = (id: string) => {
     const element = document.getElementById(`degree-certificate-${id}`);
     if (!element) {
@@ -61,13 +77,20 @@ export default function MyDegrees() {
     win?.print();
   };
 
-
-
-  // Statistics counts
+  // Statistics
   const totalDegrees = myDegrees.length;
   const issuedCount = myDegrees.filter(d => d.status === 'issued').length;
   const pendingCount = myDegrees.filter(d => d.status === 'pending').length;
   const verifiedCount = myDegrees.filter(d => d.blockchainHash).length;
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="w-8 h-8 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -79,7 +102,7 @@ export default function MyDegrees() {
         </p>
       </div>
 
-      {/* Statistics Cards */}
+      {/* Statistics Cards (unchanged) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-gray-900 rounded-xl p-4">
           <p className="text-gray-400 text-sm">Total Degrees</p>
@@ -99,7 +122,7 @@ export default function MyDegrees() {
         </div>
       </div>
 
-      {/* Search & Filter */}
+      {/* Search & Filter (unchanged) */}
       <div className="flex gap-3">
         <input
           type="text"
@@ -121,7 +144,7 @@ export default function MyDegrees() {
         </select>
       </div>
 
-      {/* Degree List */}
+      {/* Degree List (unchanged except using myDegrees) */}
       {myDegrees.length === 0 ? (
         <div className="text-center py-16">
           <GraduationCap className="w-16 h-16 text-gray-600 mx-auto mb-4" />
@@ -146,6 +169,7 @@ export default function MyDegrees() {
               }`}
               onClick={() => setSelectedDegree(deg.id)}
             >
+              {/* Card content unchanged */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
@@ -204,7 +228,7 @@ export default function MyDegrees() {
         </div>
       )}
 
-      {/* Degree Modal (supports issued & revoked) */}
+      {/* Modal (unchanged) */}
       <AnimatePresence>
         {activeDegree && (
           <motion.div
@@ -221,7 +245,6 @@ export default function MyDegrees() {
               className="w-full max-w-3xl max-h-[90vh] overflow-y-auto"
               onClick={e => e.stopPropagation()}
             >
-              {/* Certificate / Revoked Panel */}
               {activeDegree.status === 'issued' ? (
                 <div
                   className="bg-gradient-to-b from-amber-50 to-amber-100 rounded-xl p-1 shadow-2xl"
@@ -241,7 +264,6 @@ export default function MyDegrees() {
                 </div>
               )}
 
-              {/* Revoked Warning (also shown inside issued modal if status revoked – but above covers it) */}
               {activeDegree.status === 'revoked' && (
                 <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mt-4">
                   <p className="text-red-400 font-semibold">Degree Revoked</p>
@@ -249,7 +271,6 @@ export default function MyDegrees() {
                 </div>
               )}
 
-              {/* Blockchain Information Panel */}
               <div className="bg-gray-900 rounded-xl p-4 mt-4">
                 <h4 className="font-semibold mb-3">Blockchain Information</h4>
                 <div className="space-y-2 text-sm">
@@ -272,7 +293,6 @@ export default function MyDegrees() {
                 </div>
               </div>
 
-              {/* Action Buttons Footer */}
               <div className="flex flex-wrap gap-3 mt-4 justify-center">
                 {activeDegree.status === 'issued' && (
                   <button
@@ -289,7 +309,6 @@ export default function MyDegrees() {
                   <X className="w-4 h-4" /> Close
                 </button>
               </div>
-
             </motion.div>
           </motion.div>
         )}
