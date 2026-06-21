@@ -1,18 +1,70 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useStore } from '../useStore';
 import {
   Search, Eye,
   UserCheck, UserX, FileText
 } from 'lucide-react';
+import api from '@/api/api';
+
+interface Student {
+  id: string;
+  name: string;
+  email: string;
+  registrationNumber: string;
+  department?: string;
+  verificationStatus: string;
+  documents?: any[];
+  cnicNumber?: string;
+  fatherName?: string;
+  program?: string;
+  cgpa?: number;
+  createdAt: string;
+}
 
 export default function StudentsManagement() {
-  const { users, approveStudent, rejectStudent } = useStore();
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<string | null>(null);
 
-  const students = users.filter(u => u.role === 'student');
+  const fetchStudents = async () => {
+    try {
+      setLoading(true);
+      // Assuming backend has GET /users?role=student
+      const data = await api.request<{ users: Student[] }>('/users?role=student');
+      setStudents(data.users || []);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load students');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStudents();
+  }, []);
+
+  const handleApprove = async (id: string) => {
+    try {
+      await api.request(`/users/${id}/approve`, { method: 'PATCH' });
+      await fetchStudents();
+    } catch (err: any) {
+      alert(`Approval failed: ${err.message}`);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      await api.request(`/users/${id}/reject`, { method: 'PATCH' });
+      await fetchStudents();
+    } catch (err: any) {
+      alert(`Rejection failed: ${err.message}`);
+    }
+  };
+
   const filtered = students.filter(s => {
     if (filter !== 'all' && s.verificationStatus !== filter) return false;
     if (search && !s.name.toLowerCase().includes(search.toLowerCase()) && !s.registrationNumber.includes(search)) return false;
@@ -33,6 +85,23 @@ export default function StudentsManagement() {
     const s = map[status] || map.pending;
     return <span className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${s.color}`}>{s.label}</span>;
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-6 text-red-400">
+        <p>{error}</p>
+        <button onClick={fetchStudents} className="mt-2 text-sm underline">Retry</button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -112,10 +181,10 @@ export default function StudentsManagement() {
                       </button>
                       {s.verificationStatus !== 'approved' && s.verificationStatus !== 'rejected' && (
                         <>
-                          <button onClick={() => approveStudent(s.id)} className="p-1.5 hover:bg-green-900/30 rounded-lg transition" title="Approve">
+                          <button onClick={() => handleApprove(s.id)} className="p-1.5 hover:bg-green-900/30 rounded-lg transition" title="Approve">
                             <UserCheck className="w-4 h-4 text-green-400" />
                           </button>
-                          <button onClick={() => rejectStudent(s.id)} className="p-1.5 hover:bg-red-900/30 rounded-lg transition" title="Reject">
+                          <button onClick={() => handleReject(s.id)} className="p-1.5 hover:bg-red-900/30 rounded-lg transition" title="Reject">
                             <UserX className="w-4 h-4 text-red-400" />
                           </button>
                         </>
@@ -197,10 +266,10 @@ export default function StudentsManagement() {
 
           {selected.verificationStatus !== 'approved' && selected.verificationStatus !== 'rejected' && (
             <div className="flex gap-3 mt-6">
-              <button onClick={() => { approveStudent(selected.id); setSelectedStudent(null); }} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 rounded-xl text-sm font-medium transition flex items-center gap-2 text-white">
+              <button onClick={() => { handleApprove(selected.id); setSelectedStudent(null); }} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 rounded-xl text-sm font-medium transition flex items-center gap-2 text-white">
                 <UserCheck className="w-4 h-4" /> Approve Student
               </button>
-              <button onClick={() => { rejectStudent(selected.id); setSelectedStudent(null); }} className="px-6 py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-xl text-sm font-medium text-red-400 transition flex items-center gap-2">
+              <button onClick={() => { handleReject(selected.id); setSelectedStudent(null); }} className="px-6 py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-xl text-sm font-medium text-red-400 transition flex items-center gap-2">
                 <UserX className="w-4 h-4" /> Reject
               </button>
             </div>

@@ -1,20 +1,84 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useStore } from '../useStore';
 import {
   CheckCircle2, Clock, Link2, AlertTriangle,
   Loader2, XCircle, Shield
 } from 'lucide-react';
+import api, { degreesApi } from '@/api/api';
+
+interface Degree {
+  id: string;
+  degreeTitle: string;
+  studentName: string;
+  registrationNumber: string;
+  department: string;
+  cgpa: number;
+  graduationYear: string;
+  fraudScore: number;
+  status: 'pending' | 'processing' | 'approved' | 'issued' | 'revoked';
+  blockchainHash?: string;
+  degreeId?: string;
+}
 
 export default function DegreeManagement() {
-  const { degreeApplications, approveDegree, issueDegree, revokeDegree } = useStore();
+  const [degrees, setDegrees] = useState<Degree[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
 
-  const handleIssueDegree = async (id: string) => {
-    setProcessing(id);
-    await new Promise(r => setTimeout(r, 2000));
-    issueDegree(id);
-    setProcessing(null);
+  const fetchDegrees = async () => {
+    try {
+      setLoading(true);
+      const data = await degreesApi.list();
+      setDegrees(data.degrees || []);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load degrees');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDegrees();
+  }, []);
+
+  const handleApprove = async (id: string) => {
+    try {
+      setProcessing(id);
+      await degreesApi.update(id, { status: 'approved' });
+      await fetchDegrees();
+    } catch (err: any) {
+      alert(`Approval failed: ${err.message}`);
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const handleIssue = async (id: string) => {
+    try {
+      setProcessing(id);
+      // Assuming backend has a route: POST /degrees/:id/issue
+      await api.request(`/degrees/${id}/issue`, { method: 'POST' });
+      await fetchDegrees();
+    } catch (err: any) {
+      alert(`Issuance failed: ${err.message}`);
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const handleRevoke = async (id: string) => {
+    if (!confirm('Revoke this degree attestation?')) return;
+    try {
+      setProcessing(id);
+      await degreesApi.revoke(id);
+      await fetchDegrees();
+    } catch (err: any) {
+      alert(`Revocation failed: ${err.message}`);
+    } finally {
+      setProcessing(null);
+    }
   };
 
   const statusConfig: Record<string, { icon: React.ElementType; color: string; bgColor: string }> = {
@@ -25,6 +89,23 @@ export default function DegreeManagement() {
     revoked: { icon: XCircle, color: 'text-red-400', bgColor: 'bg-red-400/10 border-red-400/20' },
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-6 text-red-400">
+        <p>{error}</p>
+        <button onClick={fetchDegrees} className="mt-2 text-sm underline">Retry</button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -33,7 +114,7 @@ export default function DegreeManagement() {
       </div>
 
       <div className="space-y-4">
-        {degreeApplications.map(deg => {
+        {degrees.map(deg => {
           const config = statusConfig[deg.status] || statusConfig.pending;
           const isProcessingThis = processing === deg.id;
 
@@ -70,15 +151,16 @@ export default function DegreeManagement() {
 
                   {deg.status === 'pending' && (
                     <button
-                      onClick={() => approveDegree(deg.id)}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition flex items-center gap-1.5 text-white"
+                      onClick={() => handleApprove(deg.id)}
+                      disabled={isProcessingThis}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition flex items-center gap-1.5 text-white disabled:opacity-50"
                     >
                       <CheckCircle2 className="w-4 h-4" /> Approve
                     </button>
                   )}
                   {deg.status === 'approved' && (
                     <button
-                      onClick={() => handleIssueDegree(deg.id)}
+                      onClick={() => handleIssue(deg.id)}
                       disabled={isProcessingThis}
                       className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-lg text-sm font-medium transition flex items-center gap-1.5 disabled:opacity-50 text-white"
                     >
@@ -91,8 +173,9 @@ export default function DegreeManagement() {
                   )}
                   {deg.status === 'issued' && (
                     <button
-                      onClick={() => revokeDegree(deg.id)}
-                      className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg text-sm font-medium text-red-400 transition flex items-center gap-1.5"
+                      onClick={() => handleRevoke(deg.id)}
+                      disabled={isProcessingThis}
+                      className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 rounded-lg text-sm font-medium text-red-400 transition flex items-center gap-1.5 disabled:opacity-50"
                     >
                       <AlertTriangle className="w-4 h-4" /> Revoke
                     </button>

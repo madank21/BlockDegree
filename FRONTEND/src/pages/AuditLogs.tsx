@@ -1,12 +1,40 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useStore } from '../useStore';
-import { Search } from 'lucide-react';
+import { Search, Loader2 } from 'lucide-react';
+import api from '@/api/api';
+
+interface AuditLog {
+  id: string;
+  action: string;
+  details: string;
+  category: string;
+  userName: string;
+  timestamp: string;
+}
 
 export default function AuditLogs() {
-  const { auditLogs } = useStore();
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
+
+  const fetchLogs = async () => {
+    try {
+      setLoading(true);
+      const data = await api.request<{ logs: AuditLog[] }>('/audit-logs');
+      setLogs(data.logs || []);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load audit logs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
+  }, []);
 
   const categories = ['all', 'auth', 'verification', 'degree', 'blockchain', 'fraud', 'admin'];
   const categoryColors: Record<string, string> = {
@@ -18,11 +46,28 @@ export default function AuditLogs() {
     admin: 'bg-yellow-400',
   };
 
-  const filtered = [...auditLogs].reverse().filter(log => {
+  const filtered = [...logs].reverse().filter(log => {
     if (filter !== 'all' && log.category !== filter) return false;
     if (search && !log.action.toLowerCase().includes(search.toLowerCase()) && !log.details.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-6 text-red-400">
+        <p>{error}</p>
+        <button onClick={fetchLogs} className="mt-2 text-sm underline">Retry</button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
