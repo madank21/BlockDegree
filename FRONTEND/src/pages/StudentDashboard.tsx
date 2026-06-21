@@ -13,15 +13,22 @@ export default function StudentDashboard({ onNavigate }: Props) {
   const { currentUser, degreeApplications } = useStore();
   if (!currentUser) return null;
 
+  // Safe fallback for verificationStatus
+  const status = currentUser.verificationStatus ?? 'pending';
+
+  // Helper to format status for display
+  const formatStatus = (s: string) =>
+    s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
   const myDegrees = degreeApplications.filter(d => d.studentId === currentUser.id);
   const issuedDegrees = myDegrees.filter(d => d.status === 'issued');
 
   const verificationSteps = [
     { label: 'Account Created', done: true, icon: CheckCircle2 },
-    { label: 'Documents Uploaded', done: ['documents_uploaded', 'ocr_verified', 'face_verified', 'approved'].includes(currentUser.verificationStatus), icon: FileText },
-    { label: 'OCR Verified', done: ['ocr_verified', 'face_verified', 'approved'].includes(currentUser.verificationStatus), icon: FileText },
-    { label: 'Face Verified', done: ['face_verified', 'approved'].includes(currentUser.verificationStatus), icon: ScanFace },
-    { label: 'Approved', done: currentUser.verificationStatus === 'approved', icon: Shield },
+    { label: 'Documents Uploaded', done: ['documents_uploaded', 'ocr_verified', 'face_verified', 'approved'].includes(status), icon: FileText },
+    { label: 'OCR Verified', done: ['ocr_verified', 'face_verified', 'approved'].includes(status), icon: FileText },
+    { label: 'Face Verified', done: ['face_verified', 'approved'].includes(status), icon: ScanFace },
+    { label: 'Approved', done: status === 'approved', icon: Shield },
   ];
 
   const statusColor: Record<string, string> = {
@@ -33,17 +40,19 @@ export default function StudentDashboard({ onNavigate }: Props) {
     rejected: 'text-red-400 bg-red-400/10 border-red-400/20',
   };
 
+  const statusClass = statusColor[status] ?? 'text-gray-400 bg-gray-800/50 border-gray-700';
+
   const cards = [
     {
       title: 'Verification Status',
-      value: currentUser.verificationStatus.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-      icon: currentUser.verificationStatus === 'approved' ? CheckCircle2 : currentUser.verificationStatus === 'rejected' ? XCircle : Clock,
+      value: formatStatus(status),
+      icon: status === 'approved' ? CheckCircle2 : status === 'rejected' ? XCircle : Clock,
       gradient: 'from-blue-600 to-cyan-600',
-      color: currentUser.verificationStatus === 'approved' ? 'text-green-400' : currentUser.verificationStatus === 'rejected' ? 'text-red-400' : 'text-yellow-400',
+      color: status === 'approved' ? 'text-green-400' : status === 'rejected' ? 'text-red-400' : 'text-yellow-400',
     },
     {
       title: 'Documents',
-      value: currentUser.documents?.length || 0,
+      value: currentUser.documents?.length ?? 0,
       icon: FileText,
       gradient: 'from-purple-600 to-pink-600',
       color: 'text-purple-400',
@@ -71,11 +80,13 @@ export default function StudentDashboard({ onNavigate }: Props) {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">Welcome, {currentUser.name} 👋</h1>
-            <p className="text-gray-400 mt-1">Registration #{currentUser.registrationNumber} • {currentUser.department || 'Department Pending'}</p>
+            <p className="text-gray-400 mt-1">
+              Registration #{currentUser.registrationNumber ?? 'N/A'} • {currentUser.department || 'Department Pending'}
+            </p>
           </div>
-          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium ${statusColor[currentUser.verificationStatus]}`}>
-            {currentUser.verificationStatus === 'approved' ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
-            {currentUser.verificationStatus.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium ${statusClass}`}>
+            {status === 'approved' ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+            {formatStatus(status)}
           </div>
         </div>
       </div>
@@ -125,7 +136,7 @@ export default function StudentDashboard({ onNavigate }: Props) {
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {currentUser.verificationStatus !== 'approved' && (
+        {status !== 'approved' && (
           <motion.button
             whileHover={{ scale: 1.02 }}
             onClick={() => onNavigate('documents')}
@@ -139,7 +150,7 @@ export default function StudentDashboard({ onNavigate }: Props) {
             </span>
           </motion.button>
         )}
-        {currentUser.verificationStatus !== 'approved' && (
+        {status !== 'approved' && (
           <motion.button
             whileHover={{ scale: 1.02 }}
             onClick={() => onNavigate('face-verify')}
@@ -153,7 +164,7 @@ export default function StudentDashboard({ onNavigate }: Props) {
             </span>
           </motion.button>
         )}
-        {currentUser.verificationStatus === 'approved' && (
+        {status === 'approved' && (
           <motion.button
             whileHover={{ scale: 1.02 }}
             onClick={() => onNavigate('apply-degree')}

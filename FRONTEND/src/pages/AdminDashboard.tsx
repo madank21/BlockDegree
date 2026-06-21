@@ -1,53 +1,89 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { useStore } from '../useStore';
 import {
   Users, GraduationCap, AlertTriangle, Link2, ClipboardList,
   CheckCircle2, Clock, Activity
 } from 'lucide-react';
-import { degreesApi, blockchainApi } from '@/api/api';
+import api from '@/api/api';
 
 interface Props {
   onNavigate: (page: string) => void;
 }
 
 export default function AdminDashboard({ onNavigate }: Props) {
-  // Store data – will be replaced by API calls once endpoints exist
-  const { users, degreeApplications, auditLogs, fraudReports } = useStore();
-
-  // API-fetched data
+  // State
+  const [students, setStudents] = useState<any[]>([]);
+  const [degreeApps, setDegreeApps] = useState<any[]>([]);
+  const [fraudReports, setFraudReports] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [issuedDegreesCount, setIssuedDegreesCount] = useState(0);
   const [totalAttestations, setTotalAttestations] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Derived
+  const verifiedStudents = students.filter(s => s.verificationStatus === 'approved');
+  const pendingStudents = students.filter(s => s.verificationStatus && s.verificationStatus !== 'approved' && s.verificationStatus !== 'rejected');
+  const pendingDegrees = degreeApps.filter(d => d.status === 'pending' || d.status === 'approved');
+  const unresolvedFraud = fraudReports.filter(f => !f.resolved);
 
   useEffect(() => {
-    const fetchCounts = async () => {
+    const fetchAll = async () => {
       try {
         setLoading(true);
-        const [degreesRes, totalRes] = await Promise.all([
-          degreesApi.list(),
-          blockchainApi.totalDegrees(),
+        setError(null);
+
+        // Use Promise.allSettled to avoid one failure breaking everything
+        const results = await Promise.allSettled([
+          api.get('/users?role=student'),
+          api.get('/degrees'), // adjust to your endpoint
+          api.get('/fraud-logs?resolved=false'),
+          api.get('/audit-logs?limit=8'),
+          api.get('/blockchain/total'), // or use blockchainApi
         ]);
-        // Assume degreesApi.list() returns all issued degrees
-        setIssuedDegreesCount(degreesRes.degrees?.length || 0);
-        setTotalAttestations(totalRes.total || 0);
-      } catch (err) {
-        console.error('Failed to fetch dashboard counts:', err);
+
+        // Handle each result
+        const [studentsRes, degreesRes, fraudRes, auditRes, blockchainRes] = results;
+
+        if (studentsRes.status === 'fulfilled') {
+          setStudents(studentsRes.value.data?.users || studentsRes.value.data || []);
+        } else {
+          console.warn('Failed to fetch students:', studentsRes.reason);
+          // Optionally use fallback data:
+          // setStudents([]);
+        }
+
+        if (degreesRes.status === 'fulfilled') {
+          const degrees = degreesRes.value.data?.degrees || degreesRes.value.data || [];
+          setDegreeApps(degrees);
+          const issued = degrees.filter((d: any) => d.status === 'issued').length;
+          setIssuedDegreesCount(issued);
+        }
+
+        if (fraudRes.status === 'fulfilled') {
+          setFraudReports(fraudRes.value.data?.reports || fraudRes.value.data || []);
+        }
+
+        if (auditRes.status === 'fulfilled') {
+          setAuditLogs(auditRes.value.data?.logs || auditRes.value.data || []);
+        }
+
+        if (blockchainRes.status === 'fulfilled') {
+          setTotalAttestations(blockchainRes.value.data?.total || 0);
+        }
+
+      } catch (err: any) {
+        console.error('Dashboard fetch error:', err);
+        setError('Failed to load dashboard data. Please check your connection.');
       } finally {
         setLoading(false);
       }
     };
-    fetchCounts();
+
+    fetchAll();
   }, []);
 
-  // Derived from store (will be replaced by API)
-  const students = users.filter(u => u.role === 'student');
-  const verifiedStudents = students.filter(s => s.verificationStatus === 'approved');
-  const pendingStudents = students.filter(s => s.verificationStatus !== 'approved' && s.verificationStatus !== 'rejected');
-  const pendingDegrees = degreeApplications.filter(d => d.status === 'pending' || d.status === 'approved');
-  const unresolvedFraud = fraudReports.filter(f => !f.resolved);
-  const recentLogs = [...auditLogs].reverse().slice(0, 8);
-
+  // Stats
   const stats = [
     { label: 'Total Students', value: students.length, icon: Users, gradient: 'from-blue-600 to-cyan-600', color: 'text-blue-400' },
     { label: 'Verified', value: verifiedStudents.length, icon: CheckCircle2, gradient: 'from-green-600 to-emerald-600', color: 'text-green-400' },
@@ -57,8 +93,24 @@ export default function AdminDashboard({ onNavigate }: Props) {
     { label: 'Attestations', value: loading ? '…' : totalAttestations, icon: Link2, gradient: 'from-indigo-600 to-blue-600', color: 'text-indigo-400' },
   ];
 
+  if (error) {
+    return (
+      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center">
+        <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+        <p className="text-red-400">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-3 px-4 py-2 bg-red-600/20 text-red-300 rounded-lg hover:bg-red-600/30 transition"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Admin Dashboard</h1>
@@ -89,7 +141,7 @@ export default function AdminDashboard({ onNavigate }: Props) {
         ))}
       </div>
 
-      {/* Grid: Pending Students + Pending Degrees */}
+      {/* Pending Students & Degrees */}
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Pending Students */}
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
@@ -99,7 +151,9 @@ export default function AdminDashboard({ onNavigate }: Props) {
             </h3>
             <button onClick={() => onNavigate('students')} className="text-xs text-blue-400 hover:text-blue-300 transition">View All</button>
           </div>
-          {pendingStudents.length === 0 ? (
+          {loading ? (
+            <p className="text-sm text-gray-500 text-center py-6">Loading...</p>
+          ) : pendingStudents.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-6">No pending verifications</p>
           ) : (
             <div className="space-y-3">
@@ -111,11 +165,11 @@ export default function AdminDashboard({ onNavigate }: Props) {
                     </div>
                     <div>
                       <p className="text-sm font-medium">{s.name}</p>
-                      <p className="text-xs text-gray-500">#{s.registrationNumber}</p>
+                      <p className="text-xs text-gray-500">#{s.studentId || s.id.slice(0, 8)}</p>
                     </div>
                   </div>
                   <span className="text-xs px-2 py-1 rounded bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 capitalize">
-                    {s.verificationStatus.replace(/_/g, ' ')}
+                    {s.verificationStatus?.replace(/_/g, ' ') || 'pending'}
                   </span>
                 </div>
               ))}
@@ -123,7 +177,7 @@ export default function AdminDashboard({ onNavigate }: Props) {
           )}
         </div>
 
-        {/* Pending Degree Applications */}
+        {/* Pending Degrees */}
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold flex items-center gap-2">
@@ -131,7 +185,9 @@ export default function AdminDashboard({ onNavigate }: Props) {
             </h3>
             <button onClick={() => onNavigate('degree-management')} className="text-xs text-blue-400 hover:text-blue-300 transition">View All</button>
           </div>
-          {pendingDegrees.length === 0 ? (
+          {loading ? (
+            <p className="text-sm text-gray-500 text-center py-6">Loading...</p>
+          ) : pendingDegrees.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-6">No pending degree applications</p>
           ) : (
             <div className="space-y-3">
@@ -163,23 +219,29 @@ export default function AdminDashboard({ onNavigate }: Props) {
           <button onClick={() => onNavigate('audit')} className="text-xs text-blue-400 hover:text-blue-300 transition">View All</button>
         </div>
         <div className="space-y-2">
-          {recentLogs.map(log => (
-            <div key={log.id} className="flex items-center gap-3 bg-gray-800/20 rounded-lg px-4 py-3">
-              <div className={`w-2 h-2 rounded-full shrink-0 ${
-                log.category === 'auth' ? 'bg-blue-400' :
-                log.category === 'verification' ? 'bg-purple-400' :
-                log.category === 'degree' ? 'bg-green-400' :
-                log.category === 'blockchain' ? 'bg-cyan-400' :
-                log.category === 'fraud' ? 'bg-red-400' :
-                'bg-gray-400'
-              }`} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{log.action}</p>
-                <p className="text-xs text-gray-500 truncate">{log.details}</p>
+          {loading ? (
+            <p className="text-sm text-gray-500 text-center py-6">Loading...</p>
+          ) : auditLogs.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">No recent activity</p>
+          ) : (
+            auditLogs.map(log => (
+              <div key={log.id} className="flex items-center gap-3 bg-gray-800/20 rounded-lg px-4 py-3">
+                <div className={`w-2 h-2 rounded-full shrink-0 ${
+                  log.category === 'auth' ? 'bg-blue-400' :
+                  log.category === 'verification' ? 'bg-purple-400' :
+                  log.category === 'degree' ? 'bg-green-400' :
+                  log.category === 'blockchain' ? 'bg-cyan-400' :
+                  log.category === 'fraud' ? 'bg-red-400' :
+                  'bg-gray-400'
+                }`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{log.action}</p>
+                  <p className="text-xs text-gray-500 truncate">{log.details}</p>
+                </div>
+                <span className="text-xs text-gray-500 whitespace-nowrap">{new Date(log.timestamp).toLocaleDateString()}</span>
               </div>
-              <span className="text-xs text-gray-500 whitespace-nowrap">{new Date(log.timestamp).toLocaleDateString()}</span>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>
