@@ -18,7 +18,7 @@ const degreeRoutes = require('./routes/degreeRoutes');
 const documentRoutes = require('./routes/documentRoutes');
 const verificationRoutes = require('./routes/verificationRoutes');
 const blockchainRoutes = require('./routes/blockchainRoutes');
-//const faceRoutes = require('./routes/faceRoutes');
+const faceRoutes = require('./routes/faceRoutes');
 const fraudRoutes = require('./routes/fraudRoutes');
 
 const adminRoutes = require('./routes/adminRoutes');
@@ -68,14 +68,14 @@ const authLimiter = rateLimit({
     message: 'Too many authentication attempts, please try again later.',
   },
 });
-
+// ─── Body Parsing ──────────────────────────────────────────────────────────────
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api/', globalLimiter);
 app.use('/api/v1/auth', authLimiter);
 app.use('/api/v1/admin', adminRoutes);  
 app.use('/api/v1/fraud', fraudRoutes);
-// ─── Body Parsing ──────────────────────────────────────────────────────────────
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 
 // ─── Compression ───────────────────────────────────────────────────────────────
 app.use(compression());
@@ -129,7 +129,7 @@ app.use('/api/v1/degrees', degreeRoutes);
 app.use('/api/v1/documents', documentRoutes);
 app.use('/api/v1/verification', verificationRoutes);
 app.use('/api/v1/blockchain', blockchainRoutes);
-//app.use('/api/v1/face', faceRoutes);
+app.use('/api/v1/face', faceRoutes);
 
 // ─── Error Handling ────────────────────────────────────────────────────────────
 app.use(notFound);

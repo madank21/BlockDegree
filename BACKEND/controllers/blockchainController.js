@@ -2,7 +2,7 @@ const { asyncHandler } = require('../middleware/errorMiddleware');
 const { sendSuccess, sendError } = require('../src/utils/response');
 const blockchainService = require('../services/blockchainService');
 const Degree = require('../models/Degree');
-const { supabaseAdmin } = require('../database/supabase');
+const { getSupabaseAdmin } = require('../database/supabase');   // ✅ FIXED
 const { logger } = require('../src/utils/logger');
 
 // ─── Get Network Info ──────────────────────────────────────────────────────────
@@ -43,6 +43,8 @@ const getTotalDegreesOnChain = asyncHandler(async (req, res) => {
 
 // ─── Get Blockchain Transactions ───────────────────────────────────────────────
 const getBlockchainTransactions = asyncHandler(async (req, res) => {
+  const supabaseAdmin = getSupabaseAdmin();   // ✅ get instance here
+
   const { page = 1, limit = 20, status } = req.query;
   const from = (parseInt(page) - 1) * parseInt(limit);
   const to = from + parseInt(limit) - 1;
@@ -75,7 +77,7 @@ const getBlockchainTransactions = asyncHandler(async (req, res) => {
   });
 });
 
-// ─── Re-register Degree on Blockchain (FIXED) ─────────────────────────────────
+// ─── Re-register Degree on Blockchain ─────────────────────────────────────────
 const reregisterDegree = asyncHandler(async (req, res) => {
   const { id } = req.params;
 

@@ -48,10 +48,24 @@ const sendNoContent = (res) => {
   return res.status(204).send();
 };
 
+// ---------- NEW: Missing HTTP status helpers ----------
+const sendUnauthorized = (res, message = 'Unauthorized') =>
+  sendError(res, message, 401);
+
+const sendForbidden = (res, message = 'Forbidden') =>
+  sendError(res, message, 403);
+
+const sendNotFound = (res, resource = 'Resource') =>
+  sendError(res, `${resource} not found`, 404);
+// ------------------------------------------------------
+
 module.exports = {
   sendSuccess,
   sendError,
   sendPaginated,
   sendCreated,
   sendNoContent,
+  sendUnauthorized,   // <-- newly added
+  sendForbidden,      // <-- newly added
+  sendNotFound,       // <-- newly added
 };
