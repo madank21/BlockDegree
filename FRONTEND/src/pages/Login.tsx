@@ -8,7 +8,6 @@ interface LoginProps {
 }
 
 export default function Login({ onNavigate }: LoginProps) {
-  // Use the store's login method (handles API call, token storage, audit logs)
   const { login } = useStore();
 
   const [email, setEmail] = useState('');
@@ -23,9 +22,21 @@ export default function Login({ onNavigate }: LoginProps) {
   ];
 
   const navigateByRole = (user: any) => {
-    if (user.role === 'admin') onNavigate('admin-dashboard');
-    else if (user.role === 'employer') onNavigate('employer-dashboard');
-    else onNavigate('dashboard');
+    console.log('🔍 navigateByRole called with user:', user);
+    console.log('👤 User role:', user?.role);
+
+    let targetPage = 'dashboard'; // default
+
+    if (user.role === 'admin') {
+      targetPage = 'admin-dashboard';
+    } else if (user.role === 'employer') {
+      targetPage = 'employer-dashboard';
+    } else {
+      targetPage = 'dashboard';
+    }
+
+    console.log(`➡️ Navigating to: ${targetPage}`);
+    onNavigate(targetPage);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,14 +44,21 @@ export default function Login({ onNavigate }: LoginProps) {
     setError('');
     setLoading(true);
 
+    console.log('🔐 Attempting login with email:', email);
+
     try {
       const user = await login(email, password);
+      console.log('✅ Login response user:', user);
+
       if (user) {
+        console.log('📋 User object:', user);
         navigateByRole(user);
       } else {
+        console.warn('⚠️ Login returned null user');
         setError('Invalid credentials. Please try again.');
       }
     } catch (err: any) {
+      console.error('❌ Login error:', err);
       setError(err.message || 'An error occurred during login.');
     } finally {
       setLoading(false);
@@ -51,14 +69,18 @@ export default function Login({ onNavigate }: LoginProps) {
     setEmail(demoEmail);
     setPassword('demo123');
     setLoading(true);
+    console.log('🚀 Demo login with:', demoEmail);
+
     try {
       const user = await login(demoEmail, 'demo123');
+      console.log('✅ Demo login user:', user);
       if (user) {
         navigateByRole(user);
       } else {
         setError('Demo login failed. Please try again.');
       }
     } catch (err: any) {
+      console.error('❌ Demo login error:', err);
       setError(err.message || 'Demo login failed.');
     } finally {
       setLoading(false);

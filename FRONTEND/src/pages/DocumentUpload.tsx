@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../useStore';
 import Tesseract from 'tesseract.js';
@@ -19,9 +19,34 @@ export default function DocumentUpload() {
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeUploadType, setActiveUploadType] = useState<string>('');
-  const [uploadedImages, setUploadedImages] = useState<Record<string, string>>({});
+  const [uploadedImages, setUploadedImages] = useState<Record<string, string>>(() => {
+    // Restore from sessionStorage on initial load
+    try {
+      const stored = sessionStorage.getItem('uploadedImages');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
   const [validatingDocId, setValidatingDocId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<any[]>(currentUser?.documents || []);
+
+  // Persist uploadedImages to sessionStorage whenever it changes
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('uploadedImages', JSON.stringify(uploadedImages));
+    } catch (e) {
+      // ignore quota errors
+    }
+  }, [uploadedImages]);
+
+  // Sync with currentUser.documents and merge with existing previews
+  useEffect(() => {
+    if (currentUser?.documents) {
+      setDocuments(currentUser.documents);
+      // If any document has a fileUrl (from server), we could use it, but we keep local previews.
+    }
+  }, [currentUser]);
 
   if (!currentUser) return null;
 
@@ -31,7 +56,7 @@ export default function DocumentUpload() {
     { type: 'certificate', label: 'Previous Certificate', desc: 'Intermediate or equivalent', icon: '📜', required: true },
   ] as const;
 
-  // --- Full implementation of YOLO analysis (from original) ---
+  // --- YOLO analysis (unchanged) ---
   const analyzeDocumentWithYOLO = async (imageData: string, docType: string): Promise<{ valid: boolean; detections: string[]; confidence: number }> => {
     return new Promise((resolve) => {
       const img = new Image();
@@ -132,7 +157,7 @@ export default function DocumentUpload() {
     });
   };
 
-  // --- Full OCR implementation ---
+  // --- OCR (unchanged) ---
   const performOCR = async (imageData: string): Promise<{ text: string; confidence: number }> => {
     try {
       const result = await Tesseract.recognize(imageData, 'eng', {
@@ -152,7 +177,7 @@ export default function DocumentUpload() {
     }
   };
 
-  // --- Full extraction implementation ---
+  // --- Data extraction (unchanged) ---
   const extractDataFromText = (text: string, docType: string): Record<string, string> => {
     const extracted: Record<string, string> = {};
     const cleanText = text.replace(/[^\x20-\x7E\n]/g, ' ');
@@ -239,8 +264,9 @@ export default function DocumentUpload() {
     reader.onload = async (event) => {
       const imageData = event.target?.result as string;
       
-      const docId = Math.random().toString(36).substr(2, 9);
-      setUploadedImages(prev => ({ ...prev, [docId]: imageData }));
+      // Temporary local id for image storage
+      const tempId = Math.random().toString(36).substr(2, 9);
+      setUploadedImages(prev => ({ ...prev, [tempId]: imageData }));
       
       const formData = new FormData();
       formData.append('document', file);
@@ -252,6 +278,15 @@ export default function DocumentUpload() {
       try {
         const uploadResult = await documentsApi.upload(formData);
         const backendDocId = uploadResult.documentId;
+        const fileUrl = uploadResult.fileUrl; // if backend returns a URL
+
+        // Move image from tempId to backendDocId, and store in sessionStorage
+        setUploadedImages(prev => {
+          const newState = { ...prev };
+          newState[backendDocId] = imageData;
+          delete newState[tempId];
+          return newState;
+        });
 
         const newDoc = {
           id: backendDocId,
@@ -260,11 +295,12 @@ export default function DocumentUpload() {
           uploadedAt: new Date().toISOString(),
           ocrStatus: 'processing' as const,
           yoloStatus: 'processing' as const,
-          fileUrl: imageData,
+          fileUrl: fileUrl || imageData, // keep as fallback
         };
         setDocuments(prev => [...prev, newDoc]);
         setUploading(null);
 
+        // --- YOLO ---
         setProcessing({ docId: backendDocId, stage: 'yolo' });
         const yoloAnalysis = await analyzeDocumentWithYOLO(imageData, activeUploadType);
         setYoloResult(prev => ({ ...prev, [backendDocId]: { valid: yoloAnalysis.valid, detections: yoloAnalysis.detections } }));
@@ -272,7 +308,13 @@ export default function DocumentUpload() {
           yoloStatus: yoloAnalysis.valid ? 'valid' : (yoloAnalysis.confidence > 50 ? 'suspicious' : 'fraudulent'),
           yoloDetections: yoloAnalysis.detections,
         });
+        setDocuments(prev => prev.map(doc =>
+          doc.id === backendDocId
+            ? { ...doc, yoloStatus: yoloAnalysis.valid ? 'valid' : (yoloAnalysis.confidence > 50 ? 'suspicious' : 'fraudulent') }
+            : doc
+        ));
 
+        // --- OCR ---
         setProcessing({ docId: backendDocId, stage: 'ocr' });
         setOcrProgress(0);
         const ocrData = await performOCR(imageData);
@@ -284,10 +326,22 @@ export default function DocumentUpload() {
           extractedData: extractedFields,
           ocrStatus: 'verified',
         });
+        setDocuments(prev => prev.map(doc =>
+          doc.id === backendDocId
+            ? { ...doc, ocrStatus: 'verified', extractedData: extractedFields, ocrText: ocrData.text, ocrConfidence: ocrData.confidence }
+            : doc
+        ));
 
+        // --- Validation ---
         setValidatingDocId(backendDocId);
         try {
-          await api.post(`/documents/${backendDocId}/validate`);
+          const validationRes = await api.post(`/documents/${backendDocId}/validate`);
+          const validationData = validationRes.data;
+          setDocuments(prev => prev.map(doc =>
+            doc.id === backendDocId
+              ? { ...doc, validationStatus: validationData.status, validationErrors: validationData.errors || [] }
+              : doc
+          ));
         } catch (err) {
           console.error('Validation error:', err);
         } finally {
@@ -315,7 +369,13 @@ export default function DocumentUpload() {
   const handleValidateDocument = async (docId: string) => {
     setValidatingDocId(docId);
     try {
-      await api.post(`/documents/${docId}/validate`);
+      const res = await api.post(`/documents/${docId}/validate`);
+      const data = res.data;
+      setDocuments(prev => prev.map(doc =>
+        doc.id === docId
+          ? { ...doc, validationStatus: data.status, validationErrors: data.errors || [] }
+          : doc
+      ));
     } catch (err) {
       console.error('Validation error:', err);
     } finally {
@@ -362,7 +422,6 @@ export default function DocumentUpload() {
     }
   };
 
-  // ---- JSX - same as before, but with null checks for processing ----
   return (
     <div className="space-y-6">
       <div>
@@ -385,7 +444,8 @@ export default function DocumentUpload() {
           const isProcessingThis = existingDoc && processing?.docId === existingDoc.id;
           const docOcrResult = existingDoc ? ocrResult[existingDoc.id] : null;
           const docYoloResult = existingDoc ? yoloResult[existingDoc.id] : null;
-          const docImage = existingDoc ? uploadedImages[existingDoc.id] : null;
+          // Use uploadedImages (from sessionStorage) or fileUrl from doc
+          const docImage = existingDoc ? (uploadedImages[existingDoc.id] || existingDoc.fileUrl) : null;
 
           return (
             <motion.div
@@ -410,7 +470,7 @@ export default function DocumentUpload() {
               {existingDoc ? (
                 <div className="space-y-3">
                   <div className="relative">
-                    {docImage && (
+                    {docImage ? (
                       <div className="relative group">
                         <img 
                           src={docImage} 
@@ -424,8 +484,7 @@ export default function DocumentUpload() {
                           <ZoomIn className="w-6 h-6 text-white" />
                         </button>
                       </div>
-                    )}
-                    {!docImage && (
+                    ) : (
                       <div className="flex items-center gap-2 bg-gray-800/50 rounded-lg p-3">
                         <FileImage className="w-5 h-5 text-blue-400" />
                         <div className="flex-1 min-w-0">
@@ -462,9 +521,9 @@ export default function DocumentUpload() {
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase">OCR</p>
                         <div className="flex items-center gap-1">
-                          {ocrStatusIcon(existingDoc.ocrStatus, existingDoc.id)}
+                          {ocrStatusIcon(existingDoc.ocrStatus || 'pending', existingDoc.id)}
                           <span className="text-xs capitalize">
-                            {isProcessingThis && processing?.stage === 'ocr' ? `${ocrProgress}%` : existingDoc.ocrStatus}
+                            {isProcessingThis && processing?.stage === 'ocr' ? `${ocrProgress}%` : existingDoc.ocrStatus || 'pending'}
                           </span>
                         </div>
                       </div>
@@ -474,8 +533,8 @@ export default function DocumentUpload() {
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase">Layout</p>
                         <div className="flex items-center gap-1">
-                          {yoloStatusIcon(existingDoc.yoloStatus, existingDoc.id)}
-                          <span className="text-xs capitalize">{existingDoc.yoloStatus}</span>
+                          {yoloStatusIcon(existingDoc.yoloStatus || 'processing', existingDoc.id)}
+                          <span className="text-xs capitalize">{existingDoc.yoloStatus || 'processing'}</span>
                         </div>
                       </div>
                     </div>
@@ -508,7 +567,7 @@ export default function DocumentUpload() {
                     </div>
                   )}
 
-                  {docOcrResult && existingDoc.extractedData && Object.keys(existingDoc.extractedData).length > 0 && (
+                  {existingDoc.extractedData && Object.keys(existingDoc.extractedData).length > 0 && (
                     <div className="bg-gray-800/30 rounded-lg p-3">
                       <p className="text-[10px] text-gray-500 uppercase mb-2">Extracted Data</p>
                       {Object.entries(existingDoc.extractedData).map(([key, val]) => (
@@ -602,6 +661,7 @@ export default function DocumentUpload() {
         })}
       </div>
 
+      {/* Preview Modal */}
       {previewImage && (
         <div 
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"

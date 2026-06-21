@@ -1,24 +1,28 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middleware/authMiddleware');
-const { authorizeAdmin } = require('../middleware/roleMiddleware');
-const {
-  getUsers,
-  approveUser,
-  rejectUser,
-} = require('../controllers/userController');
-const { paginationValidators, uuidParamValidator } = require('../src/utils/validators');
+const User = require('../models/User'); // adjust path as needed
 
-// All user routes require admin privileges
-router.use(authenticate, authorizeAdmin);
+// GET /users - list users with optional filters
+router.get('/', async (req, res) => {
+  try {
+    const { role, page = 1, limit = 10, search, isActive } = req.query;
 
-// GET /api/v1/users – list users with pagination and filters
-router.get('/', paginationValidators, getUsers);
+    // If role is provided, ensure it's a single string (not array)
+    const roleFilter = typeof role === 'string' ? role : undefined;
 
-// PATCH /api/v1/users/:id/approve
-router.patch('/:id/approve', ...uuidParamValidator(), approveUser);
+    const result = await User.findMany({
+      role: roleFilter,
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      search: search || undefined,
+      isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
+    });
 
-// PATCH /api/v1/users/:id/reject
-router.patch('/:id/reject', ...uuidParamValidator(), rejectUser);
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Failed to fetch users', details: error.message });
+  }
+});
 
 module.exports = router;

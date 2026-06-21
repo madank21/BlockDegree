@@ -23,6 +23,7 @@ const fraudRoutes = require('./routes/fraudRoutes');
 const userRoutes = require('./routes/userRoutes');
 const auditRoutes = require('./routes/auditRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+
 const app = express();
 
 // ─── Security Middleware ───────────────────────────────────────────────────────
@@ -41,9 +42,9 @@ app.use(helmet({
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use(cors({
   origin: [
-  "http://localhost:3000",
-  "http://localhost:5173"
-],
+    "http://localhost:3000",
+    "http://localhost:5173"
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
@@ -69,15 +70,14 @@ const authLimiter = rateLimit({
     message: 'Too many authentication attempts, please try again later.',
   },
 });
+
 // ─── Body Parsing ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// ─── Apply Rate Limiters (auth endpoints get tighter limits) ────────────────
 app.use('/api/', globalLimiter);
 app.use('/api/v1/auth', authLimiter);
-app.use('/api/v1/admin', adminRoutes);  
-app.use('/api/v1/fraud', fraudRoutes);
-app.use('/api/v1/users', userRoutes);
-app.use('/api/v1/audit-logs', auditRoutes);
 
 // ─── Compression ───────────────────────────────────────────────────────────────
 app.use(compression());
@@ -131,7 +131,11 @@ app.use('/api/v1/degrees', degreeRoutes);
 app.use('/api/v1/documents', documentRoutes);
 app.use('/api/v1/verification', verificationRoutes);
 app.use('/api/v1/blockchain', blockchainRoutes);
-//app.use('/api/v1/face', faceRoutes);
+// app.use('/api/v1/face', faceRoutes);   // uncomment when face routes are ready
+app.use('/api/v1/fraud', fraudRoutes);
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/audit-logs', auditRoutes);
+app.use('/api/v1/admin', adminRoutes);
 
 // ─── Error Handling ────────────────────────────────────────────────────────────
 app.use(notFound);

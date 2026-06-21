@@ -9,24 +9,44 @@ interface RegisterProps {
 }
 
 export default function Register({ onNavigate }: RegisterProps) {
-  const { setUser } = useStore();
+  const { setUser, currentUser } = useStore();
 
   const [name, setName] = useState('');
   const [regNo, setRegNo] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // ----- Validation helpers -----
   const emailValid = email.endsWith('@iqra.edu.pk');
   const emailHasRegNo = email.includes(`.${regNo}@`) && regNo.length > 0;
+
+  const isPasswordStrong = (pwd: string) => {
+    const minLength = 8;
+    const hasUpper = /[A-Z]/.test(pwd);
+    const hasLower = /[a-z]/.test(pwd);
+    const hasNumber = /[0-9]/.test(pwd);
+    const hasSpecial = /[^A-Za-z0-9]/.test(pwd);
+    return pwd.length >= minLength && hasUpper && hasLower && hasNumber && hasSpecial;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess(false);
 
+    // ---- Client-side validations ----
+    if (!name.trim()) {
+      setError('Full name is required.');
+      return;
+    }
+    if (!regNo.trim()) {
+      setError('Registration number is required.');
+      return;
+    }
     if (!emailValid) {
       setError('Please use an official @iqra.edu.pk email address.');
       return;
@@ -35,20 +55,28 @@ export default function Register({ onNavigate }: RegisterProps) {
       setError('Email must include your registration number (e.g., name.70618@iqra.edu.pk).');
       return;
     }
+    if (!isPasswordStrong(password)) {
+      setError(
+        'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character.'
+      );
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
 
     setLoading(true);
     try {
       const payload = {
-        name,
-        email,
-        registrationNumber: regNo,
+        name: name.trim(),
+        email: email.trim(),
+        registrationNumber: regNo.trim(),
         password,
-        role: 'student',
+        role: 'student', // role is fixed for this registration flow
       };
 
       const response = await authApi.register(payload);
-      
-      // ✅ response is directly { accessToken, refreshToken, user }
       const accessToken = response.accessToken;
       const user = response.user;
 
@@ -56,13 +84,30 @@ export default function Register({ onNavigate }: RegisterProps) {
         throw new Error('Invalid server response: missing token or user');
       }
 
+      // Store token and user
       setToken(accessToken);
       setUser(user);
+
+      console.log('[Register] User set in store:', user);
+      console.log('[Register] Current user from store after set:', currentUser);
+
       setSuccess(true);
-      setTimeout(() => onNavigate('dashboard'), 1500);
+
+      // Determine dashboard based on role
+      const role = user.role || 'student';
+      let dashboardPage = 'student-dashboard';
+      if (role === 'admin') dashboardPage = 'admin-dashboard';
+      else if (role === 'employer') dashboardPage = 'employer-dashboard';
+
+      console.log(`[Register] Navigating to: ${dashboardPage}`);
+
+      // Redirect after a short delay
+      setTimeout(() => {
+        onNavigate(dashboardPage);
+      }, 1500);
     } catch (err: any) {
       let message = err.message || 'Registration failed. Please try again.';
-      
+
       if (err.response?.data) {
         const serverData = err.response.data;
         if (serverData.errors && Array.isArray(serverData.errors)) {
@@ -73,7 +118,7 @@ export default function Register({ onNavigate }: RegisterProps) {
           message = serverData;
         }
       }
-      
+
       setError(message);
     } finally {
       setLoading(false);
@@ -126,8 +171,11 @@ export default function Register({ onNavigate }: RegisterProps) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Full Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Full Name</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Full Name <span className="text-red-400">*</span>
+            </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
@@ -141,8 +189,11 @@ export default function Register({ onNavigate }: RegisterProps) {
             </div>
           </div>
 
+          {/* Registration Number */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Registration Number</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Registration Number <span className="text-red-400">*</span>
+            </label>
             <div className="relative">
               <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
@@ -157,8 +208,11 @@ export default function Register({ onNavigate }: RegisterProps) {
             <p className="text-xs text-gray-500 mt-1">Your university registration number.</p>
           </div>
 
+          {/* Email */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Email Address</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Email Address <span className="text-red-400">*</span>
+            </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
@@ -173,10 +227,18 @@ export default function Register({ onNavigate }: RegisterProps) {
             {!emailValid && email.length > 0 && (
               <p className="text-xs text-red-400 mt-1">Must be an @iqra.edu.pk email.</p>
             )}
+            {emailValid && !emailHasRegNo && regNo.length > 0 && (
+              <p className="text-xs text-yellow-400 mt-1">
+                Email should contain your registration number (e.g., name.70618@iqra.edu.pk).
+              </p>
+            )}
           </div>
 
+          {/* Password */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Password</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Password <span className="text-red-400">*</span>
+            </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
@@ -186,12 +248,31 @@ export default function Register({ onNavigate }: RegisterProps) {
                 className="w-full pl-10 pr-4 py-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent"
                 placeholder="••••••••"
                 required
-                minLength={6}
+                minLength={8}
               />
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              At least 8 characters, with uppercase, lowercase, number and special character.
+              At least 8 characters with uppercase, lowercase, number, and special character.
             </p>
+          </div>
+
+          {/* Confirm Password */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Confirm Password <span className="text-red-400">*</span>
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent"
+                placeholder="••••••••"
+                required
+                minLength={8}
+              />
+            </div>
           </div>
 
           <button
