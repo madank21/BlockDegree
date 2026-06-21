@@ -285,7 +285,7 @@ export default function Landing({ onNavigate }: LandingProps) {
               { name: 'Solidity', desc: 'Smart Contracts', icon: '📝' },
               { name: 'React.js', desc: 'Frontend', icon: '⚛️' },
               { name: 'Node.js', desc: 'Backend', icon: '🟢' },
-              { name: 'MongoDB', desc: 'Database', icon: '🍃' },
+              { name: 'SupaBase', desc: 'Database', icon: '🍃' },
               { name: 'YOLOv8', desc: 'Document AI', icon: '👁️' },
               { name: 'DeepFace', desc: 'Face Recognition', icon: '🧑' },
               { name: 'Tesseract', desc: 'OCR Engine', icon: '📖' },

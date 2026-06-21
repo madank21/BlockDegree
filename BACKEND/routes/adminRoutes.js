@@ -3,12 +3,12 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const { authenticate } = require('../middleware/authMiddleware');
-const { authorize } = require('../middleware/roleMiddleware');
-const upload = require('../middleware/uploadMiddleware'); // if you have a multer setup
+const { authorizeAdmin } = require('../middleware/roleMiddleware');  // ✅ correct
+const { uploadImport } = require('../middleware/uploadMiddleware');   // ✅ correct
 
 // All routes require authentication and admin role
 router.use(authenticate);
-router.use(authorize('admin'));
+router.use(authorizeAdmin);   // ✅ middleware (no parentheses)
 
 // Stats & Integrity
 router.get('/stats', adminController.getStats);
@@ -21,9 +21,9 @@ router.post('/restore', adminController.restoreBackup);
 
 // Export & Import
 router.get('/export', adminController.exportData);
-router.post('/import', upload.single('data'), adminController.importData); // 'data' matches frontend field name
+router.post('/import', uploadImport.single('data'), adminController.importData);
 
-// Cleanup & Reset (use with extreme caution)
+// Cleanup & Reset
 router.delete('/cleanup', adminController.cleanupOldDocuments);
 router.delete('/reset', adminController.resetData);
 
