@@ -83,19 +83,30 @@ export async function issueDegreeOnChain(
   const degreeHash = await computeDegreeHash(input);
   const contract = await getWriteContract();
 
-  function issueDegree(
-  string memory _degreeId,           // 1
-  string memory _studentName,        // 2
-  string memory _registrationNumber, // 3
-  string memory _department,         // 4
-  string memory _program,            // 5
-  string memory _cgpa,               // 6  ← string, not number
-  string memory _graduationYear,     // 7  ← string, not number
-  string memory _degreeHash          // 8  ← hash goes LAST
-) public onlyOwner
+  // Convert numeric fields to strings because the Solidity function expects:
+  // issueDegree(string _degreeId, string _studentName, string _registrationNumber,
+  //            string _department, string _program, string _cgpa,
+  //            string _graduationYear, string _degreeHash)
+  const cgpaString = (input.cgpaX100 / 100).toFixed(2);     // e.g., "3.75"
+  const graduationYearString = input.graduationYear.toString();
+
+  // Call the contract (admissionYear is not used by this contract signature)
+  const tx = await contract.issueDegree(
+    input.degreeId,
+    input.studentName,
+    input.registrationNumber,
+    input.department,
+    input.program,
+    cgpaString,
+    graduationYearString,
+    degreeHash
+  );
 
   const receipt = await tx.wait(1);
   const provider = contract.runner?.provider as ethers.JsonRpcProvider;
+  if (!provider) {
+    throw new Error('No provider available on contract runner.');
+  }
   const block = await provider.getBlock(receipt.blockNumber);
   const timestamp = block?.timestamp ?? Math.floor(Date.now() / 1000);
 

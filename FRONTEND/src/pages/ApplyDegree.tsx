@@ -2,15 +2,17 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../useStore';
 import { GraduationCap, AlertCircle, CheckCircle2, Lock } from 'lucide-react';
+import api from '../api/api'; // adjust path if needed
 
 interface Props {
   onNavigate: (page: string) => void;
 }
 
 export default function ApplyDegree({ onNavigate }: Props) {
-  const { currentUser, applyForDegree } = useStore();
+  const { currentUser } = useStore(); // keep for user info
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     department: currentUser?.department || '',
@@ -38,22 +40,31 @@ export default function ApplyDegree({ onNavigate }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1500));
+    setError(null);
 
-    applyForDegree({
-      studentId: currentUser.id,
-      studentName: currentUser.name,
-      registrationNumber: currentUser.registrationNumber,
-      department: form.department,
-      program: form.program,
-      degreeTitle: form.degreeTitle || `Bachelor of Science in ${form.department}`,
-      cgpa: form.cgpa,
-      admissionYear: form.admissionYear,
-      graduationYear: form.graduationYear,
-    });
+    try {
+      // Prepare payload matching backend expected fields
+      const payload = {
+        studentId: currentUser.id,
+        studentName: currentUser.name,
+        registrationNumber: currentUser.registrationNumber,
+        department: form.department,
+        program: form.program,
+        degreeTitle: form.degreeTitle || `Bachelor of Science in ${form.department}`,
+        cgpa: form.cgpa,
+        admissionYear: form.admissionYear,
+        graduationYear: form.graduationYear,
+        // The backend might also expect 'studentEmail' or other fields; adjust accordingly
+      };
 
-    setLoading(false);
-    setSuccess(true);
+      await api.post('/degrees/', payload);
+      setSuccess(true);
+    } catch (err: any) {
+      console.error('Degree application error:', err);
+      setError(err.response?.data?.message || 'Failed to submit degree application. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!isApproved) {
@@ -192,6 +203,12 @@ export default function ApplyDegree({ onNavigate }: Props) {
             />
           </div>
         </div>
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-red-400 text-sm">
+            {error}
+          </div>
+        )}
 
         <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
           <div className="flex items-start gap-3">

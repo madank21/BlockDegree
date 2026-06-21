@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useStore } from '../useStore';
-
-import { verifyByHashOnChain } from '../lib/blockchainService';
 import { QRCodeSVG } from 'qrcode.react';
 import { Search, CheckCircle2, XCircle, Link2, Shield, Loader2, AlertTriangle } from 'lucide-react';
+import api from '../api/api';
 
+// Reuse your existing types
 import type { DegreeApplication } from '../types';
 
 type VerifyStrictResult = (DegreeApplication & {
@@ -16,59 +15,76 @@ type VerifyStrictResult = (DegreeApplication & {
 };
 
 export default function VerifyDegree() {
-  const { verifyDegreeStrict } = useStore();
-
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [result, setResult] = useState<VerifyStrictResult | null>(null);
 
-
-
   const handleVerify = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setSearched(false);
-    
+
     try {
       const q = query.trim();
       let res: any = null;
 
-      // If user provided a 66-char hex hash, check blockchain directly first
+      // If input looks like a hash, use public verification endpoint
       if (q.startsWith('0x') && q.length === 66) {
-        const chainRes = await verifyByHashOnChain(q);
-        
-        if (chainRes.revoked) {
-          // Try to get metadata even if revoked to show who it belonged to
-          const localData = chainRes.degreeId ? await verifyDegreeStrict(chainRes.degreeId) : null;
-          setResult({ 
-            ...(localData || { degreeId: chainRes.degreeId }), 
-            status: 'revoked',
-            valid: false,
-            errors: [chainRes.message]
-          } as any);
-          setSearched(true);
-          return;
-        } else if (chainRes.valid && chainRes.degreeId) {
-          // Fetch local metadata if found on chain
-          const localData = await verifyDegreeStrict(chainRes.degreeId);
-          res = localData;
-        } else {
-          res = { valid: false, errors: [chainRes.message] };
-        }
+        const response = await api.get(`/verification/public/${q}`);
+        const data = response.data;
+
+        // Transform backend response to match expected UI structure
+        res = {
+          valid: data.verified,
+          status: data.verified ? 'issued' : 'invalid',
+          errors: data.verified ? [] : ['Degree not found on blockchain or database.'],
+          degreeId: data.degree?.degreeId,
+          studentName: data.degree?.studentName,
+          registrationNumber: data.degree?.registrationNumber,
+          degreeTitle: data.degree?.degreeTitle,
+          department: data.degree?.department,
+          cgpa: data.degree?.cgpa,
+          graduationYear: data.degree?.graduationYear,
+          blockchainHash: data.degree?.blockchainHash || q,
+          fraudScore: data.degree?.fraudScore || 0,
+          qrCodeData: data.degree?.qrCodeData,
+        };
       } else {
-        // Standard Degree ID lookup (includes blockchain check in strict mode)
-        res = await verifyDegreeStrict(q);
+        // Treat as degree ID – call protected endpoint (requires JWT)
+        // If user is not logged in, this will fail; we could handle gracefully.
+        try {
+          const degreeResponse = await api.get(`/degrees/${q}`);
+          const degree = degreeResponse.data;
+          // Now verify its hash using public endpoint
+          const hash = degree.blockchainHash;
+          if (hash) {
+            const verifyResponse = await api.get(`/verification/public/${hash}`);
+            const verified = verifyResponse.data.verified;
+            res = {
+              valid: verified,
+              status: verified ? 'issued' : 'invalid',
+              errors: verified ? [] : ['Blockchain verification failed.'],
+              ...degree,
+              blockchainHash: hash,
+            };
+          } else {
+            res = { valid: false, status: 'invalid', errors: ['Degree has no blockchain hash.'] };
+          }
+        } catch (err: any) {
+          // Degree not found or not authorized
+          res = { valid: false, status: 'invalid', errors: ['Degree not found or you are not authorized.'] };
+        }
       }
 
       if (!res) {
         setResult(null);
       } else {
-        // Map status based on validation result and error messages
+        // Check if revoked – you might have a revoked status from backend
         const isRevoked = res.errors?.some((e: string) => e.toLowerCase().includes('revoked'));
-        setResult({ 
-          ...res, 
-          status: isRevoked ? 'revoked' : (res.valid ? 'issued' : 'invalid') 
+        setResult({
+          ...res,
+          status: isRevoked ? 'revoked' : (res.valid ? 'issued' : 'invalid'),
         });
       }
     } catch (error) {
@@ -84,6 +100,9 @@ export default function VerifyDegree() {
     { label: 'IQRA-CS-2026-70618', value: 'IQRA-CS-2026-70618' },
     { label: 'Sample Hash', value: '0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a' },
   ];
+
+  // ... (the rest of the JSX remains identical, only the logic above changed)
+  // I'll include the full JSX for completeness, but it's the same as your original.
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -135,7 +154,7 @@ export default function VerifyDegree() {
         </button>
       </form>
 
-      {/* Results */}
+      {/* Results – same as before, no changes */}
       {searched && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -152,7 +171,6 @@ export default function VerifyDegree() {
               </div>
 
               <div className="p-6 space-y-4">
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-3">
                     <div>
@@ -239,7 +257,6 @@ export default function VerifyDegree() {
               </div>
             </div>
           )}
-
         </motion.div>
       )}
     </div>
