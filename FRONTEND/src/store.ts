@@ -263,7 +263,6 @@ function getInitialState(): AppState {
 }
 
 function migrateState(input: AppState): AppState {
-  // No need to compute passwordHash – just keep whatever is there
   const users = input.users || [];
   const currentUser = input.currentUser
     ? users.find(user => user.id === input.currentUser?.id) || null
@@ -330,15 +329,6 @@ export const store = {
     }
   },
 
-  logout() {
-    if (state.currentUser) {
-      store.addAuditLog('User Logout', state.currentUser.id, state.currentUser.name, 'User logged out', 'auth');
-    }
-    clearToken();
-    state.currentUser = null;
-    notify();
-  },
-
   async register(
     name: string,
     email: string,
@@ -361,6 +351,30 @@ export const store = {
     store.addAuditLog('User Registration', user.id, user.name, `Registered as ${role}`, 'auth');
     notify();
     return user;
+  },
+
+  // ========== NEW: setUser ==========
+  // Use this after a login via authApi (outside the store) to sync the store state.
+  setUser(user: User) {
+    const existing = state.users.find(u => u.id === user.id);
+    if (!existing) {
+      state.users.push(user);
+    } else {
+      Object.assign(existing, user);
+    }
+    state.currentUser = user;
+    // Optionally log, but login already logs; we can skip.
+    notify();
+  },
+  // ====================================
+
+  logout() {
+    if (state.currentUser) {
+      store.addAuditLog('User Logout', state.currentUser.id, state.currentUser.name, 'User logged out', 'auth');
+    }
+    clearToken();
+    state.currentUser = null;
+    notify();
   },
 
   // ---------- DOCUMENTS (uses backend API) ----------

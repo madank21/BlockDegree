@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Mail, Lock, ArrowRight, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useStore } from '../useStore';
-import { authApi, setToken } from '../api/api'; // new import
 
 interface LoginProps {
   onNavigate: (page: string) => void;
 }
 
 export default function Login({ onNavigate }: LoginProps) {
-  const { login: storeLogin } = useStore(); // rename to avoid conflict
+  // Use the store's login method (handles API call, token storage, audit logs)
+  const { login } = useStore();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -21,30 +22,26 @@ export default function Login({ onNavigate }: LoginProps) {
     { email: 'hr@techcorp.com', role: 'Employer', color: 'green' },
   ];
 
+  const navigateByRole = (user: any) => {
+    if (user.role === 'admin') onNavigate('admin-dashboard');
+    else if (user.role === 'employer') onNavigate('employer-dashboard');
+    else onNavigate('dashboard');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const response = await authApi.login(email, password);
-      // response: { token, user }
-      setToken(response.token);
-      // Update the store with user data (adjust according to your store)
-      storeLogin(email, password); // if your store's login does API call, you can skip this; but we already called API, so we need to set user manually
-      // Better: storeLogin should accept user object, but we'll assume store has a setUser action
-      // For now, we call the store's login with credentials; it might re-call API? That would be duplicate.
-      // Instead, we can directly set user in store. We'll add a comment.
-      // Let's assume store has a setUser function; we'll use it.
-      // I'll use a placeholder: (window as any).__store?.setUser?.(response.user);
-      // But better: implement a setUser in useStore. For now, we'll just navigate.
-      const user = response.user;
-      // Navigate based on role
-      if (user.role === 'admin') onNavigate('admin-dashboard');
-      else if (user.role === 'employer') onNavigate('employer-dashboard');
-      else onNavigate('dashboard');
+      const user = await login(email, password);
+      if (user) {
+        navigateByRole(user);
+      } else {
+        setError('Invalid credentials. Please try again.');
+      }
     } catch (err: any) {
-      setError(err.message || 'Invalid credentials. Try a demo account below.');
+      setError(err.message || 'An error occurred during login.');
     } finally {
       setLoading(false);
     }
@@ -55,25 +52,145 @@ export default function Login({ onNavigate }: LoginProps) {
     setPassword('demo123');
     setLoading(true);
     try {
-      const response = await authApi.login(demoEmail, 'demo123');
-      setToken(response.token);
-      // update store and navigate similarly
-      const user = response.user;
-      if (user.role === 'admin') onNavigate('admin-dashboard');
-      else if (user.role === 'employer') onNavigate('employer-dashboard');
-      else onNavigate('dashboard');
+      const user = await login(demoEmail, 'demo123');
+      if (user) {
+        navigateByRole(user);
+      } else {
+        setError('Demo login failed. Please try again.');
+      }
     } catch (err: any) {
-      setError(err.message || 'Demo login failed');
+      setError(err.message || 'Demo login failed.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    // ... (JSX remains exactly the same, only event handlers changed)
-    // Keep the same JSX as provided; just ensure the button handlers call the new functions
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* ... rest unchanged ... */}
+      {/* Background effects */}
+      <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-transparent to-blue-900/20" />
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="bg-gray-900/80 backdrop-blur-xl border border-gray-800 rounded-2xl p-8 w-full max-w-md relative z-10"
+      >
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <div className="p-3 bg-purple-500/10 rounded-full border border-purple-500/20">
+              <Shield className="w-8 h-8 text-purple-400" />
+            </div>
+          </div>
+          <h1 className="text-2xl font-bold text-white">Welcome Back</h1>
+          <p className="text-gray-400 mt-1">Sign in to your BlockDegree account</p>
+        </div>
+
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center gap-2 text-red-400 text-sm"
+          >
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{error}</span>
+          </motion.div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Email</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent"
+                placeholder="you@example.com"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Password</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full pl-10 pr-12 py-2.5 bg-gray-800/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-transparent"
+                placeholder="••••••••"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>
+                Sign In <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="mt-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-700" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-gray-900 px-2 text-gray-500">Demo Accounts</span>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {demoAccounts.map((account) => (
+              <button
+                key={account.email}
+                onClick={() => handleDemoLogin(account.email)}
+                disabled={loading}
+                className={`p-3 rounded-lg border ${
+                  account.color === 'purple'
+                    ? 'border-purple-500/20 hover:border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10'
+                    : 'border-green-500/20 hover:border-green-500/40 bg-green-500/5 hover:bg-green-500/10'
+                } transition-colors text-sm text-gray-300 hover:text-white disabled:opacity-50`}
+              >
+                <div className="font-medium">{account.role}</div>
+                <div className="text-xs text-gray-500 truncate">{account.email}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <p className="mt-6 text-center text-sm text-gray-500">
+          Don't have an account?{' '}
+          <button
+            onClick={() => onNavigate('register')}
+            className="text-purple-400 hover:text-purple-300 transition-colors"
+          >
+            Register
+          </button>
+        </p>
+      </motion.div>
     </div>
   );
 }
