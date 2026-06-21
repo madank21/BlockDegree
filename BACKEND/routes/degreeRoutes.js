@@ -3,13 +3,14 @@ const router = express.Router();
 
 const {
   issueDegree,
-  getDegrees,                    // was getAllDegrees
+  getDegrees,
   getDegreeById,
-  getDegreeQR,                   // was getDegreeQRCode
-  updateDegree,                  // now exists
+  getDegreeQR,
+  updateDegree,
   revokeDegree,
   getDegreeStats,
-  getPublicCertificate,          // was getDegreePublic
+  getPublicCertificate,
+  issueExistingDegree,   // ← new controller method
 } = require('../controllers/degreeController');
 
 const { authenticate, optionalAuthenticate } = require('../middleware/authMiddleware');
@@ -33,10 +34,17 @@ router.get('/:id', ...uuidParamValidator(), getDegreeById);
 router.get('/:id/qr', ...uuidParamValidator(), getDegreeQR);
 
 // University and Admin only
-router.post('/', 
+router.post('/',
   authorizeUniversityOrAdmin,
   degreeCreateValidators,
   issueDegree
+);
+
+// ─── NEW: Issue an existing degree (change status to "issued") ──────────────
+router.post('/:id/issue',
+  authorizeUniversityOrAdmin,
+  ...uuidParamValidator(),
+  issueExistingDegree
 );
 
 router.patch('/:id',

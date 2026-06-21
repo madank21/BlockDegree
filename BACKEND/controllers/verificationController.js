@@ -22,7 +22,7 @@ const requestVerification = asyncHandler(async (req, res) => {
     return sendError(res, 'Degree not found.', 404);
   }
 
-  // FIX: Use status field instead of is_revoked
+  // Use status field
   if (degree.status === 'revoked') {
     return sendError(res, 'This degree has been revoked and cannot be verified.', 400);
   }
@@ -41,16 +41,16 @@ const requestVerification = asyncHandler(async (req, res) => {
   // Run blockchain verification asynchronously
   setImmediate(async () => {
     try {
-      const blockchainResult = await blockchainService.verifyDegree(degree.degree_hash);
+      const blockchainResult = await blockchainService.verifyDegree(degree.degreeHash);
 
       const verificationResult = {
         blockchain: blockchainResult,
         degree: {
-          title: degree.degree_title,
-          studentName: degree.student_name,
-          certificateNumber: degree.certificate_number,
-          graduationDate: degree.graduation_date,
-          institution: degree.institution?.institution_name || degree.institutionName,
+          title: degree.degreeTitle,
+          studentName: degree.studentName,
+          certificateNumber: degree.certificateNumber,
+          graduationDate: degree.graduationDate,
+          institution: degree.institutionName,
         },
         fraudCheck: {
           passed: true,
@@ -160,10 +160,14 @@ const getAllVerifications = asyncHandler(async (req, res) => {
 });
 
 // ─── Verify Degree by Hash (Public) ───────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// FIX: Return exactly the frontend‑expected shape:
+//   { valid: true, degreeDetails: {...}, blockchain: {...} }
+// ═══════════════════════════════════════════════════════════════════════════════
 const verifyDegreePublic = asyncHandler(async (req, res) => {
   const { hash } = req.params;
 
-  // Find degree by hash (now returns full degree data)
+  // Find degree by hash (now returns full camelCase data)
   const degree = await Degree.findByHash(hash);
   if (!degree) {
     return sendError(res, 'Degree not found on blockchain registry.', 404);
@@ -177,35 +181,42 @@ const verifyDegreePublic = asyncHandler(async (req, res) => {
     logger.warn('Blockchain verification error:', error.message);
   }
 
-  // FIX: Use status field instead of is_revoked
+  // Determine validity
   const isRevoked = degree.status === 'revoked' || blockchainData?.isRevoked || false;
   const isValid = blockchainData?.isValid && !isRevoked;
 
-  const result = {
-    isValid,
-    isRevoked,
-    degree: {
-      id: degree.id,
-      degree_title: degree.degree_title,
-      field_of_study: degree.field_of_study,
-      student_name: degree.student_name,
-      graduation_date: degree.graduation_date,
-      certificate_number: degree.certificate_number,
-      issue_date: degree.issue_date,
-      degree_hash: degree.degree_hash,
-      institution: degree.institution?.institution_name || degree.institutionName,
+  // Build frontend‑compatible response
+  const responseData = {
+    valid: isValid,
+    degreeDetails: {
+      degreeId: degree.id,
+      studentName: degree.studentName,
+      registrationNumber: degree.studentId,
+      degreeTitle: degree.degreeTitle,
+      department: degree.fieldOfStudy,
+      cgpa: degree.gpa,
+      graduationYear: degree.graduationDate,
+      // Additional useful fields (optional)
+      certificateNumber: degree.certificateNumber,
+      institution: degree.institutionName,
+      issuedBy: degree.issuedBy,
     },
-    blockchain: blockchainData || {
-      message: 'Blockchain data temporarily unavailable',
+    blockchain: {
+      txHash: degree.blockchainTxHash,
+      syncStatus: degree.blockchainSyncStatus,
+      ...(blockchainData && {
+        verified: blockchainData.isValid,
+        blockNumber: blockchainData.blockNumber,
+        timestamp: blockchainData.timestamp,
+      }),
     },
-    verifiedAt: new Date().toISOString(),
   };
 
   const statusMessage = isValid
     ? 'Degree is VALID and verified on blockchain'
     : 'Degree could NOT be verified';
 
-  return sendSuccess(res, result, statusMessage);
+  return sendSuccess(res, responseData, statusMessage);
 });
 
 // ─── Get Verification Stats ────────────────────────────────────────────────────
@@ -234,7 +245,7 @@ const retriggerVerification = asyncHandler(async (req, res) => {
   }
 
   try {
-    const blockchainResult = await blockchainService.verifyDegree(degree.degree_hash);
+    const blockchainResult = await blockchainService.verifyDegree(degree.degreeHash);
 
     const status = blockchainResult.isValid && !blockchainResult.isRevoked
       ? 'verified'

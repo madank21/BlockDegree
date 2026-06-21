@@ -12,7 +12,7 @@ const {
 } = require("../src/utils/response");
 const { logger } = require("../src/utils/logger");
 
-// POST /api/v1/degrees/issue
+// ─── POST /api/v1/degrees/issue ──────────────────────────────────────────────
 const issueDegree = asyncHandler(async (req, res) => {
   const { student_name, student_id, degree_title, field_of_study, graduation_date, gpa, honors, metadata, graduate_id, graduate_email } = req.body;
 
@@ -102,7 +102,46 @@ const issueDegree = asyncHandler(async (req, res) => {
   }, "Degree issuance initiated — blockchain minting in progress");
 });
 
-// GET /api/v1/degrees
+// ─── POST /api/v1/degrees/:id/issue (Issue an existing degree) ─────────────
+const issueExistingDegree = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // 1. Fetch the degree to ensure it exists
+  const degree = await Degree.findById(id);
+  if (!degree) {
+    return sendNotFound(res, "Degree");
+  }
+
+  // 2. Prevent re‑issuing if already issued
+  if (degree.status === "issued") {
+    return sendError(res, "Degree is already issued", 400);
+  }
+
+  // 3. Update the status to "issued"
+  //    Optionally set blockchainSyncStatus to 'queued' to trigger minting later.
+  const updatedDegree = await Degree.update(id, {
+    status: "issued",
+    // blockchainSyncStatus: "queued",   // uncomment if you have a background worker
+  });
+
+  // 4. (Optional) If you need to mint on the blockchain immediately:
+  //    await blockchainService.mintDegree(updatedDegree);
+
+  // 5. Audit log
+  await AuditLog.create({
+    action: "DEGREE_ISSUED",
+    actorId: req.user.id,
+    actorRole: req.user.role,
+    targetId: degree.id,
+    targetType: "degree",
+    details: { previousStatus: degree.status },
+    ipAddress: req.ip,
+  });
+
+  return sendSuccess(res, { degree: updatedDegree }, "Degree issued successfully");
+});
+
+// ─── GET /api/v1/degrees ──────────────────────────────────────────────────────
 const getDegrees = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, status, search } = req.query;
   const filter = {};
@@ -116,7 +155,7 @@ const getDegrees = asyncHandler(async (req, res) => {
   return sendPaginated(res, data, total, page, limit, "Degrees retrieved");
 });
 
-// GET /api/v1/degrees/:id
+// ─── GET /api/v1/degrees/:id ──────────────────────────────────────────────────
 const getDegreeById = asyncHandler(async (req, res) => {
   const degree = await Degree.findById(req.params.id);
   if (!degree) return sendNotFound(res, "Degree");
@@ -129,7 +168,7 @@ const getDegreeById = asyncHandler(async (req, res) => {
   return sendSuccess(res, { degree });
 });
 
-// GET /api/v1/degrees/:id/qr
+// ─── GET /api/v1/degrees/:id/qr ──────────────────────────────────────────────
 const getDegreeQR = asyncHandler(async (req, res) => {
   const degree = await Degree.findById(req.params.id);
   if (!degree) return sendNotFound(res, "Degree");
@@ -155,7 +194,7 @@ const getDegreeQR = asyncHandler(async (req, res) => {
   return sendSuccess(res, { qrCode: qrDataUrl, verificationUrl, certificateNumber: degree.certificateNumber || "PENDING_BATCH" });
 });
 
-// POST /api/v1/degrees/:id/revoke
+// ─── POST /api/v1/degrees/:id/revoke ─────────────────────────────────────────
 const revokeDegree = asyncHandler(async (req, res) => {
   const { reason } = req.body;
   const degree = await Degree.findById(req.params.id);
@@ -194,14 +233,14 @@ const revokeDegree = asyncHandler(async (req, res) => {
   return sendSuccess(res, { degree: revoked }, "Degree revoked successfully");
 });
 
-// GET /api/v1/degrees/stats
+// ─── GET /api/v1/degrees/stats ───────────────────────────────────────────────
 const getDegreeStats = asyncHandler(async (req, res) => {
   const institutionId = req.user.role === "university" ? (req.user.institution_id || req.user.id) : null;
   const stats = await Degree.getStats(institutionId);
   return sendSuccess(res, stats, "Statistics retrieved");
 });
 
-// GET /api/v1/degrees/public/cert/:certNumber
+// ─── GET /api/v1/degrees/public/cert/:certNumber ─────────────────────────────
 const getPublicCertificate = asyncHandler(async (req, res) => {
   const degree = await Degree.findByCertNumber(req.params.certNumber);
   if (!degree) return sendNotFound(res, "Certificate");
@@ -219,7 +258,7 @@ const getPublicCertificate = asyncHandler(async (req, res) => {
   });
 });
 
-// PATCH /api/v1/degrees/:id
+// ─── PATCH /api/v1/degrees/:id ───────────────────────────────────────────────
 const updateDegree = asyncHandler(async (req, res) => {
   const { gpa, honors, metadata } = req.body;
   const degree = await Degree.findById(req.params.id);
@@ -249,8 +288,10 @@ const updateDegree = asyncHandler(async (req, res) => {
   return sendSuccess(res, { degree: updatedDegree }, "Degree updated");
 });
 
+// ─── EXPORTS ──────────────────────────────────────────────────────────────────
 module.exports = {
   issueDegree,
+  issueExistingDegree,   // <-- new export
   getDegrees,
   getDegreeById,
   getDegreeQR,

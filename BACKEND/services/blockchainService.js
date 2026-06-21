@@ -235,9 +235,9 @@ class BlockchainService {
       const supabase = getSupabaseAdmin();
       await supabase.from('blockchain_transactions').insert([{
         tx_hash: txHash,
-        from_address: this.wallet.address,
-        contract_address: process.env.CONTRACT_ADDRESS,
-        function_name: 'issueDegree',
+        //from_address: this.wallet.address,
+        //contract_address: process.env.CONTRACT_ADDRESS,
+        //function_name: 'issueDegree',
         degree_id: degreeId,
         status: 'pending',
       }]);
