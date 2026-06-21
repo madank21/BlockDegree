@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 
 export default function FraudDetection() {
+  // TODO: Replace these store selectors with API calls once backend provides:
+  //       GET /api/v1/fraud/reports, GET /api/v1/users, GET /api/v1/applications
   const { fraudReports, users, degreeApplications } = useStore();
 
   const severityConfig = {

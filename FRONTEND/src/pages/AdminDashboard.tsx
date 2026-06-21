@@ -1,34 +1,61 @@
 import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
 import { useStore } from '../useStore';
 import {
   Users, GraduationCap, AlertTriangle, Link2, ClipboardList,
   CheckCircle2, Clock, Activity
 } from 'lucide-react';
+import { degreesApi, blockchainApi } from '@/api/api';
 
 interface Props {
   onNavigate: (page: string) => void;
 }
 
 export default function AdminDashboard({ onNavigate }: Props) {
-  const { users, degreeApplications, blockchainTransactions, auditLogs, fraudReports } = useStore();
+  // Store data – will be replaced by API calls once endpoints exist
+  const { users, degreeApplications, auditLogs, fraudReports } = useStore();
 
+  // API-fetched data
+  const [issuedDegreesCount, setIssuedDegreesCount] = useState(0);
+  const [totalAttestations, setTotalAttestations] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        setLoading(true);
+        const [degreesRes, totalRes] = await Promise.all([
+          degreesApi.list(),
+          blockchainApi.totalDegrees(),
+        ]);
+        // Assume degreesApi.list() returns all issued degrees
+        setIssuedDegreesCount(degreesRes.degrees?.length || 0);
+        setTotalAttestations(totalRes.total || 0);
+      } catch (err) {
+        console.error('Failed to fetch dashboard counts:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCounts();
+  }, []);
+
+  // Derived from store (will be replaced by API)
   const students = users.filter(u => u.role === 'student');
   const verifiedStudents = students.filter(s => s.verificationStatus === 'approved');
   const pendingStudents = students.filter(s => s.verificationStatus !== 'approved' && s.verificationStatus !== 'rejected');
-  const issuedDegrees = degreeApplications.filter(d => d.status === 'issued');
   const pendingDegrees = degreeApplications.filter(d => d.status === 'pending' || d.status === 'approved');
   const unresolvedFraud = fraudReports.filter(f => !f.resolved);
+  const recentLogs = [...auditLogs].reverse().slice(0, 8);
 
   const stats = [
     { label: 'Total Students', value: students.length, icon: Users, gradient: 'from-blue-600 to-cyan-600', color: 'text-blue-400' },
     { label: 'Verified', value: verifiedStudents.length, icon: CheckCircle2, gradient: 'from-green-600 to-emerald-600', color: 'text-green-400' },
-    { label: 'Degrees Issued', value: issuedDegrees.length, icon: GraduationCap, gradient: 'from-purple-600 to-pink-600', color: 'text-purple-400' },
+    { label: 'Degrees Issued', value: loading ? '…' : issuedDegreesCount, icon: GraduationCap, gradient: 'from-purple-600 to-pink-600', color: 'text-purple-400' },
     { label: 'Pending Apps', value: pendingDegrees.length, icon: Clock, gradient: 'from-yellow-600 to-orange-600', color: 'text-yellow-400' },
     { label: 'Fraud Alerts', value: unresolvedFraud.length, icon: AlertTriangle, gradient: 'from-red-600 to-rose-600', color: 'text-red-400' },
-    { label: 'Attestations', value: blockchainTransactions.length, icon: Link2, gradient: 'from-indigo-600 to-blue-600', color: 'text-indigo-400' },
+    { label: 'Attestations', value: loading ? '…' : totalAttestations, icon: Link2, gradient: 'from-indigo-600 to-blue-600', color: 'text-indigo-400' },
   ];
-
-  const recentLogs = [...auditLogs].reverse().slice(0, 8);
 
   return (
     <div className="space-y-6">
