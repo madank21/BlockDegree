@@ -2,9 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { Search, CheckCircle2, XCircle, Link2, Shield, Loader2, AlertTriangle } from 'lucide-react';
-import api from '../api/api';
-
-// Reuse your existing types
+import { verificationApi, degreesApi } from '../api/api';
 import type { DegreeApplication } from '../types';
 
 type VerifyStrictResult = (DegreeApplication & {
@@ -31,42 +29,36 @@ export default function VerifyDegree() {
 
       // If input looks like a hash, use public verification endpoint
       if (q.startsWith('0x') && q.length === 66) {
-        const response = await api.get(`/verification/public/${q}`);
-        const data = response.data;
-
-        // Transform backend response to match expected UI structure
+        const data = await verificationApi.verifyPublic(q);
+        // data shape: { valid: boolean, degreeDetails: {...}, blockchain: { confirmed, txHash } }
         res = {
-          valid: data.verified,
-          status: data.verified ? 'issued' : 'invalid',
-          errors: data.verified ? [] : ['Degree not found on blockchain or database.'],
-          degreeId: data.degree?.degreeId,
-          studentName: data.degree?.studentName,
-          registrationNumber: data.degree?.registrationNumber,
-          degreeTitle: data.degree?.degreeTitle,
-          department: data.degree?.department,
-          cgpa: data.degree?.cgpa,
-          graduationYear: data.degree?.graduationYear,
-          blockchainHash: data.degree?.blockchainHash || q,
-          fraudScore: data.degree?.fraudScore || 0,
-          qrCodeData: data.degree?.qrCodeData,
+          valid: data.valid,
+          status: data.valid ? 'issued' : 'invalid',
+          errors: data.valid ? [] : ['Degree not found on blockchain or database.'],
+          degreeId: data.degreeDetails?.degreeId,
+          studentName: data.degreeDetails?.studentName,
+          registrationNumber: data.degreeDetails?.registrationNumber,
+          degreeTitle: data.degreeDetails?.degreeTitle,
+          department: data.degreeDetails?.department,
+          cgpa: data.degreeDetails?.cgpa,
+          graduationYear: data.degreeDetails?.graduationYear,
+          blockchainHash: data.blockchain?.txHash || q,
+          fraudScore: data.degreeDetails?.fraudScore || 0,
+          qrCodeData: data.degreeDetails?.qrCodeData,
         };
       } else {
         // Treat as degree ID – call protected endpoint (requires JWT)
-        // If user is not logged in, this will fail; we could handle gracefully.
         try {
-          const degreeResponse = await api.get(`/degrees/${q}`);
-          const degree = degreeResponse.data;
-          // Now verify its hash using public endpoint
-          const hash = degree.blockchainHash;
-          if (hash) {
-            const verifyResponse = await api.get(`/verification/public/${hash}`);
-            const verified = verifyResponse.data.verified;
+          const degreeData = await degreesApi.getById(q);
+          const degree = degreeData.degree;
+          if (degree?.blockchainHash) {
+            const verifyData = await verificationApi.verifyPublic(degree.blockchainHash);
             res = {
-              valid: verified,
-              status: verified ? 'issued' : 'invalid',
-              errors: verified ? [] : ['Blockchain verification failed.'],
+              valid: verifyData.valid,
+              status: verifyData.valid ? 'issued' : 'invalid',
+              errors: verifyData.valid ? [] : ['Blockchain verification failed.'],
               ...degree,
-              blockchainHash: hash,
+              blockchainHash: degree.blockchainHash,
             };
           } else {
             res = { valid: false, status: 'invalid', errors: ['Degree has no blockchain hash.'] };
@@ -100,9 +92,6 @@ export default function VerifyDegree() {
     { label: 'IQRA-CS-2026-70618', value: 'IQRA-CS-2026-70618' },
     { label: 'Sample Hash', value: '0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a' },
   ];
-
-  // ... (the rest of the JSX remains identical, only the logic above changed)
-  // I'll include the full JSX for completeness, but it's the same as your original.
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -154,7 +143,7 @@ export default function VerifyDegree() {
         </button>
       </form>
 
-      {/* Results – same as before, no changes */}
+      {/* Results – unchanged JSX */}
       {searched && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}

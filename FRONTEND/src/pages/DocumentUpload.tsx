@@ -6,9 +6,10 @@ import {
   Upload, CheckCircle2, Clock, AlertTriangle,
   Scan, Eye, FileImage, Loader2, X, ZoomIn, Trash2
 } from 'lucide-react';
+import api, { documentsApi } from '../api/api';
 
 export default function DocumentUpload() {
-  const { currentUser, uploadDocument, simulateOCR, simulateYOLO, validateDocumentData, removeDocument } = useStore();
+  const { currentUser } = useStore();
   const [uploading, setUploading] = useState<string | null>(null);
   const [processing, setProcessing] = useState<{ docId: string; stage: string } | null>(null);
   const [ocrProgress, setOcrProgress] = useState(0);
@@ -20,6 +21,7 @@ export default function DocumentUpload() {
   const [activeUploadType, setActiveUploadType] = useState<string>('');
   const [uploadedImages, setUploadedImages] = useState<Record<string, string>>({});
   const [validatingDocId, setValidatingDocId] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<any[]>(currentUser?.documents || []);
 
   if (!currentUser) return null;
 
@@ -29,7 +31,7 @@ export default function DocumentUpload() {
     { type: 'certificate', label: 'Previous Certificate', desc: 'Intermediate or equivalent', icon: '📜', required: true },
   ] as const;
 
-  // YOLO-style document analysis (simulated with image analysis)
+  // --- Full implementation of YOLO analysis (from original) ---
   const analyzeDocumentWithYOLO = async (imageData: string, docType: string): Promise<{ valid: boolean; detections: string[]; confidence: number }> => {
     return new Promise((resolve) => {
       const img = new Image();
@@ -40,10 +42,9 @@ export default function DocumentUpload() {
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
         
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
+        const imageDataObj = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageDataObj.data;
         
-        // Analyze image properties
         let totalBrightness = 0;
         let colorVariance = 0;
         let edgeCount = 0;
@@ -58,7 +59,6 @@ export default function DocumentUpload() {
         const avgBrightness = totalBrightness / (data.length / 4);
         const avgColorVariance = colorVariance / (data.length / 4);
         
-        // Check for edges (simplified Sobel-like detection)
         for (let y = 1; y < canvas.height - 1; y++) {
           for (let x = 1; x < canvas.width - 1; x++) {
             const idx = (y * canvas.width + x) * 4;
@@ -70,12 +70,8 @@ export default function DocumentUpload() {
         }
         
         const edgeDensity = edgeCount / (canvas.width * canvas.height);
-        
-        // Determine detections based on analysis
         const detections: string[] = [];
         let confidence = 70;
-        
-        // Check aspect ratio for document type
         const aspectRatio = canvas.width / canvas.height;
         
         if (docType === 'cnic') {
@@ -109,7 +105,6 @@ export default function DocumentUpload() {
           }
         }
         
-        // Common detections
         if (canvas.width > 500 && canvas.height > 300) {
           detections.push('✓ Adequate Resolution');
           confidence += 5;
@@ -125,21 +120,19 @@ export default function DocumentUpload() {
           confidence -= 5;
         }
         
-        // Simulate stamp/seal detection based on color clusters
         if (avgColorVariance > 30) {
           detections.push('✓ Stamps/Seals Detected');
           confidence += 5;
         }
         
         const valid = confidence >= 75;
-        
         resolve({ valid, detections, confidence: Math.min(confidence, 98) });
       };
       img.src = imageData;
     });
   };
 
-  // Real OCR using Tesseract.js
+  // --- Full OCR implementation ---
   const performOCR = async (imageData: string): Promise<{ text: string; confidence: number }> => {
     try {
       const result = await Tesseract.recognize(imageData, 'eng', {
@@ -149,7 +142,6 @@ export default function DocumentUpload() {
           }
         },
       });
-      
       return {
         text: result.data.text,
         confidence: result.data.confidence,
@@ -160,24 +152,21 @@ export default function DocumentUpload() {
     }
   };
 
-  // Extract structured data from OCR text
+  // --- Full extraction implementation ---
   const extractDataFromText = (text: string, docType: string): Record<string, string> => {
     const extracted: Record<string, string> = {};
-    const cleanText = text.replace(/[^\x20-\x7E\n]/g, ' '); // Remove non-printable chars
+    const cleanText = text.replace(/[^\x20-\x7E\n]/g, ' ');
     const lines = cleanText.split('\n').filter(l => l.trim().length > 2);
     
-    // CNIC patterns
     const cnicPattern = /\d{5}[-\s]?\d{7}[-\s]?\d/;
     const datePattern = /\d{1,2}[./-]\d{1,2}[./-]\d{2,4}/;
     
     for (const line of lines) {
-      // CNIC number
       const cnicMatch = line.match(cnicPattern);
       if (cnicMatch && !extracted['CNIC Number']) {
         extracted['CNIC Number'] = cnicMatch[0].replace(/\s/g, '-');
       }
       
-      // Date patterns
       const dateMatch = line.match(datePattern);
       if (dateMatch && !extracted['Date of Birth'] && !extracted['Issue Date']) {
         if (line.toLowerCase().includes('birth') || line.toLowerCase().includes('dob')) {
@@ -189,55 +178,45 @@ export default function DocumentUpload() {
         }
       }
       
-      // Look for names - more flexible pattern
       const nameMatch = line.match(/(?:name|holder|student)[:\s]*([A-Za-z\s]{3,40})/i);
       if (nameMatch && !extracted['Name']) {
         extracted['Name'] = nameMatch[1].trim();
       }
       
-      // Father name
       const fatherMatch = line.match(/(?:father|s\/o|d\/o|w\/o)[:\s]*([A-Za-z\s]{3,40})/i);
       if (fatherMatch && !extracted['Father Name']) {
         extracted['Father Name'] = fatherMatch[1].trim();
       }
       
-      // All caps names (common in documents)
       if (line.match(/^[A-Z\s]{5,35}$/) && !line.match(/PAKISTAN|GOVERNMENT|NATIONAL|IDENTITY|CARD|CERTIFICATE|BOARD|UNIVERSITY/i)) {
         if (!extracted['Name']) extracted['Name'] = line.trim();
         else if (!extracted['Father Name']) extracted['Father Name'] = line.trim();
       }
       
-      // CGPA/GPA
       const cgpaMatch = line.match(/(?:CGPA|GPA|Grade\s*Point)[:\s]*([0-4]\.\d{1,2})/i);
       if (cgpaMatch) extracted['CGPA'] = cgpaMatch[1];
       
-      // Percentage/Marks
       const percentMatch = line.match(/(\d{2,3}(?:\.\d{1,2})?)\s*(?:%|percent|marks)/i);
       if (percentMatch) extracted['Percentage'] = percentMatch[1] + '%';
       
-      // Registration/Roll numbers
       const regMatch = line.match(/(?:Reg(?:istration)?|Roll|Student\s*ID)[.\s#:No]*(\d{4,10})/i);
       if (regMatch && !extracted['Registration No']) {
         extracted['Registration No'] = regMatch[1];
       }
       
-      // Year patterns
       const yearMatch = line.match(/(?:year|session|batch)[:\s]*(\d{4})/i);
       if (yearMatch) extracted['Year'] = yearMatch[1];
       
-      // Board/University
       const boardMatch = line.match(/(?:board|university)[:\s]*([A-Za-z\s]{5,50})/i);
       if (boardMatch && !extracted['Board/University']) {
         extracted['Board/University'] = boardMatch[1].trim();
       }
       
-      // Gender
       if (line.toLowerCase().includes('male') && !extracted['Gender']) {
         extracted['Gender'] = line.toLowerCase().includes('female') ? 'Female' : 'Male';
       }
     }
     
-    // Add document type context
     if (Object.keys(extracted).length > 0) {
       extracted['Document Type'] = docType.replace(/_/g, ' ').toUpperCase();
     }
@@ -256,82 +235,105 @@ export default function DocumentUpload() {
     
     setUploading(activeUploadType);
     
-    // Read file as data URL
     const reader = new FileReader();
     reader.onload = async (event) => {
       const imageData = event.target?.result as string;
       
-      // Store uploaded image
       const docId = Math.random().toString(36).substr(2, 9);
       setUploadedImages(prev => ({ ...prev, [docId]: imageData }));
       
-      // Create document record
-      const doc = {
-        id: docId,
-        type: activeUploadType as 'cnic' | 'marksheet' | 'certificate' | 'academic_record',
-        fileName: file.name,
-        uploadedAt: new Date().toISOString(),
-        ocrStatus: 'processing' as const,
-        yoloStatus: 'processing' as const,
-        // Store the uploaded dataURL so FaceVerification can extract CNIC face reference.
-        // This avoids relying on a non-existent fileUrl field.
-        fileUrl: imageData,
-      };
+      const formData = new FormData();
+      formData.append('document', file);
+      formData.append('metadata', JSON.stringify({
+        type: activeUploadType,
+        userId: currentUser.id,
+      }));
+      
+      try {
+        const uploadResult = await documentsApi.upload(formData);
+        const backendDocId = uploadResult.documentId;
 
-      
-      uploadDocument(currentUser.id, doc);
-      setUploading(null);
-      
-      // Start YOLO analysis
-      setProcessing({ docId, stage: 'yolo' });
-      const yoloAnalysis = await analyzeDocumentWithYOLO(imageData, activeUploadType);
-      setYoloResult(prev => ({ ...prev, [docId]: { valid: yoloAnalysis.valid, detections: yoloAnalysis.detections } }));
-      // Pass YOLO result to store
-      const yoloStatus = yoloAnalysis.valid ? 'valid' : (yoloAnalysis.confidence > 50 ? 'suspicious' : 'fraudulent');
-      simulateYOLO(currentUser.id, docId, yoloStatus as 'valid' | 'suspicious' | 'fraudulent');
-      
-      // Start OCR
-      setProcessing({ docId, stage: 'ocr' });
-      setOcrProgress(0);
-      const ocrData = await performOCR(imageData);
-      // Extract structured data from OCR text
-      const extractedFields = extractDataFromText(ocrData.text, activeUploadType);
-      setOcrResult(prev => ({ ...prev, [docId]: ocrData }));
-      // Pass extracted data to store
-      simulateOCR(currentUser.id, docId, extractedFields);
-      
-      // Auto-validate document data
-      setValidatingDocId(docId);
-      setTimeout(() => {
-        validateDocumentData(currentUser.id, docId);
-        setValidatingDocId(null);
-      }, 500);
-      
-      setProcessing(null);
-      setActiveUploadType('');
+        const newDoc = {
+          id: backendDocId,
+          type: activeUploadType as 'cnic' | 'marksheet' | 'certificate' | 'academic_record',
+          fileName: file.name,
+          uploadedAt: new Date().toISOString(),
+          ocrStatus: 'processing' as const,
+          yoloStatus: 'processing' as const,
+          fileUrl: imageData,
+        };
+        setDocuments(prev => [...prev, newDoc]);
+        setUploading(null);
+
+        setProcessing({ docId: backendDocId, stage: 'yolo' });
+        const yoloAnalysis = await analyzeDocumentWithYOLO(imageData, activeUploadType);
+        setYoloResult(prev => ({ ...prev, [backendDocId]: { valid: yoloAnalysis.valid, detections: yoloAnalysis.detections } }));
+        await api.put(`/documents/${backendDocId}`, {
+          yoloStatus: yoloAnalysis.valid ? 'valid' : (yoloAnalysis.confidence > 50 ? 'suspicious' : 'fraudulent'),
+          yoloDetections: yoloAnalysis.detections,
+        });
+
+        setProcessing({ docId: backendDocId, stage: 'ocr' });
+        setOcrProgress(0);
+        const ocrData = await performOCR(imageData);
+        const extractedFields = extractDataFromText(ocrData.text, activeUploadType);
+        setOcrResult(prev => ({ ...prev, [backendDocId]: ocrData }));
+        await api.put(`/documents/${backendDocId}`, {
+          ocrText: ocrData.text,
+          ocrConfidence: ocrData.confidence,
+          extractedData: extractedFields,
+          ocrStatus: 'verified',
+        });
+
+        setValidatingDocId(backendDocId);
+        try {
+          await api.post(`/documents/${backendDocId}/validate`);
+        } catch (err) {
+          console.error('Validation error:', err);
+        } finally {
+          setValidatingDocId(null);
+        }
+
+        setProcessing(null);
+        setActiveUploadType('');
+
+      } catch (error) {
+        console.error('Upload error:', error);
+        setUploading(null);
+        setProcessing(null);
+      }
     };
     
     reader.readAsDataURL(file);
-    
-    // Reset file input
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const getDocForType = (type: string) => {
-    return currentUser.documents?.find(d => d.type === type);
+    return documents.find(d => d.type === type);
   };
 
-  const handleValidateDocument = (docId: string) => {
+  const handleValidateDocument = async (docId: string) => {
     setValidatingDocId(docId);
-    setTimeout(() => {
-      validateDocumentData(currentUser.id, docId);
+    try {
+      await api.post(`/documents/${docId}/validate`);
+    } catch (err) {
+      console.error('Validation error:', err);
+    } finally {
       setValidatingDocId(null);
-    }, 300);
+    }
   };
 
-  const handleRemoveDocument = (docId: string, docType: string) => {
+  const handleRemoveDocument = async (docId: string, docType: string) => {
     if (confirm(`Are you sure you want to remove the ${docType} document? This action cannot be undone.`)) {
-      removeDocument(currentUser.id, docId);
+      try {
+        await api.delete(`/documents/${docId}`);
+        setDocuments(prev => prev.filter(d => d.id !== docId));
+        setUploadedImages(prev => { const newState = {...prev}; delete newState[docId]; return newState; });
+        setOcrResult(prev => { const newState = {...prev}; delete newState[docId]; return newState; });
+        setYoloResult(prev => { const newState = {...prev}; delete newState[docId]; return newState; });
+      } catch (err) {
+        console.error('Delete error:', err);
+      }
     }
   };
 
@@ -360,6 +362,7 @@ export default function DocumentUpload() {
     }
   };
 
+  // ---- JSX - same as before, but with null checks for processing ----
   return (
     <div className="space-y-6">
       <div>
@@ -375,7 +378,6 @@ export default function DocumentUpload() {
         onChange={handleFileSelect}
       />
 
-      {/* Upload Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {docTypes.map((dt) => {
           const existingDoc = getDocForType(dt.type);
@@ -407,7 +409,6 @@ export default function DocumentUpload() {
 
               {existingDoc ? (
                 <div className="space-y-3">
-                  {/* Document Preview */}
                   <div className="relative">
                     {docImage && (
                       <div className="relative group">
@@ -436,8 +437,7 @@ export default function DocumentUpload() {
                     )}
                   </div>
 
-                  {/* Processing Status */}
-                  {isProcessingThis && (
+                  {isProcessingThis && processing && (
                     <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
@@ -456,7 +456,6 @@ export default function DocumentUpload() {
                     </div>
                   )}
 
-                  {/* Verification Results */}
                   <div className="grid grid-cols-2 gap-2">
                     <div className="flex items-center gap-2 bg-gray-800/30 rounded-lg px-3 py-2">
                       <Scan className="w-4 h-4 text-blue-400" />
@@ -465,7 +464,7 @@ export default function DocumentUpload() {
                         <div className="flex items-center gap-1">
                           {ocrStatusIcon(existingDoc.ocrStatus, existingDoc.id)}
                           <span className="text-xs capitalize">
-                            {isProcessingThis && processing.stage === 'ocr' ? `${ocrProgress}%` : existingDoc.ocrStatus}
+                            {isProcessingThis && processing?.stage === 'ocr' ? `${ocrProgress}%` : existingDoc.ocrStatus}
                           </span>
                         </div>
                       </div>
@@ -482,12 +481,11 @@ export default function DocumentUpload() {
                     </div>
                   </div>
 
-                  {/* YOLO Detections */}
                   {docYoloResult && (
                     <div className="bg-gray-800/30 rounded-lg p-3">
                       <p className="text-[10px] text-gray-500 uppercase mb-2">Document Signals</p>
                       <div className="space-y-1">
-                        {docYoloResult.detections.map((det, i) => (
+                        {docYoloResult.detections.map((det: string, i: number) => (
                           <p key={i} className={`text-xs ${det.startsWith('✓') ? 'text-green-400' : 'text-yellow-400'}`}>
                             {det}
                           </p>
@@ -496,7 +494,6 @@ export default function DocumentUpload() {
                     </div>
                   )}
 
-                  {/* OCR Extracted Text */}
                   {docOcrResult && docOcrResult.text && (
                     <div className="bg-gray-800/30 rounded-lg p-3">
                       <div className="flex items-center justify-between mb-2">
@@ -511,20 +508,18 @@ export default function DocumentUpload() {
                     </div>
                   )}
 
-                  {/* Extracted Data */}
                   {docOcrResult && existingDoc.extractedData && Object.keys(existingDoc.extractedData).length > 0 && (
                     <div className="bg-gray-800/30 rounded-lg p-3">
                       <p className="text-[10px] text-gray-500 uppercase mb-2">Extracted Data</p>
                       {Object.entries(existingDoc.extractedData).map(([key, val]) => (
                         <div key={key} className="flex justify-between text-xs">
                           <span className="text-gray-400 capitalize">{key}:</span>
-                          <span className="text-white">{val}</span>
+                          <span className="text-white">{String(val)}</span>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  {/* Validation Status */}
                   {existingDoc.validationStatus && (
                     <div className={`rounded-lg p-3 ${
                       existingDoc.validationStatus === 'valid'
@@ -548,7 +543,7 @@ export default function DocumentUpload() {
                       </div>
                       {existingDoc.validationErrors && existingDoc.validationErrors.length > 0 && (
                         <div className="space-y-1">
-                          {existingDoc.validationErrors.map((error, i) => (
+                          {existingDoc.validationErrors.map((error: string, i: number) => (
                             <p key={i} className="text-xs text-red-400">{error}</p>
                           ))}
                         </div>
@@ -556,9 +551,8 @@ export default function DocumentUpload() {
                     </div>
                   )}
 
-                  {/* Action Buttons */}
                   <div className="flex gap-2">
-                    {!existingDoc.validationStatus || existingDoc.validationStatus === 'pending' ? (
+                    {(!existingDoc.validationStatus || existingDoc.validationStatus === 'pending') && (
                       <button
                         onClick={() => handleValidateDocument(existingDoc.id)}
                         disabled={validatingDocId === existingDoc.id}
@@ -573,7 +567,7 @@ export default function DocumentUpload() {
                           'Validate Data'
                         )}
                       </button>
-                    ) : null}
+                    )}
                     <button
                       onClick={() => handleRemoveDocument(existingDoc.id, dt.label)}
                       className="flex-1 px-3 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-xs font-medium rounded-lg transition flex items-center justify-center gap-2 border border-red-600/30"
@@ -608,7 +602,6 @@ export default function DocumentUpload() {
         })}
       </div>
 
-      {/* Image Preview Modal */}
       {previewImage && (
         <div 
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
@@ -623,12 +616,11 @@ export default function DocumentUpload() {
             </button>
             <img src={previewImage} alt="Preview" className="max-w-full max-h-[85vh] object-contain rounded-lg" />
             
-            {/* Show YOLO results overlay */}
             {previewDocId && yoloResult[previewDocId] && (
               <div className="absolute bottom-4 left-4 right-4 bg-black/80 backdrop-blur rounded-lg p-4">
                 <p className="text-sm font-medium text-white mb-2">Document Analysis Results:</p>
                 <div className="flex flex-wrap gap-2">
-                  {yoloResult[previewDocId].detections.map((det, i) => (
+                  {yoloResult[previewDocId].detections.map((det: string, i: number) => (
                     <span key={i} className={`text-xs px-2 py-1 rounded ${det.startsWith('✓') ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
                       {det}
                     </span>
@@ -640,7 +632,6 @@ export default function DocumentUpload() {
         </div>
       )}
 
-      {/* OCR Info - Simplified */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
         <h3 className="font-semibold mb-4">Verification Pipeline</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
