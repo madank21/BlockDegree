@@ -144,22 +144,21 @@ const Degree = {
   },
 
   // ── Find by hash ──────────────────────────────────────────────────────────
+  // ═════════════════════════════════════════════════════════════════════════
+  // FIX: Return full degree data instead of minimal subset.
+  // ═════════════════════════════════════════════════════════════════════════
   async findByHash(degreeHash) {
     const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase
       .from(TABLE)
-      .select("id, degree_hash, status")
+      .select(DEFAULT_COLUMNS)          // ← now selects all columns
       .eq("degree_hash", degreeHash)
       .maybeSingle();
 
     if (error || !data) return null;
 
-    return {
-      id: data.id,
-      degreeHash: data.degree_hash,
-      status: data.status,
-    };
+    return mapDegreeFromDB(data);       // ← returns full DTO with camelCase keys
   },
 
   // ── Find by certificate number ────────────────────────────────────────────

@@ -22,7 +22,8 @@ const requestVerification = asyncHandler(async (req, res) => {
     return sendError(res, 'Degree not found.', 404);
   }
 
-  if (degree.is_revoked) {
+  // FIX: Use status field instead of is_revoked
+  if (degree.status === 'revoked') {
     return sendError(res, 'This degree has been revoked and cannot be verified.', 400);
   }
 
@@ -49,7 +50,7 @@ const requestVerification = asyncHandler(async (req, res) => {
           studentName: degree.student_name,
           certificateNumber: degree.certificate_number,
           graduationDate: degree.graduation_date,
-          institution: degree.institution?.institution_name,
+          institution: degree.institution?.institution_name || degree.institutionName,
         },
         fraudCheck: {
           passed: true,
@@ -162,7 +163,7 @@ const getAllVerifications = asyncHandler(async (req, res) => {
 const verifyDegreePublic = asyncHandler(async (req, res) => {
   const { hash } = req.params;
 
-  // Find degree by hash
+  // Find degree by hash (now returns full degree data)
   const degree = await Degree.findByHash(hash);
   if (!degree) {
     return sendError(res, 'Degree not found on blockchain registry.', 404);
@@ -176,11 +177,13 @@ const verifyDegreePublic = asyncHandler(async (req, res) => {
     logger.warn('Blockchain verification error:', error.message);
   }
 
-  const isValid = blockchainData?.isValid && !blockchainData?.isRevoked && !degree.is_revoked;
+  // FIX: Use status field instead of is_revoked
+  const isRevoked = degree.status === 'revoked' || blockchainData?.isRevoked || false;
+  const isValid = blockchainData?.isValid && !isRevoked;
 
   const result = {
     isValid,
-    isRevoked: degree.is_revoked || blockchainData?.isRevoked || false,
+    isRevoked,
     degree: {
       id: degree.id,
       degree_title: degree.degree_title,
@@ -190,7 +193,7 @@ const verifyDegreePublic = asyncHandler(async (req, res) => {
       certificate_number: degree.certificate_number,
       issue_date: degree.issue_date,
       degree_hash: degree.degree_hash,
-      institution: degree.institution?.institution_name,
+      institution: degree.institution?.institution_name || degree.institutionName,
     },
     blockchain: blockchainData || {
       message: 'Blockchain data temporarily unavailable',
