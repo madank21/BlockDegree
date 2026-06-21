@@ -1,28 +1,42 @@
-// test-contract-only.js
-require("dotenv").config();  // Load .env variables
+// BACKEND/test-contract-only.js
+require('dotenv').config();
 
-
-const blockchainService = require("./services/BlockchainService"); // ← no braces, no 'new'
-
+// ✅ Import the already-instantiated singleton
+const blockchainService = require('./services/blockchainService');
 
 async function test() {
-  try {
-    console.log("Checking environment...");
-    console.log("RPC URL:", process.env.BLOCKCHAIN_RPC_URL ? "✅ Set" : "❌ Missing");
-    console.log("Private key:", process.env.BLOCKCHAIN_PRIVATE_KEY ? "✅ Set (length: " + process.env.BLOCKCHAIN_PRIVATE_KEY.length + ")" : "❌ Missing");
-    console.log("Contract address:", process.env.CONTRACT_ADDRESS ? "✅ Set" : "❌ Missing");
+  console.log('🔍 Checking environment variables...');
+  console.log('BLOCKCHAIN_RPC_URL:', process.env.BLOCKCHAIN_RPC_URL ? '✅ Set' : '❌ Missing');
+  console.log('PRIVATE_KEY:', process.env.PRIVATE_KEY ? '✅ Set (length: ' + process.env.PRIVATE_KEY.length + ')' : '❌ Missing');
+  console.log('CONTRACT_ADDRESS:', process.env.CONTRACT_ADDRESS ? '✅ Set' : '❌ Missing');
 
-    const service = new BlockchainService();
-    
-    const testHash = "0x" + "0".repeat(64);
+  try {
+    // 1. Ensure connection and get network info
+    await blockchainService.ensureConnected();
+    const networkInfo = await blockchainService.getNetworkInfo();
+    console.log('\n✅ Connected to blockchain:');
+    console.log(`   Network: ${networkInfo.networkName} (chainId: ${networkInfo.chainId})`);
+    console.log(`   Block: ${networkInfo.blockNumber}`);
+    console.log(`   Contract: ${networkInfo.contractAddress}`);
+    console.log(`   Wallet: ${networkInfo.walletAddress}`);
+    console.log(`   Balance: ${networkInfo.walletBalance} ETH`);
+
+    // 2. Test verification with a dummy hash (all zeros)
+    const testHash = '0x' + '0'.repeat(64);
+    console.log(`\n🔎 Verifying dummy hash: ${testHash}`);
     const result = await blockchainService.verifyDegree(testHash);
-    console.log(result);
-    
-    console.log("\n✅ Contract call successful!");
-    
+    console.log('Verification result:', result);
+
+    // 3. Get total degrees issued
+    const total = await blockchainService.getTotalDegreesIssued();
+    console.log(`\n📊 Total degrees issued on chain: ${total}`);
+
+    console.log('\n✅ All contract calls successful!');
   } catch (error) {
-    console.error("\n❌ Error:", error.message);
-    if (error.reason) console.error("Reason:", error.reason);
+    console.error('\n❌ Error:', error.message);
+    if (error.reason) console.error('   Reason:', error.reason);
+    if (error.code) console.error('   Code:', error.code);
+    process.exit(1);
   }
 }
 
