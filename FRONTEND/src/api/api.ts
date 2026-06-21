@@ -1,87 +1,249 @@
 // FRONTEND/src/api/api.ts
-import axios, { AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
-import { useStore } from '../useStore'; // adjust path if your store is elsewhere
+//
+// Single source of truth for all backend calls. No page or lib file should
+// call Supabase directly for mutations, and nothing in the browser should
+// call the blockchain directly — everything routes through here, which
+// talks to BACKEND/app.js (/api/v1/...).
+//
+// Usage:
+//   import { authApi, degreesApi, verificationApi, blockchainApi, documentsApi } from '@/api/api';
+//   const result = await degreesApi.issue({ ... });
+//   const data = await verificationApi.verifyPublic(hash);
+//   const uploadRes = await documentsApi.upload(formData);
 
-// 1. Create axios instance with base URL from environment
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1',
-  headers: { 'Content-Type': 'application/json' },
-  timeout: 30000, // 30 seconds
-});
+// ----------------------------------------------------------------------
+// 1. Environment & token
+// ----------------------------------------------------------------------
 
-// 2. Request interceptor: attach JWT token from store
-api.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    // Get token from Zustand store (or replace with your auth hook)
-    const token = useStore.getState().token; // ensure your store has `token`
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
 
-    // If the body is FormData, remove the 'Content-Type' header so the browser can set it with the correct boundary.
-    if (config.data instanceof FormData) {
-      delete config.headers['Content-Type'];
-    }
+// Token storage – adjust the key to match your login implementation
+const TOKEN_KEY = 'token'; // or 'accessToken', 'auth_token', etc.
 
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// 3. Response interceptor: handle 401 Unauthorized globally
-api.interceptors.response.use(
-  (response: AxiosResponse) => response,
-  async (error: AxiosError) => {
-    // If the error is 401 and we have a logout function in the store, call it
-    if (error.response?.status === 401) {
-      const logout = useStore.getState().logout; // ensure your store has `logout`
-      if (logout) {
-        logout(); // clears token and user data
-        // Optionally redirect to login page (if using React Router)
-        // window.location.href = '/login';
-      }
-    }
-
-    // Extract a meaningful error message from the response, or fallback
-    const message =
-      (error.response?.data as any)?.message ||
-      error.message ||
-      'An unexpected error occurred.';
-
-    // Reject with a custom error object to preserve status and data
-    return Promise.reject({
-      status: error.response?.status,
-      message,
-      data: error.response?.data,
-    });
+function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
   }
-);
+}
 
-// 4. Convenience methods with generics for typed responses
-export const apiGet = <T = any>(url: string, config = {}) =>
-  api.get<T>(url, config).then((res) => res.data);
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
 
-export const apiPost = <T = any>(url: string, data: any, config = {}) =>
-  api.post<T>(url, data, config).then((res) => res.data);
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
 
-export const apiPut = <T = any>(url: string, data: any, config = {}) =>
-  api.put<T>(url, data, config).then((res) => res.data);
+// ----------------------------------------------------------------------
+// 2. Custom error class
+// ----------------------------------------------------------------------
 
-export const apiPatch = <T = any>(url: string, data: any, config = {}) =>
-  api.patch<T>(url, data, config).then((res) => res.data);
+export class ApiError extends Error {
+  public status: number;
+  public payload?: unknown;
 
-export const apiDelete = <T = any>(url: string, config = {}) =>
-  api.delete<T>(url, config).then((res) => res.data);
+  constructor(message: string, status: number, payload?: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.payload = payload;
+  }
+}
 
-// 5. Optional: for direct form‑data uploads, you can use api.post with FormData
-// Example:
-// const formData = new FormData();
-// formData.append('file', file);
-// const result = await apiPost('/documents/upload', formData, {
-//   headers: { 'Content-Type': 'multipart/form-data' } // axios will auto‑remove if we use FormData?
-// });
-// But our interceptor already removes Content-Type for FormData,
-// so you can simply do: apiPost('/documents/upload', formData)
+// ----------------------------------------------------------------------
+// 3. Core request helpers
+// ----------------------------------------------------------------------
 
-// 6. Export the raw axios instance as well (if needed)
-export default api;
+/**
+ * Performs a JSON request (GET, POST, PUT, PATCH, DELETE) – body will be JSON.stringify'd.
+ */
+async function request<T = any>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const token = getToken();
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
+  };
+
+  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+
+  // Parse response body (could be JSON, text, or empty)
+  let body: unknown = null;
+  const contentType = res.headers.get('content-type');
+  if (contentType?.includes('application/json')) {
+    body = await res.json();
+  } else if (contentType?.includes('text/')) {
+    body = await res.text();
+  } else {
+    // For 204 No Content etc.
+    body = undefined;
+  }
+
+  if (!res.ok) {
+    const message =
+      (body as any)?.message || (body as any)?.error || `Request failed (${res.status})`;
+    throw new ApiError(message, res.status, body);
+  }
+
+  return body as T;
+}
+
+/**
+ * Performs a multipart/form-data POST (for file uploads).
+ * Do NOT set Content-Type – the browser will add the correct boundary.
+ */
+async function postForm<T = any>(path: string, formData: FormData): Promise<T> {
+  const token = getToken();
+
+  const headers: HeadersInit = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  let body: unknown = null;
+  const contentType = res.headers.get('content-type');
+  if (contentType?.includes('application/json')) {
+    body = await res.json();
+  } else {
+    body = await res.text();
+  }
+
+  if (!res.ok) {
+    const message =
+      (body as any)?.message || (body as any)?.error || `Upload failed (${res.status})`;
+    throw new ApiError(message, res.status, body);
+  }
+
+  return body as T;
+}
+
+// ----------------------------------------------------------------------
+// 4. Convenience methods (GET, POST, PUT, PATCH, DELETE)
+// ----------------------------------------------------------------------
+
+const get = <T = any>(path: string) => request<T>(path, { method: 'GET' });
+const post = <T = any>(path: string, data?: unknown) =>
+  request<T>(path, {
+    method: 'POST',
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+  });
+const put = <T = any>(path: string, data?: unknown) =>
+  request<T>(path, {
+    method: 'PUT',
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+  });
+const patch = <T = any>(path: string, data?: unknown) =>
+  request<T>(path, {
+    method: 'PATCH',
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+  });
+const del = <T = any>(path: string) => request<T>(path, { method: 'DELETE' });
+
+// ----------------------------------------------------------------------
+// 5. API endpoint groups
+// ----------------------------------------------------------------------
+
+// --- Auth -----------------------------------------------------------------
+export const authApi = {
+  login: (email: string, password: string) =>
+    post<{ token: string; user: any }>('/auth/login', { email, password }),
+  register: (payload: Record<string, unknown>) =>
+    post<{ token?: string; user: any }>('/auth/register', payload),
+  refresh: () => post<{ token: string }>('/auth/refresh'),
+};
+
+// --- Degrees -------------------------------------------------------------
+export const degreesApi = {
+  // Issue a new degree (admin/university only)
+  issue: (payload: Record<string, unknown>) =>
+    post<{ degreeHash: string; qrCodeUrl: string; degreeId: string }>(
+      '/degrees',
+      payload
+    ),
+  // List degrees (filtered by role)
+  list: () => get<{ degrees: any[] }>('/degrees'),
+  getById: (id: string) => get<{ degree: any }>(`/degrees/${id}`),
+  getQr: (id: string) => get<{ qrUrl: string }>(`/degrees/${id}/qr`),
+  revoke: (id: string) => del<{ success: boolean }>(`/degrees/${id}/revoke`),
+  publicLookup: (id: string) => get<{ degree: any }>(`/degrees/public/${id}`),
+  // Optional: update degree (if needed)
+  update: (id: string, payload: Record<string, unknown>) =>
+    put<{ success: boolean }>(`/degrees/${id}`, payload),
+};
+
+// --- Verification -------------------------------------------------------
+export const verificationApi = {
+  // Request a new verification (authenticated)
+  request: (payload: Record<string, unknown>) =>
+    post<{ verificationId: string; status: string }>('/verification', payload),
+  // Public hash verification – replaces direct blockchain call
+  verifyPublic: (hash: string) =>
+    get<{
+      valid: boolean;
+      degreeDetails?: any;
+      blockchain: { confirmed: boolean; txHash?: string };
+    }>(`/verification/public/${encodeURIComponent(hash)}`),
+  getById: (id: string) =>
+    get<{ verification: any }>(`/verification/${id}`),
+  getByCode: (code: string) =>
+    get<{ verification: any }>(`/verification/code/${encodeURIComponent(code)}`),
+};
+
+// --- Blockchain (read-only, server-proxied) ----------------------------
+export const blockchainApi = {
+  network: () => get<{ chainId: number; gasPrice: string; blockNumber: number }>(
+    '/blockchain/network'
+  ),
+  totalDegrees: () => get<{ total: number }>('/blockchain/total'),
+  verifyHash: (hash: string) =>
+    get<{ valid: boolean; txHash?: string }>(
+      `/blockchain/verify/${encodeURIComponent(hash)}`
+    ),
+  transactions: () => get<{ transactions: any[] }>('/blockchain/transactions'),
+  token: (id: string) => get<{ token: any }>(`/blockchain/token/${id}`),
+};
+
+// --- Documents -----------------------------------------------------------
+export const documentsApi = {
+  // Upload a file (multipart/form-data) – uses the backend upload endpoint
+  upload: (formData: FormData) => postForm<{ documentId: string; url: string }>(
+    '/documents/upload',
+    formData
+  ),
+  // Alternatively, if you use a two-step signed‑URL flow, keep these:
+  // requestUploadToken: (payload: Record<string, unknown>) =>
+  //   post<{ uploadUrl: string; token: string }>('/documents/upload-token', payload),
+  // confirmUpload: (payload: Record<string, unknown>) =>
+  //   post<{ success: boolean }>('/documents/upload-complete', payload),
+  list: () => get<{ documents: any[] }>('/documents'),
+  getById: (id: string) => get<{ document: any }>(`/documents/${id}`),
+  // Fraud check (if you have a separate endpoint)
+  checkFraud: (documentId: string) =>
+    post<{ fraudScore: number; status: string; flags?: string[] }>(
+      `/documents/${documentId}/check-fraud`
+    ),
+};
+
+// ----------------------------------------------------------------------
+// 6. Export raw request function for custom calls (optional)
+// ----------------------------------------------------------------------
+export default {
+  get,
+  post,
+  put,
+  patch,
+  delete: del,
+  postForm,
+  request,
+};
