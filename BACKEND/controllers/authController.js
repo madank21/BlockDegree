@@ -14,7 +14,7 @@ const {
 } = require("../src/utils/response");
 const { logger } = require("../src/utils/logger");
 
-// Import Supabase admin and notification service (adjust paths as needed)
+// Import Supabase admin and notification service
 const { getSupabaseAdmin } = require("../database/supabase");
 const notificationService = require("../services/notificationService");
 
@@ -32,31 +32,91 @@ const generateTokens = (userId, role) => ({
   ),
 });
 
+// ─── Helper: build user response object ──────────────────────────────────────
+const buildUserResponse = (user) => {
+  // user is the raw DB row with first_name, last_name, etc.
+  // Compute full name for frontend compatibility
+  const fullName = user.first_name && user.last_name
+    ? `${user.first_name} ${user.last_name}`.trim()
+    : user.name || ''; // fallback if name exists
+
+  return {
+    id: user.id,
+    name: fullName,
+    email: user.email,
+    role: user.role,
+    studentId: user.student_id || null,
+    institutionName: user.institution_name || null,
+    walletAddress: user.wallet_address || null,
+    isActive: user.is_active,
+    createdAt: user.created_at,
+    lastLogin: user.last_login,
+  };
+};
+
 // ─── Public Routes ────────────────────────────────────────────────────────────
 
 // POST /api/v1/auth/register
 const register = asyncHandler(async (req, res) => {
-  const { name, email, password, role = "student", student_id, institution_name } = req.body;
+  // Accept both 'name' (from frontend) and optionally first_name/last_name
+  const {
+    name,
+    email,
+    password,
+    role = "student",
+    student_id,
+    registrationNumber, // frontend sends this
+    institution_name,
+  } = req.body;
 
+  // Check if email already exists
   const exists = await User.emailExists(email);
   if (exists) return sendError(res, "Email already registered", 409);
 
-  const user = await User.create({ name, email, password, role, studentId: student_id, institutionName: institution_name });
+  // Split full name into first and last
+  let firstName = '';
+  let lastName = '';
+  if (name) {
+    const parts = name.trim().split(/\s+/);
+    firstName = parts[0] || '';
+    lastName = parts.slice(1).join(' ') || '';
+  } else {
+    // Fallback: if first_name and last_name are provided directly
+    firstName = req.body.first_name || '';
+    lastName = req.body.last_name || '';
+  }
 
-  await AuditLog.create({ action: "USER_REGISTERED", actorId: user.id, actorRole: role, details: { email, role } });
+  // Determine student_id: use provided student_id or registrationNumber
+  const studentId = student_id || registrationNumber || null;
+
+  // Create user (User.create should accept all these fields)
+  const user = await User.create({
+    first_name: firstName,
+    last_name: lastName,
+    email,
+    password,          // User.create will hash it
+    role,
+    student_id: studentId,
+    institution_name: institution_name || null,
+    is_active: true,
+  });
+
+  // Log the registration
+  await AuditLog.create({
+    action: "USER_REGISTERED",
+    actorId: user.id,
+    actorRole: role,
+    details: { email, role },
+  });
 
   const { accessToken, refreshToken } = generateTokens(user.id, user.role);
   logger.info(`[Auth] Registered: ${email} (${role})`);
 
+  // Build response with computed name
+  const userResponse = buildUserResponse(user);
+
   return sendCreated(res, {
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      studentId: user.student_id,
-      institutionName: user.institution_name,
-    },
+    user: userResponse,
     accessToken,
     refreshToken,
   }, "Registration successful");
@@ -73,30 +133,37 @@ const login = asyncHandler(async (req, res) => {
   const isValid = await User.comparePassword(password, user.password_hash);
   if (!isValid) return sendUnauthorized(res, "Invalid email or password");
 
-  User.update(user.id, { lastLogin: new Date().toISOString() }).catch(() => {});
-  await AuditLog.create({ action: "USER_LOGIN", actorId: user.id, actorRole: user.role, details: { email } });
+  // Update last login asynchronously (fire-and-forget)
+  User.update(user.id, { last_login: new Date().toISOString() }).catch(() => {});
+
+  await AuditLog.create({
+    action: "USER_LOGIN",
+    actorId: user.id,
+    actorRole: user.role,
+    details: { email },
+  });
 
   const { accessToken, refreshToken } = generateTokens(user.id, user.role);
   logger.info(`[Auth] Login: ${email} (${user.role})`);
 
+  const userResponse = buildUserResponse(user);
+
   return sendSuccess(res, {
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      studentId: user.student_id,
-      institutionName: user.institution_name,
-      walletAddress: user.wallet_address,
-    },
+    user: userResponse,
     accessToken,
     refreshToken,
   }, "Login successful");
 });
 
-// GET /api/v1/auth/me  (renamed from getProfile to match route)
+// GET /api/v1/auth/me
 const getMe = asyncHandler(async (req, res) => {
-  return sendSuccess(res, { user: req.user }, "Profile retrieved");
+  // req.user is attached by authMiddleware; it may already have first_name/last_name
+  // But to be safe, fetch fresh from DB
+  const user = await User.findById(req.user.id);
+  if (!user) return sendError(res, "User not found", 404);
+
+  const userResponse = buildUserResponse(user);
+  return sendSuccess(res, { user: userResponse }, "Profile retrieved");
 });
 
 // POST /api/v1/auth/refresh-token
@@ -113,7 +180,7 @@ const refreshToken = asyncHandler(async (req, res) => {
   }
 });
 
-// ─── Protected Routes (added from Step 11) ──────────────────────────────────
+// ─── Protected Routes ──────────────────────────────────────────────────────────
 
 // POST /api/v1/auth/logout
 const logout = async (req, res, next) => {
@@ -151,10 +218,11 @@ const updateProfile = async (req, res, next) => {
     }
 
     const updated = await User.update(req.user.id, updates);
+    const userResponse = buildUserResponse(updated);
     return res.status(200).json({
       success: true,
       message: 'Profile updated',
-      data: { user: updated },
+      data: { user: userResponse },
     });
   } catch (error) {
     next(error);
@@ -313,7 +381,7 @@ module.exports = {
   register,
   login,
   logout,
-  getMe,        // renamed from getProfile to match route
+  getMe,
   updateProfile,
   changePassword,
   forgotPassword,

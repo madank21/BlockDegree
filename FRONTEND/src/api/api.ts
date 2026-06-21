@@ -15,7 +15,7 @@
 // 1. Environment & token
 // ----------------------------------------------------------------------
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
+const BASE_URL = 'http://localhost:5001/api/v1'; // Adjust if your backend runs on a different port or path
 
 // Token storage – adjust the key to match your login implementation
 const TOKEN_KEY = 'token'; // or 'accessToken', 'auth_token', etc.
@@ -91,6 +91,16 @@ async function request<T = any>(
     throw new ApiError(message, res.status, body);
   }
 
+  // ---- FIX: Unwrap the data envelope if present ----
+  if (
+    body &&
+    typeof body === 'object' &&
+    'success' in body &&
+    (body as any).success === true &&
+    'data' in body
+  ) {
+    return (body as any).data as T;
+  }
   return body as T;
 }
 
@@ -125,6 +135,16 @@ async function postForm<T = any>(path: string, formData: FormData): Promise<T> {
     throw new ApiError(message, res.status, body);
   }
 
+  // ---- FIX: Unwrap the data envelope if present ----
+  if (
+    body &&
+    typeof body === 'object' &&
+    'success' in body &&
+    (body as any).success === true &&
+    'data' in body
+  ) {
+    return (body as any).data as T;
+  }
   return body as T;
 }
 
@@ -148,7 +168,13 @@ const patch = <T = any>(path: string, data?: unknown) =>
     method: 'PATCH',
     body: data !== undefined ? JSON.stringify(data) : undefined,
   });
-const del = <T = any>(path: string) => request<T>(path, { method: 'DELETE' });
+
+// ---- FIX: DELETE now accepts an optional body payload (used for revoke with reason) ----
+const del = <T = any>(path: string, data?: unknown) =>
+  request<T>(path, {
+    method: 'DELETE',
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+  });
 
 // ----------------------------------------------------------------------
 // 5. API endpoint groups
@@ -157,10 +183,11 @@ const del = <T = any>(path: string) => request<T>(path, { method: 'DELETE' });
 // --- Auth -----------------------------------------------------------------
 export const authApi = {
   login: (email: string, password: string) =>
-    post<{ token: string; user: any }>('/auth/login', { email, password }),
+    post<{ accessToken: string; refreshToken: string; user: any }>('/auth/login', { email, password }),
   register: (payload: Record<string, unknown>) =>
-    post<{ token?: string; user: any }>('/auth/register', payload),
-  refresh: () => post<{ token: string }>('/auth/refresh'),
+    post<{ accessToken?: string; refreshToken?: string; user: any }>('/auth/register', payload),
+  // ---- FIX: corrected refresh endpoint ----
+  refresh: () => post<{ accessToken: string }>('/auth/refresh-token'),
 };
 
 // --- Degrees -------------------------------------------------------------
@@ -175,11 +202,13 @@ export const degreesApi = {
   list: () => get<{ degrees: any[] }>('/degrees'),
   getById: (id: string) => get<{ degree: any }>(`/degrees/${id}`),
   getQr: (id: string) => get<{ qrUrl: string }>(`/degrees/${id}/qr`),
-  revoke: (id: string) => del<{ success: boolean }>(`/degrees/${id}/revoke`),
+  // ---- FIX: revoke now accepts a reason and sends it in the body ----
+  revoke: (id: string, reason: string) =>
+    del<{ success: boolean }>(`/degrees/${id}/revoke`, { reason }),
   publicLookup: (id: string) => get<{ degree: any }>(`/degrees/public/${id}`),
-  // Optional: update degree (if needed)
+  // ---- FIX: update now uses PATCH (not PUT) ----
   update: (id: string, payload: Record<string, unknown>) =>
-    put<{ success: boolean }>(`/degrees/${id}`, payload),
+    patch<{ success: boolean }>(`/degrees/${id}`, payload),
 };
 
 // --- Verification -------------------------------------------------------
@@ -221,12 +250,8 @@ export const documentsApi = {
     '/documents/upload',
     formData
   ),
-  // Alternatively, if you use a two-step signed‑URL flow, keep these:
-  // requestUploadToken: (payload: Record<string, unknown>) =>
-  //   post<{ uploadUrl: string; token: string }>('/documents/upload-token', payload),
-  // confirmUpload: (payload: Record<string, unknown>) =>
-  //   post<{ success: boolean }>('/documents/upload-complete', payload),
-  list: () => get<{ documents: any[] }>('/documents'),
+  // ---- FIX: list now calls the existing /documents/me endpoint ----
+  list: () => get<{ documents: any[] }>('/documents/me'),
   getById: (id: string) => get<{ document: any }>(`/documents/${id}`),
   // Fraud check (if you have a separate endpoint)
   checkFraud: (documentId: string) =>

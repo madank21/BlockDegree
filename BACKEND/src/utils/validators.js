@@ -27,14 +27,13 @@ const registerValidators = [
     .withMessage('Password must be at least 8 characters')
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
     .withMessage('Password must contain uppercase, lowercase, number, and special character'),
-  body('first_name')
+  // ✅ Changed: accept single 'name' instead of first_name + last_name
+  body('name')
     .trim().notEmpty().isLength({ min: 2, max: 100 })
-    .withMessage('First name is required (2-100 characters)'),
-  body('last_name')
-    .trim().notEmpty().isLength({ min: 2, max: 100 })
-    .withMessage('Last name is required (2-100 characters)'),
+    .withMessage('Full name is required (2-100 characters)'),
+  // ✅ Changed: role list now includes 'student' instead of 'graduate'
   body('role')
-    .isIn(['admin', 'university', 'employer', 'graduate'])
+    .isIn(['admin', 'university', 'employer', 'student'])
     .withMessage('Invalid role'),
   body('phone')
     .optional()
@@ -52,9 +51,9 @@ const loginValidators = [
 // ─── Degree Validators ────────────────────────────────────────────────────────
 const degreeCreateValidators = [
   body('graduate_id')
-  .optional({ nullable: true })
-  .isUUID()
-  .withMessage('Valid graduate ID is required'),
+    .optional({ nullable: true })
+    .isUUID()
+    .withMessage('Valid graduate ID is required'),
   body('student_name').trim().notEmpty().isLength({ min: 2, max: 255 })
     .withMessage('Student name is required'),
   body('student_id').trim().notEmpty().isLength({ min: 2, max: 100 })

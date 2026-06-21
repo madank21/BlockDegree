@@ -11,8 +11,9 @@ const { getSupabaseAdmin } = require("../database/supabase");
 const TABLE = "users";
 
 // Columns returned by default — face_descriptor intentionally excluded
+// ✅ Changed: use first_name and last_name instead of name
 const PUBLIC_COLUMNS =
-  "id, name, email, role, student_id, institution_id, institution_name, " +
+  "id, first_name, last_name, email, role, student_id, institution_id, institution_name, " +
   "wallet_address, is_active, email_verified, avatar_url, " +
   "face_registered_at, last_login, metadata, created_at, updated_at";
 
@@ -22,14 +23,20 @@ const User = {
   async create(data) {
     const supabase     = getSupabaseAdmin();
     const passwordHash = await bcrypt.hash(
-      data.password || data.passwordHash,
+      data.password || data.passwordHash || 'defaultPassword123!',
       12
     );
+
+    // Ensure we have first_name and last_name
+    // data may contain first_name, last_name from controller
+    const firstName = data.first_name || data.name?.split(' ')[0] || '';
+    const lastName = data.last_name || (data.name ? data.name.split(' ').slice(1).join(' ') : '') || '';
 
     const { data: user, error } = await supabase
       .from(TABLE)
       .insert({
-        name:             data.name,
+        first_name:       firstName,
+        last_name:        lastName,
         email:            data.email.toLowerCase().trim(),
         password_hash:    passwordHash,
         role:             data.role             || "student",
@@ -85,7 +92,7 @@ const User = {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from(TABLE)
-      .select("id, name, email, role, student_id, institution_id, is_active")
+      .select("id, first_name, last_name, email, role, student_id, institution_id, is_active")
       .eq("student_id", studentId)
       .single();
 
@@ -99,7 +106,15 @@ const User = {
     const payload  = { updated_at: new Date().toISOString() };
 
     // Explicit field mapping — camelCase or snake_case both accepted
-    if (updates.name             !== undefined) payload.name             = updates.name;
+    // ✅ Added support for first_name and last_name
+    if (updates.first_name        !== undefined) payload.first_name      = updates.first_name;
+    if (updates.last_name         !== undefined) payload.last_name       = updates.last_name;
+    if (updates.name              !== undefined) {
+      // If they send a full name, split it (fallback)
+      const parts = updates.name.trim().split(/\s+/);
+      payload.first_name = parts[0] || '';
+      payload.last_name = parts.slice(1).join(' ') || '';
+    }
     if (updates.isActive         !== undefined) payload.is_active        = updates.isActive;
     if (updates.is_active        !== undefined) payload.is_active        = updates.is_active;
     if (updates.lastLogin        !== undefined) payload.last_login       = updates.lastLogin;

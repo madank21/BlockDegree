@@ -311,7 +311,8 @@ export const store = {
   async login(email: string, password: string): Promise<User | null> {
     try {
       const data = await authApi.login(email, password);
-      setToken(data.token);
+      // After envelope unwrapping, data contains { accessToken, refreshToken, user }
+      setToken(data.accessToken);   // <-- FIXED: was data.token
       const user = data.user as User;
       const existing = state.users.find(u => u.id === user.id);
       if (!existing) {
@@ -337,8 +338,10 @@ export const store = {
     role: UserRole
   ): Promise<User> {
     const data = await authApi.register({ name, email, registrationNumber: regNo, password, role });
-    if (data.token) {
-      setToken(data.token);
+    // Register may or may not return an accessToken (depending on backend config)
+    // If it does, we store it.
+    if (data.accessToken) {
+      setToken(data.accessToken);
     }
     const user = data.user as User;
     const existing = state.users.find(u => u.id === user.id);
