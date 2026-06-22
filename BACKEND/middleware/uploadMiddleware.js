@@ -1,4 +1,3 @@
-// BACKEND/middleware/uploadMiddleware.js
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -23,7 +22,6 @@ const createUploadDirs = () => {
         console.log(`[uploadMiddleware] Created directory: ${dir}`);
       } catch (err) {
         console.error(`[uploadMiddleware] Failed to create directory ${dir}:`, err.message);
-        // Don't throw – let the app start, but log the error
       }
     }
   });
@@ -66,7 +64,6 @@ const faceStorage = multer.diskStorage({
   },
 });
 
-// ─── NEW: Import storage (for admin import of JSON files) ────────────────────
 const importStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const dest = path.join(__dirname, '..', 'uploads', 'temp');
@@ -106,7 +103,6 @@ const imageFilter = (req, file, cb) => {
   }
 };
 
-// ─── NEW: Import filter – only JSON ──────────────────────────────────────────
 const importFilter = (req, file, cb) => {
   const allowedTypes = ['application/json'];
   if (allowedTypes.includes(file.mimetype) || file.originalname.endsWith('.json')) {
@@ -147,7 +143,6 @@ const uploadFace = multer({
   },
 });
 
-// ─── NEW: Import multer instance ──────────────────────────────────────────────
 const uploadImport = multer({
   storage: importStorage,
   fileFilter: importFilter,
@@ -179,15 +174,23 @@ const handleUploadError = (err, req, res, next) => {
 
 const cleanupFile = (filePath) => {
   if (filePath && fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
+    try {
+      fs.unlinkSync(filePath);
+    } catch (err) {
+      console.error(`[cleanupFile] Failed to delete ${filePath}:`, err.message);
+    }
   }
 };
+
+// ─── NEW: Debug helper – log the saved file path (optional) ──────────────────
+// This can be used in the controller to verify the file exists after multer saves it.
+// Not required but helpful for debugging.
 
 module.exports = {
   uploadDocument,
   uploadAvatar,
   uploadFace,
-  uploadImport,           // <-- new export
+  uploadImport,
   handleUploadError,
   cleanupFile,
 };

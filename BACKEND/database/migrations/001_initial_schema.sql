@@ -362,14 +362,19 @@ ALTER TABLE documents            ENABLE ROW LEVEL SECURITY;   -- newly added
 -- Ensure all columns exist (idempotent) – in case table already existed
 -- without the new columns, this will add them.
 -- ─────────────────────────────────────────────────────────────────────────────
-ALTER TABLE documents
+ALTER TABLE public.documents 
   ADD COLUMN IF NOT EXISTS ocr_status TEXT DEFAULT 'pending',
   ADD COLUMN IF NOT EXISTS yolo_status TEXT DEFAULT 'pending',
   ADD COLUMN IF NOT EXISTS validation_status TEXT DEFAULT 'pending',
   ADD COLUMN IF NOT EXISTS ocr_text TEXT,
+  ADD COLUMN IF NOT EXISTS ocr_confidence NUMERIC,
   ADD COLUMN IF NOT EXISTS extracted_data JSONB DEFAULT '{}',
-  ADD COLUMN IF NOT EXISTS yolo_detections TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS yolo_detections JSONB DEFAULT '[]',
   ADD COLUMN IF NOT EXISTS yolo_valid BOOLEAN,
-  ADD COLUMN IF NOT EXISTS yolo_confidence FLOAT,
-  ADD COLUMN IF NOT EXISTS validation_errors TEXT[] DEFAULT '{}',
-  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+  ADD COLUMN IF NOT EXISTS yolo_confidence NUMERIC,
+  ADD COLUMN IF NOT EXISTS validation_errors JSONB DEFAULT '[]',
+  -- Keep legacy fields (may already exist)
+  ADD COLUMN IF NOT EXISTS ocr_data JSONB DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS fraud_score NUMERIC DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS verification_notes TEXT;

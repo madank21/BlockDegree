@@ -67,6 +67,23 @@ const AuditLog = {
     if (error) return 0;
     return count || 0;
   },
+
+  // ── NEW: Static `log` method (compatible with controller calls) ──────────
+  async log(action, data) {
+    // Transform the parameters into the shape expected by `create`
+    return await this.create({
+      action,
+      actorId:    data.userId,            // controller passes `userId`
+      actorRole:  data.userRole || null,  // optional, not used in controller
+      targetId:   data.resourceId,
+      targetType: data.resourceType,
+      details:    {
+        oldData: data.oldData || null,
+        newData: data.newData || null,
+      },
+      ipAddress:  data.ipAddress || null,
+    });
+  },
 };
 
 module.exports = AuditLog;

@@ -1,4 +1,3 @@
-// BACKEND/controllers/documentController.js
 const path = require("path");
 const fs = require("fs");
 const { asyncHandler } = require("../middleware/errorMiddleware");
@@ -18,6 +17,14 @@ const uploadDocument = asyncHandler(async (req, res) => {
 
   const { document_type, degree_id } = req.body;
   const filePath = req.file.path;
+
+  // ─── Debug: Verify file exists right after multer saves it ──────────────────
+  if (!fs.existsSync(filePath)) {
+    logger.error(`[uploadDocument] File was NOT saved to ${filePath} immediately after upload!`);
+    // But we continue – maybe it's a race; the background check will catch it.
+  } else {
+    logger.debug(`[uploadDocument] File saved at ${filePath}`);
+  }
 
   try {
     // Generate file hash
@@ -49,7 +56,7 @@ const uploadDocument = asyncHandler(async (req, res) => {
 
     const document = await Document.create(documentData);
 
-    // Process document asynchronously (OCR + Fraud Detection)
+    // ─── Process document asynchronously (OCR + Fraud Detection) ──────────────
     setImmediate(async () => {
       try {
         // ─── Safety: ensure file still exists ──────────────────────────────────
@@ -99,6 +106,8 @@ const uploadDocument = asyncHandler(async (req, res) => {
       }
     });
 
+    // ─── Log audit event ──────────────────────────────────────────────────────
+    // This now works because we added the static log method to AuditLog
     await AuditLog.log("document_uploaded", {
       userId: req.user.id,
       resourceType: "document",
@@ -111,6 +120,7 @@ const uploadDocument = asyncHandler(async (req, res) => {
 
     return sendCreated(res, document, "Document uploaded successfully. Processing in background.");
   } catch (error) {
+    // Clean up file if any error occurs during the synchronous part
     cleanupFile(filePath);
     throw error;
   }
