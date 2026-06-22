@@ -16,10 +16,7 @@ export default function Login({ onNavigate }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const demoAccounts = [
-    { email: 'admin@iqra.edu.pk', role: 'Administrator', color: 'purple' },
-    { email: 'hr@techcorp.com', role: 'Employer', color: 'green' },
-  ];
+ 
 
   const navigateByRole = (role: string) => {
     console.log('🔍 navigateByRole called with role:', role);
@@ -64,27 +61,7 @@ export default function Login({ onNavigate }: LoginProps) {
     }
   };
 
-  const handleDemoLogin = async (demoEmail: string) => {
-    setEmail(demoEmail);
-    setPassword('demo123');
-    setLoading(true);
-    console.log('🚀 Demo login with:', demoEmail);
-
-    try {
-      const user = await login(demoEmail, 'demo123');
-      console.log('✅ Demo login user:', user);
-      if (user && user.role) {
-        navigateByRole(user.role);
-      } else {
-        setError('Demo login failed. Please try again.');
-      }
-    } catch (err: any) {
-      console.error('❌ Demo login error:', err);
-      setError(err.message || 'Demo login failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  
 
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4 relative overflow-hidden">
@@ -179,27 +156,11 @@ export default function Login({ onNavigate }: LoginProps) {
               <div className="w-full border-t border-gray-700" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-gray-900 px-2 text-gray-500">Demo Accounts</span>
+              
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            {demoAccounts.map((account) => (
-              <button
-                key={account.email}
-                onClick={() => handleDemoLogin(account.email)}
-                disabled={loading}
-                className={`p-3 rounded-lg border ${
-                  account.color === 'purple'
-                    ? 'border-purple-500/20 hover:border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10'
-                    : 'border-green-500/20 hover:border-green-500/40 bg-green-500/5 hover:bg-green-500/10'
-                } transition-colors text-sm text-gray-300 hover:text-white disabled:opacity-50`}
-              >
-                <div className="font-medium">{account.role}</div>
-                <div className="text-xs text-gray-500 truncate">{account.email}</div>
-              </button>
-            ))}
-          </div>
+          
         </div>
 
         <p className="mt-6 text-center text-sm text-gray-500">
