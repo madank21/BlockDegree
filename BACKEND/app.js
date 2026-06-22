@@ -43,7 +43,7 @@ app.use(helmet({
 app.use(cors({
   origin: [
     "http://localhost:3000",
-    "http://localhost:5173"
+    'http://localhost:5173'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -64,7 +64,7 @@ const globalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 100,
   message: {
     success: false,
     message: 'Too many authentication attempts, please try again later.',

@@ -58,7 +58,10 @@ export class ApiError extends Error {
 // ----------------------------------------------------------------------
 
 /**
- * Performs a JSON request (GET, POST, PUT, PATCH, DELETE) – body will be JSON.stringify'd.
+ * Performs a JSON request (GET, POST, PUT, PATCH, DELETE).
+ * - Adds Authorization header if token exists.
+ * - Forces `cache: 'no-store'` to prevent 304 Not Modified responses.
+ * - Unwraps `{ success: true, data: T }` envelope if present.
  */
 async function request<T = any>(
   path: string,
@@ -72,7 +75,14 @@ async function request<T = any>(
     ...(options.headers || {}),
   };
 
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  // IMPORTANT: Disable cache to always get fresh data (avoids 304)
+  const fetchOptions: RequestInit = {
+    ...options,
+    headers,
+    cache: 'no-store',
+  };
+
+  const res = await fetch(`${BASE_URL}${path}`, fetchOptions);
 
   // Parse response body (could be JSON, text, or empty)
   let body: unknown = null;
@@ -120,6 +130,7 @@ async function postForm<T = any>(path: string, formData: FormData): Promise<T> {
     method: 'POST',
     headers,
     body: formData,
+    cache: 'no-store', // also disable cache for uploads
   });
 
   let body: unknown = null;

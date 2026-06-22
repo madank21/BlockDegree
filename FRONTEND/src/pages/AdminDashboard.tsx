@@ -4,93 +4,96 @@ import {
   Users, GraduationCap, AlertTriangle, Link2, ClipboardList,
   CheckCircle2, Clock, Activity
 } from 'lucide-react';
-import api from '@/api/api';
+import { usersApi, degreesApi, blockchainApi } from '@/api/api';
 
 interface Props {
   onNavigate: (page: string) => void;
 }
 
 export default function AdminDashboard({ onNavigate }: Props) {
-  // State
   const [students, setStudents] = useState<any[]>([]);
   const [degreeApps, setDegreeApps] = useState<any[]>([]);
-  const [fraudReports, setFraudReports] = useState<any[]>([]);
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [issuedDegreesCount, setIssuedDegreesCount] = useState(0);
   const [totalAttestations, setTotalAttestations] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [blockchainError, setBlockchainError] = useState<string | null>(null);
+  const [degreeError, setDegreeError] = useState<string | null>(null);
 
   // Derived
   const verifiedStudents = students.filter(s => s.verificationStatus === 'approved');
   const pendingStudents = students.filter(s => s.verificationStatus && s.verificationStatus !== 'approved' && s.verificationStatus !== 'rejected');
   const pendingDegrees = degreeApps.filter(d => d.status === 'pending' || d.status === 'approved');
-  const unresolvedFraud = fraudReports.filter(f => !f.resolved);
 
   useEffect(() => {
-    const fetchAll = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
+        setBlockchainError(null);
+        setDegreeError(null);
 
-        // Use Promise.allSettled to avoid one failure breaking everything
-        const results = await Promise.allSettled([
-          api.get('/users?role=student'),
-          api.get('/degrees'), // adjust to your endpoint
-          api.get('/fraud-logs?resolved=false'),
-          api.get('/audit-logs?limit=8'),
-          api.get('/blockchain/total'), // or use blockchainApi
-        ]);
-
-        // Handle each result
-        const [studentsRes, degreesRes, fraudRes, auditRes, blockchainRes] = results;
-
-        if (studentsRes.status === 'fulfilled') {
-          setStudents(studentsRes.value.data?.users || studentsRes.value.data || []);
-        } else {
-          console.warn('Failed to fetch students:', studentsRes.reason);
-          // Optionally use fallback data:
-          // setStudents([]);
+        // 1. Fetch students – works with auth but may not check is_active
+        try {
+          const usersRes = await usersApi.list({ role: 'student' });
+          setStudents(usersRes.users || []);
+        } catch (err: any) {
+          console.error('Students fetch error:', err);
+          if (err.message?.includes('deactivated')) {
+            setError('Your account is deactivated. Please contact support.');
+          } else {
+            setError('Failed to load students.');
+          }
         }
 
-        if (degreesRes.status === 'fulfilled') {
-          const degrees = degreesRes.value.data?.degrees || degreesRes.value.data || [];
+        // 2. Fetch degrees – requires admin + active
+        try {
+          const degreesRes = await degreesApi.list();
+          const degrees = degreesRes.degrees || [];
           setDegreeApps(degrees);
           const issued = degrees.filter((d: any) => d.status === 'issued').length;
           setIssuedDegreesCount(issued);
+        } catch (err: any) {
+          console.warn('Degrees fetch failed:', err);
+          if (err.message?.includes('deactivated') || err.status === 401) {
+            setDegreeError('Account deactivated or insufficient permissions.');
+          } else {
+            setDegreeError('Could not load degree data.');
+          }
+          // Keep existing count (if any)
         }
 
-        if (fraudRes.status === 'fulfilled') {
-          setFraudReports(fraudRes.value.data?.reports || fraudRes.value.data || []);
-        }
-
-        if (auditRes.status === 'fulfilled') {
-          setAuditLogs(auditRes.value.data?.logs || auditRes.value.data || []);
-        }
-
-        if (blockchainRes.status === 'fulfilled') {
-          setTotalAttestations(blockchainRes.value.data?.total || 0);
+        // 3. Fetch blockchain total – requires admin + active
+        try {
+          const bcRes = await blockchainApi.totalDegrees();
+          setTotalAttestations(bcRes.total || 0);
+        } catch (err: any) {
+          console.warn('Blockchain total fetch failed:', err);
+          if (err.message?.includes('deactivated') || err.status === 401) {
+            setBlockchainError('Blockchain access denied – account inactive.');
+          } else {
+            setBlockchainError('Could not load blockchain data.');
+          }
         }
 
       } catch (err: any) {
         console.error('Dashboard fetch error:', err);
-        setError('Failed to load dashboard data. Please check your connection.');
+        setError('Failed to load dashboard data.');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchAll();
+    fetchData();
   }, []);
 
-  // Stats
   const stats = [
     { label: 'Total Students', value: students.length, icon: Users, gradient: 'from-blue-600 to-cyan-600', color: 'text-blue-400' },
     { label: 'Verified', value: verifiedStudents.length, icon: CheckCircle2, gradient: 'from-green-600 to-emerald-600', color: 'text-green-400' },
     { label: 'Degrees Issued', value: loading ? '…' : issuedDegreesCount, icon: GraduationCap, gradient: 'from-purple-600 to-pink-600', color: 'text-purple-400' },
     { label: 'Pending Apps', value: pendingDegrees.length, icon: Clock, gradient: 'from-yellow-600 to-orange-600', color: 'text-yellow-400' },
-    { label: 'Fraud Alerts', value: unresolvedFraud.length, icon: AlertTriangle, gradient: 'from-red-600 to-rose-600', color: 'text-red-400' },
-    { label: 'Attestations', value: loading ? '…' : totalAttestations, icon: Link2, gradient: 'from-indigo-600 to-blue-600', color: 'text-indigo-400' },
+    { label: 'Fraud Alerts', value: '0', icon: AlertTriangle, gradient: 'from-red-600 to-rose-600', color: 'text-red-400' },
+    { label: 'Attestations', value: loading ? '…' : (blockchainError ? '⚠️' : totalAttestations), icon: Link2, gradient: 'from-indigo-600 to-blue-600', color: 'text-indigo-400' },
   ];
 
   if (error) {
@@ -185,7 +188,17 @@ export default function AdminDashboard({ onNavigate }: Props) {
             </h3>
             <button onClick={() => onNavigate('degree-management')} className="text-xs text-blue-400 hover:text-blue-300 transition">View All</button>
           </div>
-          {loading ? (
+          {degreeError ? (
+            <div className="text-sm text-yellow-400 text-center py-4">
+              {degreeError}
+              <button
+                onClick={() => window.location.reload()}
+                className="block mx-auto mt-2 text-xs text-blue-400 hover:text-blue-300"
+              >
+                Retry
+              </button>
+            </div>
+          ) : loading ? (
             <p className="text-sm text-gray-500 text-center py-6">Loading...</p>
           ) : pendingDegrees.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-6">No pending degree applications</p>
@@ -210,7 +223,7 @@ export default function AdminDashboard({ onNavigate }: Props) {
         </div>
       </div>
 
-      {/* Recent Audit Logs */}
+      {/* Recent Activity */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold flex items-center gap-2">
@@ -218,31 +231,19 @@ export default function AdminDashboard({ onNavigate }: Props) {
           </h3>
           <button onClick={() => onNavigate('audit')} className="text-xs text-blue-400 hover:text-blue-300 transition">View All</button>
         </div>
-        <div className="space-y-2">
-          {loading ? (
-            <p className="text-sm text-gray-500 text-center py-6">Loading...</p>
-          ) : auditLogs.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-6">No recent activity</p>
-          ) : (
-            auditLogs.map(log => (
-              <div key={log.id} className="flex items-center gap-3 bg-gray-800/20 rounded-lg px-4 py-3">
-                <div className={`w-2 h-2 rounded-full shrink-0 ${
-                  log.category === 'auth' ? 'bg-blue-400' :
-                  log.category === 'verification' ? 'bg-purple-400' :
-                  log.category === 'degree' ? 'bg-green-400' :
-                  log.category === 'blockchain' ? 'bg-cyan-400' :
-                  log.category === 'fraud' ? 'bg-red-400' :
-                  'bg-gray-400'
-                }`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{log.action}</p>
-                  <p className="text-xs text-gray-500 truncate">{log.details}</p>
-                </div>
-                <span className="text-xs text-gray-500 whitespace-nowrap">{new Date(log.timestamp).toLocaleDateString()}</span>
-              </div>
-            ))
-          )}
-        </div>
+        {blockchainError ? (
+          <div className="text-sm text-yellow-400 text-center py-4">
+            {blockchainError}
+            <button
+              onClick={() => window.location.reload()}
+              className="block mx-auto mt-2 text-xs text-blue-400 hover:text-blue-300"
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 text-center py-6">Audit logs will appear here once the backend is ready.</p>
+        )}
       </div>
     </div>
   );

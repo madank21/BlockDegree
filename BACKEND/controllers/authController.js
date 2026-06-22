@@ -34,18 +34,18 @@ const generateTokens = (userId, role) => ({
 
 // ─── Helper: build user response object ──────────────────────────────────────
 const buildUserResponse = (user) => {
-  // user is the raw DB row – we assume it has a `name` column
+  // user is already mapped from DB (camelCase properties)
   return {
     id: user.id,
-    name: user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || '',
+    name: user.name || '',
     email: user.email,
     role: user.role,
-    studentId: user.student_id || null,
-    institutionName: user.institution_name || null,
-    walletAddress: user.wallet_address || null,
-    isActive: user.is_active,
-    createdAt: user.created_at,
-    lastLogin: user.last_login,
+    studentId: user.studentId || null,
+    institutionName: user.institutionName || null,
+    walletAddress: user.walletAddress || null,
+    isActive: user.isActive,     // now available
+    createdAt: user.createdAt,
+    lastLogin: user.lastLogin,
   };
 };
 
@@ -80,15 +80,12 @@ const register = asyncHandler(async (req, res) => {
     return sendError(res, "Email already registered", 409);
   }
 
-  // Determine the full name: use provided 'name' or combine first_name/last_name if sent separately
   let fullName = name || '';
   if (!fullName && req.body.first_name && req.body.last_name) {
     fullName = `${req.body.first_name} ${req.body.last_name}`.trim();
   }
-  // If still empty, use a placeholder
   if (!fullName) fullName = email.split('@')[0];
 
-  // Determine student_id: use provided student_id or registrationNumber
   const studentId = student_id || registrationNumber || null;
 
   console.log(`[REGISTER] Creating user with:`, {
@@ -101,11 +98,10 @@ const register = asyncHandler(async (req, res) => {
   });
 
   try {
-    // User.create should accept { name, email, password, role, student_id, institution_name, is_active }
     const user = await User.create({
       name: fullName,
       email,
-      password,          // User.create must hash it
+      password,
       role,
       student_id: studentId,
       institution_name: institution_name || null,
@@ -118,7 +114,6 @@ const register = asyncHandler(async (req, res) => {
       role: user.role,
     });
 
-    // Log the registration
     await AuditLog.create({
       action: "USER_REGISTERED",
       actorId: user.id,
@@ -141,7 +136,6 @@ const register = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error(`[REGISTER] Error creating user:`, error.message);
     console.error(error.stack);
-    // Re-throw to let the asyncHandler catch and send a 500
     throw new Error(`User creation failed: ${error.message}`);
   }
 });
@@ -152,7 +146,8 @@ const login = asyncHandler(async (req, res) => {
 
   console.log(`[LOGIN] Attempt for email: ${email}`);
 
-  const user = await User.findByEmail(email, true);
+  // ✅ FIX: remove the second argument (true) – it was not used
+  const user = await User.findByEmail(email);
   if (!user) {
     console.log(`[LOGIN] User not found: ${email}`);
     return sendUnauthorized(res, "Invalid email or password");
@@ -162,17 +157,18 @@ const login = asyncHandler(async (req, res) => {
     id: user.id,
     email: user.email,
     role: user.role,
-    is_active: user.is_active,
-    password_hash_exists: !!user.password_hash,
+    is_active: user.isActive,          // now correctly retrieved
+    password_hash_exists: !!user.passwordHash,
   });
 
-  if (!user.is_active) {
+  // ✅ Use user.isActive (camelCase) – already mapped
+  if (!user.isActive) {
     console.log(`[LOGIN] User account deactivated: ${email}`);
     return sendUnauthorized(res, "Account deactivated");
   }
 
-  // Compare password
-  const isValid = await User.comparePassword(password, user.password_hash);
+  // Compare password – use user.passwordHash
+  const isValid = await User.comparePassword(password, user.passwordHash);
   console.log(`[LOGIN] Password comparison result: ${isValid}`);
 
   if (!isValid) {
@@ -180,9 +176,9 @@ const login = asyncHandler(async (req, res) => {
     return sendUnauthorized(res, "Invalid email or password");
   }
 
-  // Update last login asynchronously (fire-and-forget)
-  User.update(user.id, { last_login: new Date().toISOString() }).catch((err) => {
-    console.error(`[LOGIN] Failed to update last_login for ${user.id}:`, err.message);
+  // Update last login asynchronously
+  User.update(user.id, { lastLogin: new Date().toISOString() }).catch((err) => {
+    console.error(`[LOGIN] Failed to update lastLogin for ${user.id}:`, err.message);
   });
 
   await AuditLog.create({
@@ -251,8 +247,7 @@ const logout = async (req, res, next) => {
 // PATCH /api/v1/auth/me
 const updateProfile = async (req, res, next) => {
   try {
-    // Update allowed fields; adjust to match your actual columns
-    const allowedFields = ['name', 'phone', 'organization', 'institution_name'];
+    const allowedFields = ['name', 'phone', 'organization', 'institutionName', 'institution_name'];
     const updates = {};
     allowedFields.forEach((f) => {
       if (req.body[f] !== undefined) updates[f] = req.body[f];
@@ -289,7 +284,7 @@ const changePassword = async (req, res, next) => {
     }
 
     const user = await User.findById(req.user.id);
-    const isMatch = await User.comparePassword(currentPassword, user.password_hash);
+    const isMatch = await User.comparePassword(currentPassword, user.passwordHash);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
@@ -298,7 +293,7 @@ const changePassword = async (req, res, next) => {
     }
 
     const newHash = await bcrypt.hash(newPassword, 12);
-    await User.update(req.user.id, { password_hash: newHash });
+    await User.update(req.user.id, { passwordHash: newHash });
 
     return res.status(200).json({
       success: true,
@@ -329,8 +324,8 @@ const forgotPassword = async (req, res, next) => {
     const expires = new Date(Date.now() + 3600000).toISOString();
 
     await User.update(user.id, {
-      password_reset_token: token,
-      password_reset_expires: expires,
+      passwordResetToken: token,
+      passwordResetExpires: expires,
     });
 
     await notificationService.sendPasswordResetEmail(user.email, { token });
@@ -372,9 +367,9 @@ const resetPassword = async (req, res, next) => {
 
     const newHash = await bcrypt.hash(newPassword, 12);
     await User.update(user.id, {
-      password_hash: newHash,
-      password_reset_token: null,
-      password_reset_expires: null,
+      passwordHash: newHash,
+      passwordResetToken: null,
+      passwordResetExpires: null,
     });
 
     return res.status(200).json({
@@ -410,8 +405,8 @@ const verifyEmail = async (req, res, next) => {
     }
 
     await User.update(user.id, {
-      email_verified: true,
-      email_verification_token: null,
+      emailVerified: true,
+      emailVerificationToken: null,
     });
 
     return res.status(200).json({
