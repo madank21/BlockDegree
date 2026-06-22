@@ -10,7 +10,8 @@ const {
   revokeDegree,
   getDegreeStats,
   getPublicCertificate,
-  issueExistingDegree,   // ← new controller method
+  issueExistingDegree,
+  publicLookupById,   // <-- new controller method
 } = require('../controllers/degreeController');
 
 const { authenticate, optionalAuthenticate } = require('../middleware/authMiddleware');
@@ -23,7 +24,8 @@ const {
 const { body } = require('express-validator');
 
 // ─── Public Routes ─────────────────────────────────────────────────────────────
-router.get('/public/:certNumber', getPublicCertificate);
+router.get('/public/cert/:certNumber', getPublicCertificate);
+router.get('/public/degree/:id', publicLookupById);   // <-- NEW: public degree lookup by ID
 
 // ─── Protected Routes ──────────────────────────────────────────────────────────
 router.use(authenticate);
@@ -40,7 +42,6 @@ router.post('/',
   issueDegree
 );
 
-// ─── NEW: Issue an existing degree (change status to "issued") ──────────────
 router.post('/:id/issue',
   authorizeUniversityOrAdmin,
   ...uuidParamValidator(),

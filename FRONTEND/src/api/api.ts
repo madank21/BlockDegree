@@ -237,7 +237,8 @@ export const degreesApi = {
   getQr: (id: string) => get<{ qrUrl: string }>(`/degrees/${id}/qr`),
   revoke: (id: string, reason: string) =>
     del<{ success: boolean }>(`/degrees/${id}/revoke`, { reason }),
-  publicLookup: (id: string) => get<{ degree: any }>(`/degrees/public/${id}`),
+  // ✅ FIX: public degree lookup uses the new route /public/degree/:id
+  publicLookup: (id: string) => get<{ degree: any }>(`/degrees/public/degree/${encodeURIComponent(id)}`),
   update: (id: string, payload: Record<string, unknown>) =>
     patch<{ success: boolean }>(`/degrees/${id}`, payload),
 };

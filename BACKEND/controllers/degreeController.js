@@ -106,28 +106,19 @@ const issueDegree = asyncHandler(async (req, res) => {
 const issueExistingDegree = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  // 1. Fetch the degree to ensure it exists
   const degree = await Degree.findById(id);
   if (!degree) {
     return sendNotFound(res, "Degree");
   }
 
-  // 2. Prevent re‑issuing if already issued
   if (degree.status === "issued") {
     return sendError(res, "Degree is already issued", 400);
   }
 
-  // 3. Update the status to "issued"
-  //    Optionally set blockchainSyncStatus to 'queued' to trigger minting later.
   const updatedDegree = await Degree.update(id, {
     status: "issued",
-    // blockchainSyncStatus: "queued",   // uncomment if you have a background worker
   });
 
-  // 4. (Optional) If you need to mint on the blockchain immediately:
-  //    await blockchainService.mintDegree(updatedDegree);
-
-  // 5. Audit log
   await AuditLog.create({
     action: "DEGREE_ISSUED",
     actorId: req.user.id,
@@ -258,13 +249,43 @@ const getPublicCertificate = asyncHandler(async (req, res) => {
   });
 });
 
+// ─── GET /api/v1/degrees/public/degree/:id ────────────────────────────────────
+const publicLookupById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const degree = await Degree.findById(id);
+  if (!degree) {
+    return sendNotFound(res, "Degree");
+  }
+
+  // Return only public-safe fields, including blockchainTxHash for verification
+  const publicData = {
+    id: degree.id,
+    studentName: degree.studentName,
+    studentId: degree.studentId,
+    degreeTitle: degree.degreeTitle,
+    fieldOfStudy: degree.fieldOfStudy,
+    graduationDate: degree.graduationDate,
+    gpa: degree.gpa,
+    honors: degree.honors,
+    certificateNumber: degree.certificateNumber,
+    status: degree.status,
+    blockchainTxHash: degree.blockchainTxHash,   // critical for on-chain verification
+    qrCodeUrl: degree.qrCodeUrl,
+    ipfsCid: degree.ipfsCid,
+    ipfsGatewayUrl: degree.ipfsGatewayUrl,
+    createdAt: degree.createdAt,
+  };
+
+  return sendSuccess(res, { degree: publicData }, "Degree retrieved");
+});
+
 // ─── PATCH /api/v1/degrees/:id ───────────────────────────────────────────────
 const updateDegree = asyncHandler(async (req, res) => {
   const { gpa, honors, metadata } = req.body;
   const degree = await Degree.findById(req.params.id);
   if (!degree) return sendNotFound(res, "Degree");
 
-  // Only certain fields can be updated
   const updates = {};
   if (gpa !== undefined) updates.gpa = gpa;
   if (honors !== undefined) updates.honors = honors;
@@ -291,7 +312,7 @@ const updateDegree = asyncHandler(async (req, res) => {
 // ─── EXPORTS ──────────────────────────────────────────────────────────────────
 module.exports = {
   issueDegree,
-  issueExistingDegree,   // <-- new export
+  issueExistingDegree,
   getDegrees,
   getDegreeById,
   getDegreeQR,
@@ -299,4 +320,5 @@ module.exports = {
   getDegreeStats,
   getPublicCertificate,
   updateDegree,
+  publicLookupById,   // <-- new export for public ID lookup
 };

@@ -47,25 +47,44 @@ export default function VerifyDegree() {
           qrCodeData: data.degreeDetails?.qrCodeData,
         };
       } else {
-        // Treat as degree ID – call protected endpoint (requires JWT)
+        // Treat as degree ID – use public lookup (no authentication required)
         try {
-          const degreeData = await degreesApi.getById(q);
+          const degreeData = await degreesApi.publicLookup(q);
           const degree = degreeData.degree;
           if (degree?.blockchainHash) {
+            // Verify the hash on-chain
             const verifyData = await verificationApi.verifyPublic(degree.blockchainHash);
             res = {
               valid: verifyData.valid,
               status: verifyData.valid ? 'issued' : 'invalid',
               errors: verifyData.valid ? [] : ['Blockchain verification failed.'],
-              ...degree,
-              blockchainHash: degree.blockchainHash,
+              degreeId: degree.id || q,
+              studentName: degree.studentName || degree.student_name,
+              registrationNumber: degree.studentId || degree.student_id,
+              degreeTitle: degree.degreeTitle || degree.degree_title,
+              department: degree.department || degree.field_of_study,
+              cgpa: degree.cgpa || degree.gpa,
+              graduationYear: degree.graduationYear || degree.graduation_date,
+              blockchainHash: degree.blockchainHash || degree.blockchain_tx_hash,
+              fraudScore: degree.fraudScore || 0,
+              qrCodeData: degree.qrCodeData || degree.qr_code_url,
             };
           } else {
-            res = { valid: false, status: 'invalid', errors: ['Degree has no blockchain hash.'] };
+            // Degree exists but no on-chain record
+            res = {
+              valid: false,
+              status: 'invalid',
+              errors: ['Degree has no blockchain attestation.'],
+              ...degree,
+            };
           }
         } catch (err: any) {
-          // Degree not found or not authorized
-          res = { valid: false, status: 'invalid', errors: ['Degree not found or you are not authorized.'] };
+          // Degree not found or public lookup failed
+          res = {
+            valid: false,
+            status: 'invalid',
+            errors: ['Degree not found. Please check the ID and try again.'],
+          };
         }
       }
 
@@ -143,7 +162,7 @@ export default function VerifyDegree() {
         </button>
       </form>
 
-      {/* Results – unchanged JSX */}
+      {/* Results */}
       {searched && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -228,7 +247,7 @@ export default function VerifyDegree() {
                   <h3 className="text-lg font-bold text-red-400">INVALID — Verification Failed</h3>
                   <p className="text-sm text-gray-400 mt-1">
                     {result?.errors?.length
-                      ? 'Degree does not match required documents (OCR/validation mismatch).'
+                      ? result.errors.join(' ')
                       : 'No valid attestation record found for this Degree ID / hash.'}
                   </p>
 
