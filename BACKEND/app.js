@@ -136,7 +136,7 @@ app.use('/api/v1/fraud', fraudRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/audit-logs', auditRoutes);
 app.use('/api/v1/admin', adminRoutes);
-
+app.use('/uploads', express.static('uploads'));
 // ─── Error Handling ────────────────────────────────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);

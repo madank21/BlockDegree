@@ -5,18 +5,26 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { sendError } = require('../src/utils/response');
 
-// Ensure upload directories exist
+// ─── Ensure upload directories exist (absolute paths) ────────────────────────
 const createUploadDirs = () => {
+  const baseDir = path.join(__dirname, '..'); // BACKEND root
   const dirs = [
-    './uploads',
-    './uploads/documents',
-    './uploads/avatars',
-    './uploads/temp',
-    './uploads/faces',
+    path.join(baseDir, 'uploads'),
+    path.join(baseDir, 'uploads', 'documents'),
+    path.join(baseDir, 'uploads', 'avatars'),
+    path.join(baseDir, 'uploads', 'temp'),
+    path.join(baseDir, 'uploads', 'faces'),
   ];
+
   dirs.forEach(dir => {
     if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+        console.log(`[uploadMiddleware] Created directory: ${dir}`);
+      } catch (err) {
+        console.error(`[uploadMiddleware] Failed to create directory ${dir}:`, err.message);
+        // Don't throw – let the app start, but log the error
+      }
     }
   });
 };
@@ -27,7 +35,8 @@ createUploadDirs();
 
 const documentStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, './uploads/documents');
+    const dest = path.join(__dirname, '..', 'uploads', 'documents');
+    cb(null, dest);
   },
   filename: (req, file, cb) => {
     const uniqueName = `${uuidv4()}-${Date.now()}${path.extname(file.originalname)}`;
@@ -37,7 +46,8 @@ const documentStorage = multer.diskStorage({
 
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, './uploads/avatars');
+    const dest = path.join(__dirname, '..', 'uploads', 'avatars');
+    cb(null, dest);
   },
   filename: (req, file, cb) => {
     const uniqueName = `avatar-${uuidv4()}${path.extname(file.originalname)}`;
@@ -47,7 +57,8 @@ const avatarStorage = multer.diskStorage({
 
 const faceStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, './uploads/faces');
+    const dest = path.join(__dirname, '..', 'uploads', 'faces');
+    cb(null, dest);
   },
   filename: (req, file, cb) => {
     const uniqueName = `face-${uuidv4()}${path.extname(file.originalname)}`;
@@ -58,7 +69,8 @@ const faceStorage = multer.diskStorage({
 // ─── NEW: Import storage (for admin import of JSON files) ────────────────────
 const importStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, './uploads/temp');  // temporary storage
+    const dest = path.join(__dirname, '..', 'uploads', 'temp');
+    cb(null, dest);
   },
   filename: (req, file, cb) => {
     const uniqueName = `import-${uuidv4()}${path.extname(file.originalname)}`;

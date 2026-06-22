@@ -273,6 +273,58 @@ CREATE INDEX IF NOT EXISTS idx_ipfs_cid    ON ipfs_documents(cid);
 CREATE INDEX IF NOT EXISTS idx_ipfs_user   ON ipfs_documents(user_id);
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- TABLE: documents   <--- ADDED (was missing)
+-- Stores uploaded user documents (CNIC, marksheets, certificates) with
+-- OCR, YOLO, and validation statuses.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS documents (
+  id                    UUID          PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id               UUID          REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  degree_id             UUID          REFERENCES degrees(id) ON DELETE SET NULL,
+  document_type         VARCHAR(50)   NOT NULL DEFAULT 'degree',
+  file_name             VARCHAR(255)  NOT NULL,
+  original_name         VARCHAR(255)  NOT NULL,
+  file_path             TEXT          NOT NULL,
+  file_url              TEXT          NOT NULL,
+  file_size             BIGINT,
+  mime_type             VARCHAR(100),
+  file_hash             VARCHAR(64)   UNIQUE NOT NULL,
+
+  -- OCR data
+  ocr_data              JSONB         DEFAULT '{}',
+  ocr_confidence        DECIMAL(5,2)  DEFAULT 0,
+  ocr_status            TEXT          DEFAULT 'pending',
+  ocr_text              TEXT,
+
+  -- YOLO / layout analysis
+  yolo_status           TEXT          DEFAULT 'pending',
+  yolo_detections       TEXT[]        DEFAULT '{}',
+  yolo_valid            BOOLEAN,
+  yolo_confidence       FLOAT,
+
+  -- Validation against user profile
+  validation_status     TEXT          DEFAULT 'pending',
+  validation_errors     TEXT[]        DEFAULT '{}',
+  extracted_data        JSONB         DEFAULT '{}',
+
+  -- Fraud detection
+  fraud_score           INTEGER       DEFAULT 0 CHECK (fraud_score BETWEEN 0 AND 100),
+  is_verified           BOOLEAN       DEFAULT false,
+  verification_notes    TEXT,
+
+  -- Timestamps
+  created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_docs_user_id    ON documents(user_id);
+CREATE INDEX IF NOT EXISTS idx_docs_type       ON documents(document_type);
+CREATE INDEX IF NOT EXISTS idx_docs_hash       ON documents(file_hash);
+CREATE INDEX IF NOT EXISTS idx_docs_created    ON documents(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_docs_ocr_status ON documents(ocr_status);
+CREATE INDEX IF NOT EXISTS idx_docs_yolo_status ON documents(yolo_status);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- TABLE: blockchain_transactions
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS blockchain_transactions (
@@ -304,3 +356,20 @@ ALTER TABLE audit_logs           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fraud_logs           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ipfs_documents       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE face_verification_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents            ENABLE ROW LEVEL SECURITY;   -- newly added
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Ensure all columns exist (idempotent) – in case table already existed
+-- without the new columns, this will add them.
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE documents
+  ADD COLUMN IF NOT EXISTS ocr_status TEXT DEFAULT 'pending',
+  ADD COLUMN IF NOT EXISTS yolo_status TEXT DEFAULT 'pending',
+  ADD COLUMN IF NOT EXISTS validation_status TEXT DEFAULT 'pending',
+  ADD COLUMN IF NOT EXISTS ocr_text TEXT,
+  ADD COLUMN IF NOT EXISTS extracted_data JSONB DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS yolo_detections TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS yolo_valid BOOLEAN,
+  ADD COLUMN IF NOT EXISTS yolo_confidence FLOAT,
+  ADD COLUMN IF NOT EXISTS validation_errors TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();

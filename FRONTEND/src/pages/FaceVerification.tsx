@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../useStore';
 import { Camera, CheckCircle2, ScanFace, Shield, User, AlertTriangle, RefreshCw, X } from 'lucide-react';
-// ✅ Correct import: default object containing postForm, request, etc.
 import api from '../api/api';
 
 export default function FaceVerification() {
@@ -17,7 +16,7 @@ export default function FaceVerification() {
   const [analysisDetails, setAnalysisDetails] = useState<string[]>([]);
   const [permissionStatus, setPermissionStatus] = useState<'prompt' | 'granted' | 'denied'>('prompt');
 
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationRef = useRef<number | null>(null);
@@ -51,7 +50,122 @@ export default function FaceVerification() {
     }
   };
 
-  // Start camera
+  // Face detection loop (memoized)
+  const startFaceDetection = useCallback(() => {
+    const detect = () => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas) {
+        animationRef.current = requestAnimationFrame(detect);
+        return;
+      }
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx || video.readyState !== 4) {
+        animationRef.current = requestAnimationFrame(detect);
+        return;
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      const width = imageData.width;
+      const height = imageData.height;
+
+      let skinPixels = 0;
+      let minX = width,
+        maxX = 0,
+        minY = height,
+        maxY = 0;
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = (y * width + x) * 4;
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
+
+          const isSkin = r > 95 && g > 40 && b > 20 &&
+            r > g && r > b &&
+            Math.abs(r - g) > 15 &&
+            r - g > 15 && r - b > 15;
+
+          if (isSkin) {
+            skinPixels++;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      const totalPixels = width * height;
+      const skinRatio = skinPixels / totalPixels;
+      const faceWidth = maxX - minX;
+      const faceHeight = maxY - minY;
+
+      const detected = skinRatio > 0.05 && skinRatio < 0.5 &&
+        faceWidth > width * 0.15 && faceHeight > height * 0.15 &&
+        faceWidth < width * 0.8 && faceHeight < height * 0.8;
+
+      setFaceDetected(detected);
+
+      if (detected) {
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(minX, minY, faceWidth, faceHeight);
+      }
+
+      animationRef.current = requestAnimationFrame(detect);
+    };
+
+    detect();
+  }, []);
+
+  // Stop camera and cleanup (memoized)
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, []);
+
+  // Ref callback for the video element – attaches the stream as soon as the element is mounted
+  const handleVideoRef = useCallback((el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+
+    // If the element exists, we're in camera stage, and we have a stream – attach it immediately
+    if (el && stage === 'camera' && streamRef.current) {
+      // Avoid re-attaching if already attached
+      if (el.srcObject !== streamRef.current) {
+        el.srcObject = streamRef.current;
+        el.play()
+          .then(() => {
+            // Start the face detection loop once the video is playing
+            startFaceDetection();
+          })
+          .catch((err) => {
+            console.error('video.play() failed:', err);
+            setCameraError(
+              `Camera started but preview did not play automatically.\nReason: ${err?.message ?? String(err)}\nTry: click the Start Camera button again.`
+            );
+          });
+      }
+    }
+  }, [stage, startFaceDetection]);
+
+  // Start camera – only gets the stream and changes stage
   const startCamera = async () => {
     setCameraError(null);
     setStage('permission');
@@ -71,24 +185,8 @@ export default function FaceVerification() {
       });
 
       streamRef.current = stream;
-      setStage('camera');
       setPermissionStatus('granted');
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        try {
-          const playPromise = videoRef.current.play();
-          if (playPromise && typeof (playPromise as any).then === 'function') {
-            await playPromise;
-          }
-        } catch (playErr) {
-          console.error('video.play() failed:', playErr);
-          setCameraError(
-            `Camera started but preview did not play automatically.\nReason: ${(playErr as any)?.message ?? String(playErr)}\nTry: click the Start Camera button again or interact with the page.`
-          );
-        }
-        startFaceDetection();
-      }
+      setStage('camera'); // triggers re-render; the video ref callback will attach the stream
     } catch (err: any) {
       console.error('Camera error:', err);
 
@@ -100,7 +198,7 @@ export default function FaceVerification() {
       } else if (err.name === 'NotFoundError') {
         setCameraError('No camera found. Please connect a camera and try again.');
       } else if (err.name === 'NotSupportedError') {
-        setCameraError('QR scanning is not supported on your browser or device.');
+        setCameraError('Camera is not supported on your browser or device.');
       } else {
         setCameraError('Failed to access camera. Please check your device settings.');
       }
@@ -109,109 +207,12 @@ export default function FaceVerification() {
     }
   };
 
-  const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-      animationRef.current = null;
-    }
-  }, []);
-
-  // Simple face detection (kept for UI feedback)
-  const detectFace = (imageData: ImageData): { detected: boolean; x: number; y: number; width: number; height: number } => {
-    const data = imageData.data;
-    const width = imageData.width;
-    const height = imageData.height;
-
-    let skinPixels = 0;
-    let minX = width, maxX = 0, minY = height, maxY = 0;
-
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const idx = (y * width + x) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
-
-        const isSkin = (
-          r > 95 && g > 40 && b > 20 &&
-          r > g && r > b &&
-          Math.abs(r - g) > 15 &&
-          r - g > 15 && r - b > 15
-        );
-
-        if (isSkin) {
-          skinPixels++;
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
-        }
-      }
-    }
-
-    const totalPixels = width * height;
-    const skinRatio = skinPixels / totalPixels;
-    const faceWidth = maxX - minX;
-    const faceHeight = maxY - minY;
-
-    const detected = skinRatio > 0.05 && skinRatio < 0.5 &&
-      faceWidth > width * 0.15 && faceHeight > height * 0.15 &&
-      faceWidth < width * 0.8 && faceHeight < height * 0.8;
-
-    return {
-      detected,
-      x: minX,
-      y: minY,
-      width: faceWidth,
-      height: faceHeight
-    };
-  };
-
-  const startFaceDetection = () => {
-    const detect = () => {
-      if (!videoRef.current || !canvasRef.current) return;
-
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-
-      if (!ctx || video.readyState !== 4) {
-        animationRef.current = requestAnimationFrame(detect);
-        return;
-      }
-
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0);
-
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const faceResult = detectFace(imageData);
-
-      setFaceDetected(faceResult.detected);
-
-      if (faceResult.detected) {
-        ctx.strokeStyle = '#22c55e';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(faceResult.x, faceResult.y, faceResult.width, faceResult.height);
-      }
-
-      animationRef.current = requestAnimationFrame(detect);
-    };
-
-    detect();
-  };
-
   const capturePhoto = () => {
-    if (!videoRef.current || !canvasRef.current) return;
-
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d')!;
+    if (!video || !canvas) return;
 
+    const ctx = canvas.getContext('2d')!;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
@@ -222,7 +223,6 @@ export default function FaceVerification() {
     stopCamera();
   };
 
-  // --- Updated analyzeAndCompare: uses api.postForm ---
   const analyzeAndCompare = async () => {
     setStage('analyzing');
     setAnalysisDetails([]);
@@ -237,7 +237,6 @@ export default function FaceVerification() {
         return;
       }
 
-      // Get the selfie image as a blob
       const canvas = canvasRef.current;
       const selfieBlob = await new Promise<Blob>((resolve) => {
         canvas.toBlob((blob) => resolve(blob!), 'image/jpeg', 0.9);
@@ -245,7 +244,6 @@ export default function FaceVerification() {
 
       setAnalysisDetails(prev => [...prev, '✓ Selfie captured, sending to backend for verification...']);
 
-      // Get CNIC image blob
       let cnicBlob: Blob | null = null;
       if (cnicImage) {
         try {
@@ -256,7 +254,6 @@ export default function FaceVerification() {
         }
       }
 
-      // Prepare FormData
       const formData = new FormData();
       formData.append('selfie', selfieBlob, 'selfie.jpg');
       if (cnicBlob) {
@@ -266,7 +263,6 @@ export default function FaceVerification() {
 
       setAnalysisDetails(prev => [...prev, '📤 Uploading to backend...']);
 
-      // ✅ Use api.postForm for multipart upload
       const response = await api.postForm<{ match: boolean; confidence: number; details?: string }>(
         '/face/verify',
         formData
@@ -330,7 +326,6 @@ export default function FaceVerification() {
     );
   }
 
-  // --- JSX (unchanged) ---
   return (
     <div className="space-y-6">
       <div>
@@ -393,8 +388,8 @@ export default function FaceVerification() {
                     
                     {cameraError && (
                       <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                        <div className="flex items-center gap-2 text-red-400 text-sm">
-                          <AlertTriangle className="w-4 h-4" />
+                        <div className="flex items-center gap-2 text-red-400 text-sm whitespace-pre-wrap">
+                          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                           {cameraError}
                         </div>
                       </div>
@@ -407,7 +402,7 @@ export default function FaceVerification() {
             {stage === 'camera' && (
               <>
                 <video
-                  ref={videoRef}
+                  ref={handleVideoRef}
                   autoPlay
                   playsInline
                   muted

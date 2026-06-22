@@ -20,7 +20,6 @@ export default function DocumentUpload() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeUploadType, setActiveUploadType] = useState<string>('');
   const [uploadedImages, setUploadedImages] = useState<Record<string, string>>(() => {
-    // Restore from sessionStorage on initial load
     try {
       const stored = sessionStorage.getItem('uploadedImages');
       return stored ? JSON.parse(stored) : {};
@@ -29,9 +28,10 @@ export default function DocumentUpload() {
     }
   });
   const [validatingDocId, setValidatingDocId] = useState<string | null>(null);
-  const [documents, setDocuments] = useState<any[]>(currentUser?.documents || []);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Persist uploadedImages to sessionStorage whenever it changes
+  // Persist uploadedImages to sessionStorage
   useEffect(() => {
     try {
       sessionStorage.setItem('uploadedImages', JSON.stringify(uploadedImages));
@@ -40,13 +40,29 @@ export default function DocumentUpload() {
     }
   }, [uploadedImages]);
 
-  // Sync with currentUser.documents and merge with existing previews
+  // Fetch user's documents on mount
   useEffect(() => {
-    if (currentUser?.documents) {
-      setDocuments(currentUser.documents);
-      // If any document has a fileUrl (from server), we could use it, but we keep local previews.
+    fetchDocuments();
+  }, [currentUser?.id]);
+
+  const fetchDocuments = async () => {
+    if (!currentUser) return;
+    setLoading(true);
+    try {
+      const res = await api.get('/documents/me?limit=50');
+      const rawDocs = res.data.data || res.data || [];
+      // Map document_type to type for consistent frontend usage
+      const docs = rawDocs.map((doc: any) => ({
+        ...doc,
+        type: doc.document_type || doc.type,
+      }));
+      setDocuments(docs);
+    } catch (error) {
+      console.error('Failed to fetch documents:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [currentUser]);
+  };
 
   if (!currentUser) return null;
 
@@ -56,7 +72,6 @@ export default function DocumentUpload() {
     { type: 'certificate', label: 'Previous Certificate', desc: 'Intermediate or equivalent', icon: '📜', required: true },
   ] as const;
 
-  // --- YOLO analysis (unchanged) ---
   const analyzeDocumentWithYOLO = async (imageData: string, docType: string): Promise<{ valid: boolean; detections: string[]; confidence: number }> => {
     return new Promise((resolve) => {
       const img = new Image();
@@ -157,7 +172,6 @@ export default function DocumentUpload() {
     });
   };
 
-  // --- OCR (unchanged) ---
   const performOCR = async (imageData: string): Promise<{ text: string; confidence: number }> => {
     try {
       const result = await Tesseract.recognize(imageData, 'eng', {
@@ -177,7 +191,6 @@ export default function DocumentUpload() {
     }
   };
 
-  // --- Data extraction (unchanged) ---
   const extractDataFromText = (text: string, docType: string): Record<string, string> => {
     const extracted: Record<string, string> = {};
     const cleanText = text.replace(/[^\x20-\x7E\n]/g, ' ');
@@ -254,33 +267,45 @@ export default function DocumentUpload() {
     fileInputRef.current?.click();
   };
 
+  // ─── UPDATED handleFileSelect ──────────────────────────────────────────────
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeUploadType) return;
-    
+
     setUploading(activeUploadType);
-    
+
     const reader = new FileReader();
     reader.onload = async (event) => {
       const imageData = event.target?.result as string;
-      
-      // Temporary local id for image storage
+
       const tempId = Math.random().toString(36).substr(2, 9);
       setUploadedImages(prev => ({ ...prev, [tempId]: imageData }));
-      
+
       const formData = new FormData();
       formData.append('document', file);
+      // ✅ Send document_type directly so backend knows the type
+      formData.append('document_type', activeUploadType);
       formData.append('metadata', JSON.stringify({
         type: activeUploadType,
         userId: currentUser.id,
       }));
-      
+
       try {
         const uploadResult = await documentsApi.upload(formData);
-        const backendDocId = uploadResult.documentId;
-        const fileUrl = uploadResult.fileUrl; // if backend returns a URL
+        // The response should be { data: document, message: ... }
+        const docRecord = (uploadResult as any).data || uploadResult;
+        const backendDocId = docRecord.id;
 
-        // Move image from tempId to backendDocId, and store in sessionStorage
+        if (!backendDocId) {
+          // If no ID, something went wrong; refetch to sync
+          console.warn('Upload response missing ID, refetching documents...');
+          await fetchDocuments();
+          setUploading(null);
+          setActiveUploadType('');
+          return;
+        }
+
+        // ✅ Save image data in session storage with the real ID
         setUploadedImages(prev => {
           const newState = { ...prev };
           newState[backendDocId] = imageData;
@@ -288,19 +313,23 @@ export default function DocumentUpload() {
           return newState;
         });
 
+        // ✅ Build a new document object using the returned data
         const newDoc = {
           id: backendDocId,
-          type: activeUploadType as 'cnic' | 'marksheet' | 'certificate' | 'academic_record',
-          fileName: file.name,
-          uploadedAt: new Date().toISOString(),
-          ocrStatus: 'processing' as const,
-          yoloStatus: 'processing' as const,
-          fileUrl: fileUrl || imageData, // keep as fallback
+          type: docRecord.document_type || activeUploadType, // use backend's type if available
+          fileName: docRecord.original_name || file.name,
+          uploadedAt: docRecord.created_at || new Date().toISOString(),
+          ocrStatus: docRecord.ocr_status || 'processing',
+          yoloStatus: docRecord.yolo_status || 'processing',
+          fileUrl: docRecord.file_url || imageData,
+          // Include any other fields that might come from backend
+          ...docRecord,
         };
-        setDocuments(prev => [...prev, newDoc]);
+        // ✅ Prepend and immediately refetch to ensure consistency
+        setDocuments(prev => [newDoc, ...prev]);
         setUploading(null);
 
-        // --- YOLO ---
+        // ─── YOLO ──────────────────────────────────────────────────────────────
         setProcessing({ docId: backendDocId, stage: 'yolo' });
         const yoloAnalysis = await analyzeDocumentWithYOLO(imageData, activeUploadType);
         setYoloResult(prev => ({ ...prev, [backendDocId]: { valid: yoloAnalysis.valid, detections: yoloAnalysis.detections } }));
@@ -314,7 +343,7 @@ export default function DocumentUpload() {
             : doc
         ));
 
-        // --- OCR ---
+        // ─── OCR ──────────────────────────────────────────────────────────────
         setProcessing({ docId: backendDocId, stage: 'ocr' });
         setOcrProgress(0);
         const ocrData = await performOCR(imageData);
@@ -332,7 +361,7 @@ export default function DocumentUpload() {
             : doc
         ));
 
-        // --- Validation ---
+        // ─── Validation (optional) ──────────────────────────────────────────
         setValidatingDocId(backendDocId);
         try {
           const validationRes = await api.post(`/documents/${backendDocId}/validate`);
@@ -351,13 +380,20 @@ export default function DocumentUpload() {
         setProcessing(null);
         setActiveUploadType('');
 
+        // ✅ Optionally refetch to ensure we have the latest data from DB
+        // (but the local state is already updated, so this is just a safety net)
+        await fetchDocuments();
+
       } catch (error) {
         console.error('Upload error:', error);
+        alert('Upload failed. Please try again.');
         setUploading(null);
         setProcessing(null);
+        // Refetch to clean up any inconsistent state
+        await fetchDocuments();
       }
     };
-    
+
     reader.readAsDataURL(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -422,6 +458,10 @@ export default function DocumentUpload() {
     }
   };
 
+  if (loading) {
+    return <div className="text-center py-10 text-gray-400">Loading documents...</div>;
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -444,7 +484,6 @@ export default function DocumentUpload() {
           const isProcessingThis = existingDoc && processing?.docId === existingDoc.id;
           const docOcrResult = existingDoc ? ocrResult[existingDoc.id] : null;
           const docYoloResult = existingDoc ? yoloResult[existingDoc.id] : null;
-          // Use uploadedImages (from sessionStorage) or fileUrl from doc
           const docImage = existingDoc ? (uploadedImages[existingDoc.id] || existingDoc.fileUrl) : null;
 
           return (
@@ -589,9 +628,9 @@ export default function DocumentUpload() {
                     }`}>
                       <div className="flex items-start gap-2 mb-2">
                         {existingDoc.validationStatus === 'valid' ? (
-                          <CheckCircle2 className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                          <CheckCircle2 className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
                         ) : (
-                          <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                          <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
                         )}
                         <div>
                           <p className="text-[10px] text-gray-400 uppercase">Data Validation</p>
