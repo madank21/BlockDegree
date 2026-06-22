@@ -1,4 +1,3 @@
-// BACKEND/controllers/authController.js
 const asyncHandler = require("express-async-handler");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
@@ -34,7 +33,6 @@ const generateTokens = (userId, role) => ({
 
 // ─── Helper: build user response object ──────────────────────────────────────
 const buildUserResponse = (user) => {
-  // user is the raw DB row – we assume it has a `name` column
   return {
     id: user.id,
     name: user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || '',
@@ -80,15 +78,13 @@ const register = asyncHandler(async (req, res) => {
     return sendError(res, "Email already registered", 409);
   }
 
-  // Determine the full name: use provided 'name' or combine first_name/last_name if sent separately
+  // Determine the full name
   let fullName = name || '';
   if (!fullName && req.body.first_name && req.body.last_name) {
     fullName = `${req.body.first_name} ${req.body.last_name}`.trim();
   }
-  // If still empty, use a placeholder
   if (!fullName) fullName = email.split('@')[0];
 
-  // Determine student_id: use provided student_id or registrationNumber
   const studentId = student_id || registrationNumber || null;
 
   console.log(`[REGISTER] Creating user with:`, {
@@ -101,15 +97,13 @@ const register = asyncHandler(async (req, res) => {
   });
 
   try {
-    // ── Hash the password ──────────────────────────────────────────────────────
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // ── Create user with hashed password ──────────────────────────────────────
     const user = await User.create({
       name: fullName,
       email,
-      passwordHash: hashedPassword,   // <-- now using passwordHash
+      passwordHash: hashedPassword,
       role,
       student_id: studentId,
       institution_name: institution_name || null,
@@ -120,9 +114,10 @@ const register = asyncHandler(async (req, res) => {
       id: user.id,
       email: user.email,
       role: user.role,
+      // ✅ FIXED: use the correct property name (passwordHash)
+      passwordHashPrefix: user.passwordHash ? user.passwordHash.substring(0, 10) : 'MISSING',
     });
 
-    // Log the registration
     await AuditLog.create({
       action: "USER_REGISTERED",
       actorId: user.id,
@@ -145,7 +140,6 @@ const register = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error(`[REGISTER] Error creating user:`, error.message);
     console.error(error.stack);
-    // Re-throw to let the asyncHandler catch and send a 500
     throw new Error(`User creation failed: ${error.message}`);
   }
 });
@@ -167,16 +161,23 @@ const login = asyncHandler(async (req, res) => {
     email: user.email,
     role: user.role,
     is_active: user.is_active,
-    password_hash_exists: !!user.password_hash,
+    // ✅ FIXED: use passwordHash
+    password_hash_exists: !!user.passwordHash,
   });
 
-  if (!user.is_active) {
+  if (user.is_active === false) {
     console.log(`[LOGIN] User account deactivated: ${email}`);
     return sendUnauthorized(res, "Account deactivated");
   }
 
-  // Compare password
-  const isValid = await User.comparePassword(password, user.password_hash);
+  // ✅ FIXED: check passwordHash
+  if (!user.passwordHash) {
+    console.error(`[LOGIN] Missing password hash for user: ${email} (id: ${user.id})`);
+    return sendUnauthorized(res, "Invalid email or password");
+  }
+
+  // ✅ FIXED: pass user.passwordHash
+  const isValid = await User.comparePassword(password, user.passwordHash);
   console.log(`[LOGIN] Password comparison result: ${isValid}`);
 
   if (!isValid) {
@@ -184,7 +185,7 @@ const login = asyncHandler(async (req, res) => {
     return sendUnauthorized(res, "Invalid email or password");
   }
 
-  // Update last login asynchronously (fire-and-forget)
+  // Update last login asynchronously
   User.update(user.id, { last_login: new Date().toISOString() }).catch((err) => {
     console.error(`[LOGIN] Failed to update last_login for ${user.id}:`, err.message);
   });
@@ -255,7 +256,6 @@ const logout = async (req, res, next) => {
 // PATCH /api/v1/auth/me
 const updateProfile = async (req, res, next) => {
   try {
-    // Update allowed fields; adjust to match your actual columns
     const allowedFields = ['name', 'phone', 'organization', 'institution_name'];
     const updates = {};
     allowedFields.forEach((f) => {
@@ -293,7 +293,8 @@ const changePassword = async (req, res, next) => {
     }
 
     const user = await User.findById(req.user.id);
-    const isMatch = await User.comparePassword(currentPassword, user.password_hash);
+    // ✅ FIXED: use user.passwordHash
+    const isMatch = await User.comparePassword(currentPassword, user.passwordHash);
     if (!isMatch) {
       return res.status(401).json({
         success: false,

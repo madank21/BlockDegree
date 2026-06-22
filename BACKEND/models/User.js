@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────
 
 const { getSupabaseAdmin } = require("../database/supabase");
+const bcrypt = require("bcrypt");   // <-- unchanged
 
 const TABLE = "users";
 
@@ -17,7 +18,7 @@ const mapUserFromDB = (row) => {
     id: row.id,
     name: row.name,
     email: row.email,
-    passwordHash: row.password_hash,
+    passwordHash: row.password_hash,   // <-- maps to camelCase
     role: row.role,
 
     studentId: row.student_id,
@@ -249,12 +250,22 @@ const User = {
     return count || 0;
   },
 
-  // ── NEW: Check if email exists ────────────────────────────
-  // Returns true if a user with the given email exists, false otherwise.
+  // ── Check if email exists ────────────────────────────────
   async emailExists(email) {
     if (!email) return false;
     const user = await this.findByEmail(email);
     return !!user;
+  },
+
+  // ── Compare password (for login) ──────────────────────────
+  async comparePassword(plainPassword, hashedPassword) {
+    if (!plainPassword || !hashedPassword) return false;
+    try {
+      return await bcrypt.compare(plainPassword, hashedPassword);
+    } catch (error) {
+      console.error("Password comparison error:", error);
+      return false;
+    }
   },
   // ──────────────────────────────────────────────────────────
 };
