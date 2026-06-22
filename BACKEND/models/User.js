@@ -4,7 +4,6 @@
 // ─────────────────────────────────────────────────────────────
 
 const { getSupabaseAdmin } = require("../database/supabase");
-const bcrypt = require("bcryptjs");
 
 const TABLE = "users";
 
@@ -31,7 +30,7 @@ const mapUserFromDB = (row) => {
     faceDescriptorHash: row.face_descriptor_hash,
     faceRegisteredAt: row.face_registered_at,
 
-    isActive: row.is_active,          // ✅ included
+    isActive: row.is_active,
     emailVerified: row.email_verified,
     avatarUrl: row.avatar_url,
     lastLogin: row.last_login,
@@ -44,9 +43,6 @@ const mapUserFromDB = (row) => {
 
 const mapMany = (rows) => (rows || []).map(mapUserFromDB);
 
-// ─────────────────────────────────────────────────────────────
-// ✅ DEFAULT COLUMNS – includes is_active
-// ─────────────────────────────────────────────────────────────
 const DEFAULT_COLUMNS = `
   id, name, email, password_hash, role,
   student_id, institution_id, institution_name,
@@ -65,18 +61,12 @@ const User = {
   async create(data) {
     const supabase = getSupabaseAdmin();
 
-    // Hash the password if provided
-    let passwordHash = data.password || data.passwordHash;
-    if (passwordHash) {
-      passwordHash = await bcrypt.hash(passwordHash, 12);
-    }
-
     const { data: user, error } = await supabase
       .from(TABLE)
       .insert({
         name: data.name,
         email: data.email,
-        password_hash: passwordHash,
+        password_hash: data.passwordHash || data.password_hash,
         role: data.role || "student",
 
         student_id: data.studentId || data.student_id || null,
@@ -127,7 +117,7 @@ const User = {
 
     const { data, error } = await supabase
       .from(TABLE)
-      .select(DEFAULT_COLUMNS)   // ✅ includes is_active
+      .select(DEFAULT_COLUMNS)
       .eq("email", email)
       .maybeSingle();
 
@@ -136,30 +126,12 @@ const User = {
     return mapUserFromDB(data);
   },
 
-  // ── Email exists check ────────────────────────────────────
-  async emailExists(email) {
-    const supabase = getSupabaseAdmin();
-    const { count, error } = await supabase
-      .from(TABLE)
-      .select('id', { count: 'exact', head: true })
-      .eq('email', email);
-    if (error) throw new Error(`User.emailExists failed: ${error.message}`);
-    return count > 0;
-  },
-
-  // ── Compare password ───────────────────────────────────────
-  // ✅ NEW METHOD – fixes the "is not a function" error
-  async comparePassword(plainPassword, hashedPassword) {
-    if (!hashedPassword) return false;
-    return bcrypt.compare(plainPassword, hashedPassword);
-  },
-
-  // ── Find many ─────────────────────────────────────────────
-  async findMany({
-    page = 1,
-    limit = 10,
-    role,
-    isActive,
+  // ── Find many (with filters) ─────────────────────────────
+  async findMany({ 
+    page = 1, 
+    limit = 10, 
+    role, 
+    isActive, 
     search,
     institutionId,
   } = {}) {
@@ -219,19 +191,11 @@ const User = {
       avatarUrl: "avatar_url",
       lastLogin: "last_login",
       metadata: "metadata",
-      passwordResetToken: "password_reset_token",
-      passwordResetExpires: "password_reset_expires",
-      emailVerificationToken: "email_verification_token",
     };
 
     for (const [key, col] of Object.entries(map)) {
       if (updates[key] !== undefined) {
-        // If it's a password, hash it
-        if (key === 'passwordHash' && updates[key]) {
-          payload[col] = await bcrypt.hash(updates[key], 12);
-        } else {
-          payload[col] = updates[key];
-        }
+        payload[col] = updates[key];
       }
     }
 
@@ -259,6 +223,7 @@ const User = {
       if (error) throw new Error(`User.delete failed: ${error.message}`);
       return true;
     } else {
+      // soft delete: set is_active = false
       const { data, error } = await supabase
         .from(TABLE)
         .update({ is_active: false, updated_at: new Date().toISOString() })
@@ -283,6 +248,15 @@ const User = {
     if (error) throw new Error(`User.count failed: ${error.message}`);
     return count || 0;
   },
+
+  // ── NEW: Check if email exists ────────────────────────────
+  // Returns true if a user with the given email exists, false otherwise.
+  async emailExists(email) {
+    if (!email) return false;
+    const user = await this.findByEmail(email);
+    return !!user;
+  },
+  // ──────────────────────────────────────────────────────────
 };
 
 module.exports = User;

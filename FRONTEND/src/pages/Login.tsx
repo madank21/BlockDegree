@@ -21,18 +21,17 @@ export default function Login({ onNavigate }: LoginProps) {
     { email: 'hr@techcorp.com', role: 'Employer', color: 'green' },
   ];
 
-  const navigateByRole = (user: any) => {
-    console.log('🔍 navigateByRole called with user:', user);
-    console.log('👤 User role:', user?.role);
+  const navigateByRole = (role: string) => {
+    console.log('🔍 navigateByRole called with role:', role);
 
-    let targetPage = 'dashboard'; // default
+    let targetPage = 'dashboard'; // default for students
 
-    if (user.role === 'admin') {
+    if (role === 'admin') {
       targetPage = 'admin-dashboard';
-    } else if (user.role === 'employer') {
+    } else if (role === 'employer') {
       targetPage = 'employer-dashboard';
     } else {
-      targetPage = 'dashboard';
+      targetPage = 'dashboard'; // student dashboard
     }
 
     console.log(`➡️ Navigating to: ${targetPage}`);
@@ -50,12 +49,12 @@ export default function Login({ onNavigate }: LoginProps) {
       const user = await login(email, password);
       console.log('✅ Login response user:', user);
 
-      if (user) {
-        console.log('📋 User object:', user);
-        navigateByRole(user);
+      if (user && user.role) {
+        console.log('📋 User role:', user.role);
+        navigateByRole(user.role);
       } else {
-        console.warn('⚠️ Login returned null user');
-        setError('Invalid credentials. Please try again.');
+        console.warn('⚠️ Login returned invalid user object:', user);
+        setError('Login failed. Please try again.');
       }
     } catch (err: any) {
       console.error('❌ Login error:', err);
@@ -74,8 +73,8 @@ export default function Login({ onNavigate }: LoginProps) {
     try {
       const user = await login(demoEmail, 'demo123');
       console.log('✅ Demo login user:', user);
-      if (user) {
-        navigateByRole(user);
+      if (user && user.role) {
+        navigateByRole(user.role);
       } else {
         setError('Demo login failed. Please try again.');
       }

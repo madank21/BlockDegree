@@ -9,7 +9,7 @@ interface RegisterProps {
 }
 
 export default function Register({ onNavigate }: RegisterProps) {
-  const { setUser, currentUser } = useStore();
+  const { setUser } = useStore();
 
   const [name, setName] = useState('');
   const [regNo, setRegNo] = useState('');
@@ -76,7 +76,11 @@ export default function Register({ onNavigate }: RegisterProps) {
         role: 'student', // role is fixed for this registration flow
       };
 
+      console.log('[Register] Sending payload:', payload);
+
       const response = await authApi.register(payload);
+      console.log('[Register] Response:', response);
+
       const accessToken = response.accessToken;
       const user = response.user;
 
@@ -89,7 +93,6 @@ export default function Register({ onNavigate }: RegisterProps) {
       setUser(user);
 
       console.log('[Register] User set in store:', user);
-      console.log('[Register] Current user from store after set:', currentUser);
 
       setSuccess(true);
 
@@ -106,6 +109,8 @@ export default function Register({ onNavigate }: RegisterProps) {
         onNavigate(dashboardPage);
       }, 1500);
     } catch (err: any) {
+      console.error('[Register] Error:', err);
+
       let message = err.message || 'Registration failed. Please try again.';
 
       if (err.response?.data) {

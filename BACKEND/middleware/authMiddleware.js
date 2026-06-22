@@ -20,7 +20,7 @@ const authenticate = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ error: "User not found" });
     }
-    if (!user.is_active) {
+    if (!user.isActive) {
       return res.status(401).json({ error: "Account deactivated" });
     }
 
@@ -51,7 +51,7 @@ const optionalAuthenticate = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId);
-    if (user && user.is_active) {
+    if (user && user.isActive) {
       req.user = user;   // attach user if valid and active
     } else {
       req.user = null;   // user not found or inactive → treat as unauthenticated

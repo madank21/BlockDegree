@@ -58,10 +58,7 @@ export class ApiError extends Error {
 // ----------------------------------------------------------------------
 
 /**
- * Performs a JSON request (GET, POST, PUT, PATCH, DELETE).
- * - Adds Authorization header if token exists.
- * - Forces `cache: 'no-store'` to prevent 304 Not Modified responses.
- * - Unwraps `{ success: true, data: T }` envelope if present.
+ * Performs a JSON request (GET, POST, PUT, PATCH, DELETE) – body will be JSON.stringify'd.
  */
 async function request<T = any>(
   path: string,
@@ -75,14 +72,7 @@ async function request<T = any>(
     ...(options.headers || {}),
   };
 
-  // IMPORTANT: Disable cache to always get fresh data (avoids 304)
-  const fetchOptions: RequestInit = {
-    ...options,
-    headers,
-    cache: 'no-store',
-  };
-
-  const res = await fetch(`${BASE_URL}${path}`, fetchOptions);
+  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
 
   // Parse response body (could be JSON, text, or empty)
   let body: unknown = null;
@@ -130,7 +120,6 @@ async function postForm<T = any>(path: string, formData: FormData): Promise<T> {
     method: 'POST',
     headers,
     body: formData,
-    cache: 'no-store', // also disable cache for uploads
   });
 
   let body: unknown = null;
@@ -237,8 +226,7 @@ export const degreesApi = {
   getQr: (id: string) => get<{ qrUrl: string }>(`/degrees/${id}/qr`),
   revoke: (id: string, reason: string) =>
     del<{ success: boolean }>(`/degrees/${id}/revoke`, { reason }),
-  // ✅ FIX: public degree lookup uses the new route /public/degree/:id
-  publicLookup: (id: string) => get<{ degree: any }>(`/degrees/public/degree/${encodeURIComponent(id)}`),
+  publicLookup: (id: string) => get<{ degree: any }>(`/degrees/public/${id}`),
   update: (id: string, payload: Record<string, unknown>) =>
     patch<{ success: boolean }>(`/degrees/${id}`, payload),
 };
