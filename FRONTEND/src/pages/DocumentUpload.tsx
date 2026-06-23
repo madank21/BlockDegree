@@ -199,19 +199,15 @@ export default function DocumentUpload() {
     }
   };
 
-  // ─── IMPROVED EXTRACTION FUNCTION ───────────────────────────────────────────
   const extractDataFromText = (text: string, docType: string): Record<string, string> => {
     const extracted: Record<string, string> = {};
     const cleanText = text.replace(/[^\x20-\x7E\n]/g, ' ');
     const lines = cleanText.split('\n').filter(l => l.trim().length > 2);
 
-    // Helper: extract a name from a line
     const extractNameFromLine = (line: string): string | null => {
-      // 1. If line contains "Name" (case-insensitive), capture everything after it
       const nameMatch = line.match(/Name\s*[:.]?\s*([A-Za-z\s]{2,40})/i);
       if (nameMatch) return nameMatch[1].trim();
 
-      // 2. If line is a single word or two words with capitals, but not a keyword
       const words = line.trim().split(/\s+/);
       if (words.length >= 2 && words.length <= 4) {
         const allCaps = words.every(w => /^[A-Z]/.test(w) && w.length > 1);
@@ -222,7 +218,6 @@ export default function DocumentUpload() {
       return null;
     };
 
-    // First, try lines that explicitly contain "Name"
     for (const line of lines) {
       if (/name/i.test(line)) {
         const name = extractNameFromLine(line);
@@ -233,7 +228,6 @@ export default function DocumentUpload() {
       }
     }
 
-    // If no name found in "Name" lines, scan all lines for a likely name
     if (!extracted['Name']) {
       for (const line of lines) {
         const name = extractNameFromLine(line);
@@ -244,7 +238,6 @@ export default function DocumentUpload() {
       }
     }
 
-    // ─── Continue with other fields (unchanged) ──────────────────────────────
     const cnicPattern = /\d{5}[-\s]?\d{7}[-\s]?\d/;
     const datePattern = /\d{1,2}[./-]\d{1,2}[./-]\d{2,4}/;
 
@@ -365,8 +358,8 @@ export default function DocumentUpload() {
         const yoloAnalysis = await analyzeDocumentWithYOLO(imageData, activeUploadType);
         setYoloResult(prev => ({ ...prev, [backendDocId]: { valid: yoloAnalysis.valid, detections: yoloAnalysis.detections } }));
         await api.put(`/documents/${backendDocId}`, {
-          yoloStatus: yoloAnalysis.valid ? 'valid' : (yoloAnalysis.confidence > 50 ? 'suspicious' : 'fraudulent'),
-          yoloDetections: yoloAnalysis.detections,
+          yolo_status: yoloAnalysis.valid ? 'valid' : (yoloAnalysis.confidence > 50 ? 'suspicious' : 'fraudulent'),
+          yolo_detections: yoloAnalysis.detections,
         });
         setDocuments(prev => prev.map(doc =>
           doc.id === backendDocId
@@ -381,10 +374,10 @@ export default function DocumentUpload() {
         const extractedFields = extractDataFromText(ocrData.text, activeUploadType);
         setOcrResult(prev => ({ ...prev, [backendDocId]: ocrData }));
         await api.put(`/documents/${backendDocId}`, {
-          ocrText: ocrData.text,
-          ocrConfidence: ocrData.confidence,
-          extractedData: extractedFields,
-          ocrStatus: 'verified',
+          ocr_text: ocrData.text,
+          ocr_confidence: ocrData.confidence,
+          extracted_data: extractedFields,
+          ocr_status: 'verified',
         });
         setDocuments(prev => prev.map(doc =>
           doc.id === backendDocId
