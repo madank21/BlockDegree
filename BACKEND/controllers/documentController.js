@@ -107,7 +107,6 @@ const uploadDocument = asyncHandler(async (req, res) => {
     });
 
     // ─── Log audit event ──────────────────────────────────────────────────────
-    // This now works because we added the static log method to AuditLog
     await AuditLog.log("document_uploaded", {
       userId: req.user.id,
       resourceType: "document",
@@ -122,6 +121,8 @@ const uploadDocument = asyncHandler(async (req, res) => {
   } catch (error) {
     // Clean up file if any error occurs during the synchronous part
     cleanupFile(filePath);
+    // Log the full error for debugging
+    console.error("[uploadDocument] error:", error.message, error.stack);
     throw error;
   }
 });
@@ -130,13 +131,21 @@ const uploadDocument = asyncHandler(async (req, res) => {
 const getMyDocuments = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, document_type } = req.query;
 
-  const result = await Document.findByUser(req.user.id, {
-    page: parseInt(page),
-    limit: parseInt(limit),
-    documentType: document_type,
-  });
+  console.log(`[getMyDocuments] user: ${req.user.id}, page: ${page}, limit: ${limit}`);
 
-  return sendPaginated(res, result.data, result, "Documents retrieved successfully");
+  try {
+    const result = await Document.findByUser(req.user.id, {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      documentType: document_type,
+    });
+
+    console.log(`[getMyDocuments] found ${result.data.length} documents`);
+    return sendPaginated(res, result.data, result, "Documents retrieved successfully");
+  } catch (error) {
+    console.error("[getMyDocuments] error:", error.message);
+    throw error;
+  }
 });
 
 // ─── Get Document By ID ────────────────────────────────────────────────────────

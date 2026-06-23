@@ -45,20 +45,33 @@ export default function DocumentUpload() {
     fetchDocuments();
   }, [currentUser?.id]);
 
+  // ─── UPDATED fetchDocuments ───────────────────────────────────────────────────
   const fetchDocuments = async () => {
     if (!currentUser) return;
     setLoading(true);
     try {
       const res = await api.get('/documents/me?limit=50');
-      const rawDocs = res.data.data || res.data || [];
-      // Map document_type to type for consistent frontend usage
+      console.log('[fetchDocuments] raw response:', res);
+
+      // The request helper unwraps the data envelope, so `res` is either the array
+      // or, if the backend didn't use the standard envelope, an object with data.
+      let rawDocs: any[] = [];
+      if (Array.isArray(res)) {
+        rawDocs = res;
+      } else if (res && typeof res === 'object') {
+        // If it's an object, try to find the array in common properties
+        rawDocs = (res as any).data || (res as any).documents || [];
+      }
+
       const docs = rawDocs.map((doc: any) => ({
         ...doc,
         type: doc.document_type || doc.type,
       }));
+      console.log('[fetchDocuments] mapped docs:', docs);
       setDocuments(docs);
-    } catch (error) {
-      console.error('Failed to fetch documents:', error);
+    } catch (error: any) {
+      console.error('[fetchDocuments] failed:', error.message, error.response?.data || '');
+      // Optionally show a user-friendly message
     } finally {
       setLoading(false);
     }
@@ -283,7 +296,6 @@ export default function DocumentUpload() {
 
       const formData = new FormData();
       formData.append('document', file);
-      // ✅ Send document_type directly so backend knows the type
       formData.append('document_type', activeUploadType);
       formData.append('metadata', JSON.stringify({
         type: activeUploadType,
@@ -292,12 +304,10 @@ export default function DocumentUpload() {
 
       try {
         const uploadResult = await documentsApi.upload(formData);
-        // The response should be { data: document, message: ... }
         const docRecord = (uploadResult as any).data || uploadResult;
         const backendDocId = docRecord.id;
 
         if (!backendDocId) {
-          // If no ID, something went wrong; refetch to sync
           console.warn('Upload response missing ID, refetching documents...');
           await fetchDocuments();
           setUploading(null);
@@ -305,7 +315,6 @@ export default function DocumentUpload() {
           return;
         }
 
-        // ✅ Save image data in session storage with the real ID
         setUploadedImages(prev => {
           const newState = { ...prev };
           newState[backendDocId] = imageData;
@@ -313,23 +322,20 @@ export default function DocumentUpload() {
           return newState;
         });
 
-        // ✅ Build a new document object using the returned data
         const newDoc = {
           id: backendDocId,
-          type: docRecord.document_type || activeUploadType, // use backend's type if available
+          type: docRecord.document_type || activeUploadType,
           fileName: docRecord.original_name || file.name,
           uploadedAt: docRecord.created_at || new Date().toISOString(),
           ocrStatus: docRecord.ocr_status || 'processing',
           yoloStatus: docRecord.yolo_status || 'processing',
           fileUrl: docRecord.file_url || imageData,
-          // Include any other fields that might come from backend
           ...docRecord,
         };
-        // ✅ Prepend and immediately refetch to ensure consistency
         setDocuments(prev => [newDoc, ...prev]);
         setUploading(null);
 
-        // ─── YOLO ──────────────────────────────────────────────────────────────
+        // YOLO
         setProcessing({ docId: backendDocId, stage: 'yolo' });
         const yoloAnalysis = await analyzeDocumentWithYOLO(imageData, activeUploadType);
         setYoloResult(prev => ({ ...prev, [backendDocId]: { valid: yoloAnalysis.valid, detections: yoloAnalysis.detections } }));
@@ -343,7 +349,7 @@ export default function DocumentUpload() {
             : doc
         ));
 
-        // ─── OCR ──────────────────────────────────────────────────────────────
+        // OCR
         setProcessing({ docId: backendDocId, stage: 'ocr' });
         setOcrProgress(0);
         const ocrData = await performOCR(imageData);
@@ -361,7 +367,7 @@ export default function DocumentUpload() {
             : doc
         ));
 
-        // ─── Validation (optional) ──────────────────────────────────────────
+        // Validation
         setValidatingDocId(backendDocId);
         try {
           const validationRes = await api.post(`/documents/${backendDocId}/validate`);
@@ -380,16 +386,14 @@ export default function DocumentUpload() {
         setProcessing(null);
         setActiveUploadType('');
 
-        // ✅ Optionally refetch to ensure we have the latest data from DB
-        // (but the local state is already updated, so this is just a safety net)
         await fetchDocuments();
 
-      } catch (error) {
+      } catch (error: any) {
         console.error('Upload error:', error);
-        alert('Upload failed. Please try again.');
+        const msg = error.response?.data?.message || error.message || 'Upload failed';
+        alert(`Upload failed: ${msg}`);
         setUploading(null);
         setProcessing(null);
-        // Refetch to clean up any inconsistent state
         await fetchDocuments();
       }
     };

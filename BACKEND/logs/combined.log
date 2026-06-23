@@ -504,3 +504,901 @@
 {"level":"info","message":"[Server] Blockchain config detected","timestamp":"2026-06-23 02:02:03"}
 {"level":"info","message":"\n╔════════════════════════════════════════════╗\n║        BlockDegree API — v3.0             ║\n╠════════════════════════════════════════════╣\n║  Environment : development                 \n║  Port         : 5001                              \n║  Database     : Supabase (PostgreSQL)     \n║  Queue        : BullMQ (if enabled)        \n║  Blockchain   : Enabled\n╚════════════════════════════════════════════╝\n      ","timestamp":"2026-06-23 02:02:03"}
 {"0":"I","1":"n","10":"g","100":"h","101":"t","102":"t","103":"p","104":"s","105":":","106":"/","107":"/","108":"s","109":"u","11":"i","110":"p","111":"p","112":"o","113":"r","114":"t","115":".","116":"g","117":"o","118":"o","119":"g","12":"n","120":"l","121":"e","122":".","123":"c","124":"o","125":"m","126":"/","127":"m","128":"a","129":"i","13":":","130":"l","131":"/","132":"?","133":"p","134":"=","135":"B","136":"a","137":"d","138":"C","139":"r","14":" ","140":"e","141":"d","142":"e","143":"n","144":"t","145":"i","146":"a","147":"l","148":"s","149":" ","15":"5","150":"d","151":"2","152":"e","153":"1","154":"a","155":"7","156":"2","157":"f","158":"c","159":"c","16":"3","160":"a","161":"5","162":"8","163":"-","164":"8","165":"4","166":"5","167":"6","168":"4","169":"d","17":"5","170":"8","171":"d","172":"d","173":"f","174":"1","175":"s","176":"m","177":"8","178":"6","179":"8","18":"-","180":"6","181":"2","182":"6","183":"5","184":"b","185":"3","186":"a","187":".","188":"1","189":"4","19":"5","190":" ","191":"-","192":" ","193":"g","194":"s","195":"m","196":"t","197":"p","2":"v","20":".","21":"7","22":".","23":"8","24":" ","25":"U","26":"s","27":"e","28":"r","29":"n","3":"a","30":"a","31":"m","32":"e","33":" ","34":"a","35":"n","36":"d","37":" ","38":"P","39":"a","4":"l","40":"s","41":"s","42":"w","43":"o","44":"r","45":"d","46":" ","47":"n","48":"o","49":"t","5":"i","50":" ","51":"a","52":"c","53":"c","54":"e","55":"p","56":"t","57":"e","58":"d","59":".","6":"d","60":" ","61":"F","62":"o","63":"r","64":" ","65":"m","66":"o","67":"r","68":"e","69":" ","7":" ","70":"i","71":"n","72":"f","73":"o","74":"r","75":"m","76":"a","77":"t","78":"i","79":"o","8":"l","80":"n","81":",","82":" ","83":"g","84":"o","85":" ","86":"t","87":"o","88":"\n","89":"5","9":"o","90":"3","91":"5","92":" ","93":"5","94":".","95":"7","96":".","97":"8","98":" ","99":" ","level":"warn","message":"⚠️ Email transporter not configured:","timestamp":"2026-06-23 02:02:05"}
+{"level":"info","message":"[Supabase] Clients initialised","timestamp":"2026-06-23 02:04:12"}
+{"level":"info","message":"[Supabase] Connection verified successfully","timestamp":"2026-06-23 02:04:26"}
+{"level":"info","message":"[Server] Blockchain config detected","timestamp":"2026-06-23 02:04:26"}
+{"level":"info","message":"\n╔════════════════════════════════════════════╗\n║        BlockDegree API — v3.0             ║\n╠════════════════════════════════════════════╣\n║  Environment : development                 \n║  Port         : 5001                              \n║  Database     : Supabase (PostgreSQL)     \n║  Queue        : BullMQ (if enabled)        \n║  Blockchain   : Enabled\n╚════════════════════════════════════════════╝\n      ","timestamp":"2026-06-23 02:04:26"}
+{"0":"I","1":"n","10":"g","100":"h","101":"t","102":"t","103":"p","104":"s","105":":","106":"/","107":"/","108":"s","109":"u","11":"i","110":"p","111":"p","112":"o","113":"r","114":"t","115":".","116":"g","117":"o","118":"o","119":"g","12":"n","120":"l","121":"e","122":".","123":"c","124":"o","125":"m","126":"/","127":"m","128":"a","129":"i","13":":","130":"l","131":"/","132":"?","133":"p","134":"=","135":"B","136":"a","137":"d","138":"C","139":"r","14":" ","140":"e","141":"d","142":"e","143":"n","144":"t","145":"i","146":"a","147":"l","148":"s","149":" ","15":"5","150":"d","151":"9","152":"4","153":"4","154":"3","155":"c","156":"0","157":"1","158":"a","159":"7","16":"3","160":"3","161":"3","162":"6","163":"-","164":"2","165":"c","166":"7","167":"4","168":"4","169":"4","17":"5","170":"a","171":"a","172":"5","173":"e","174":"5","175":"s","176":"m","177":"1","178":"0","179":"0","18":"-","180":"0","181":"5","182":"2","183":"1","184":"5","185":"5","186":"a","187":"d","188":".","189":"7","19":"5","190":"7","191":" ","192":"-","193":" ","194":"g","195":"s","196":"m","197":"t","198":"p","2":"v","20":".","21":"7","22":".","23":"8","24":" ","25":"U","26":"s","27":"e","28":"r","29":"n","3":"a","30":"a","31":"m","32":"e","33":" ","34":"a","35":"n","36":"d","37":" ","38":"P","39":"a","4":"l","40":"s","41":"s","42":"w","43":"o","44":"r","45":"d","46":" ","47":"n","48":"o","49":"t","5":"i","50":" ","51":"a","52":"c","53":"c","54":"e","55":"p","56":"t","57":"e","58":"d","59":".","6":"d","60":" ","61":"F","62":"o","63":"r","64":" ","65":"m","66":"o","67":"r","68":"e","69":" ","7":" ","70":"i","71":"n","72":"f","73":"o","74":"r","75":"m","76":"a","77":"t","78":"i","79":"o","8":"l","80":"n","81":",","82":" ","83":"g","84":"o","85":" ","86":"t","87":"o","88":"\n","89":"5","9":"o","90":"3","91":"5","92":" ","93":"5","94":".","95":"7","96":".","97":"8","98":" ","99":" ","level":"warn","message":"⚠️ Email transporter not configured:","timestamp":"2026-06-23 02:04:28"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\48b2f4de-e69e-4170-83b7-f4c1644f2dcd-1782162275701.jpeg","timestamp":"2026-06-23 02:04:35"}
+{"level":"info","message":"OCR processing: 48b2f4de-e69e-4170-83b7-f4c1644f2dcd-1782162275701.jpeg","timestamp":"2026-06-23 02:04:36"}
+{"level":"info","message":"Document uploaded: 84316a61-2ebb-419f-9118-a15542a2d1b3 by user 4a585ff5-815e-4bee-9525-bb5fe874d8f9","timestamp":"2026-06-23 02:04:36"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:04:50"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:04:50"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:04:50"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:04:51"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/84316a61-2ebb-419f-9118-a15542a2d1b3/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:04:51","url":"/api/v1/documents/84316a61-2ebb-419f-9118-a15542a2d1b3/validate"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:04:51"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:04:51"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:04:51"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:04:51"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:04:52"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:04:52"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:04:52"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:04:52"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:04:52"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:04:52"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:04:52"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:04:52"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:04:52"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:04:53"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:04:53"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:04:53"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:04:53"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:04:53"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:04:53"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:04:53"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:04:53"}
+{"level":"debug","message":"OCR progress: 23%","timestamp":"2026-06-23 02:04:53"}
+{"level":"debug","message":"OCR progress: 23%","timestamp":"2026-06-23 02:04:53"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:04:54"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:04:54"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:04:54"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:04:54"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:04:54"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:04:54"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:04:54"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:04:54"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:04:54"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:04:54"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:04:54"}
+{"level":"debug","message":"OCR progress: 34%","timestamp":"2026-06-23 02:04:55"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:04:55"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:04:55"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:04:55"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:04:55"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:04:55"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:04:55"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:04:56"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:04:56"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:04:56"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:04:56"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:04:56"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:04:56"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:04:56"}
+{"level":"debug","message":"OCR progress: 47%","timestamp":"2026-06-23 02:04:56"}
+{"level":"debug","message":"OCR progress: 47%","timestamp":"2026-06-23 02:04:56"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:04:57"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:04:57"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:04:57"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:04:57"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:04:57"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:04:57"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:04:57"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:04:57"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:04:57"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:04:57"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:04:57"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:04:57"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:04:57"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:04:58"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:04:58"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:04:58"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:04:58"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:04:58"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:04:58"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:04:58"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:04:58"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:04:58"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:04:58"}
+{"level":"debug","message":"OCR progress: 70%","timestamp":"2026-06-23 02:04:59"}
+{"level":"debug","message":"OCR progress: 100%","timestamp":"2026-06-23 02:04:59"}
+{"level":"info","message":"OCR completed. Confidence: 46%","timestamp":"2026-06-23 02:04:59"}
+{"level":"info","message":"Fraud analysis complete. Score: 15, Fraudulent: false","timestamp":"2026-06-23 02:04:59"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\6cdadc29-f203-4972-9c85-e81dfa2b6fa2-1782162326250.jpg","timestamp":"2026-06-23 02:05:26"}
+{"level":"info","message":"OCR processing: 6cdadc29-f203-4972-9c85-e81dfa2b6fa2-1782162326250.jpg","timestamp":"2026-06-23 02:05:27"}
+{"level":"info","message":"Document uploaded: 63f7b5da-98df-40ef-9fd6-edcf33c2be93 by user 4a585ff5-815e-4bee-9525-bb5fe874d8f9","timestamp":"2026-06-23 02:05:27"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:05:40"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:05:42"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:05:42"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:05:45"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:05:48"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:05:49"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:05:51"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:05:53"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:05:57"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:06:00"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:06:02"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:06:03"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:06:04"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:06:05"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:06:05"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:06:05"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:06:05"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:06:05"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:06:05"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:06:06"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:06:06"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:06:06"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:06:06"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:06:06"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:06:07"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:06:07"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:06:07"}
+{"level":"debug","message":"OCR progress: 23%","timestamp":"2026-06-23 02:06:07"}
+{"level":"debug","message":"OCR progress: 23%","timestamp":"2026-06-23 02:06:07"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:06:08"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:06:08"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:06:08"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:06:09"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:06:09"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:06:09"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:06:09"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:06:09"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:06:09"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:06:09"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:06:09"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:06:10"}
+{"level":"debug","message":"OCR progress: 34%","timestamp":"2026-06-23 02:06:10"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:06:10"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:06:10"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:06:10"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:06:11"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:06:11"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:06:14"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:06:15"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:06:15"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:06:15"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:06:15"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:06:15"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:06:17"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:06:17"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:06:17"}
+{"level":"debug","message":"OCR progress: 47%","timestamp":"2026-06-23 02:06:17"}
+{"level":"debug","message":"OCR progress: 47%","timestamp":"2026-06-23 02:06:18"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:06:18"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:06:19"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:06:19"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:06:19"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:06:20"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:06:20"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:06:20"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:06:20"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:06:21"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:06:22"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:06:22"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:06:22"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:06:22"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:06:22"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:06:23"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/63f7b5da-98df-40ef-9fd6-edcf33c2be93/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:06:24","url":"/api/v1/documents/63f7b5da-98df-40ef-9fd6-edcf33c2be93/validate"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:06:24"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:06:25"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:06:25"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:06:25"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:06:25"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:06:25"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:06:25"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:06:26"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:06:26"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:06:26"}
+{"level":"debug","message":"OCR progress: 70%","timestamp":"2026-06-23 02:06:27"}
+{"level":"debug","message":"OCR progress: 100%","timestamp":"2026-06-23 02:06:27"}
+{"level":"info","message":"OCR completed. Confidence: 31%","timestamp":"2026-06-23 02:06:27"}
+{"level":"info","message":"Fraud analysis complete. Score: 15, Fraudulent: false","timestamp":"2026-06-23 02:06:28"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\6454e847-28b2-4aa0-bf53-9be10cb4573d-1782162474124.jpeg","timestamp":"2026-06-23 02:07:54"}
+{"level":"info","message":"OCR processing: 6454e847-28b2-4aa0-bf53-9be10cb4573d-1782162474124.jpeg","timestamp":"2026-06-23 02:07:54"}
+{"level":"info","message":"Document uploaded: 2ade8968-2f59-43aa-8fa2-3604fe4c0c09 by user 4a585ff5-815e-4bee-9525-bb5fe874d8f9","timestamp":"2026-06-23 02:07:55"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/2ade8968-2f59-43aa-8fa2-3604fe4c0c09/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:08:03","url":"/api/v1/documents/2ade8968-2f59-43aa-8fa2-3604fe4c0c09/validate"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:08:04"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:08:05"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:08:05"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:08:05"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:08:06"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:08:06"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:08:06"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:08:06"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:08:06"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:08:06"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:08:06"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:08:06"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:08:06"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:08:06"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:08:07"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:08:07"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:08:07"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:08:07"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:08:07"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:08:07"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:08:07"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:08:07"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:08:07"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:08:07"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:08:07"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/2ade8968-2f59-43aa-8fa2-3604fe4c0c09/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:08:07","url":"/api/v1/documents/2ade8968-2f59-43aa-8fa2-3604fe4c0c09/validate"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:08:07"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:08:08"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:08:08"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:08:08"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:08:08"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:08:08"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:08:08"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:08:08"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:08:09"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:08:09"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:08:09"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:08:09"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:08:09"}
+{"level":"debug","message":"OCR progress: 100%","timestamp":"2026-06-23 02:08:09"}
+{"level":"info","message":"OCR completed. Confidence: 50%","timestamp":"2026-06-23 02:08:10"}
+{"level":"info","message":"Fraud analysis complete. Score: 15, Fraudulent: false","timestamp":"2026-06-23 02:08:10"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/2ade8968-2f59-43aa-8fa2-3604fe4c0c09/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:08:21","url":"/api/v1/documents/2ade8968-2f59-43aa-8fa2-3604fe4c0c09/validate"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\526c74bd-a85e-4a1d-9992-722a1e5a7806-1782162567896.jpg","timestamp":"2026-06-23 02:09:27"}
+{"level":"info","message":"OCR processing: 526c74bd-a85e-4a1d-9992-722a1e5a7806-1782162567896.jpg","timestamp":"2026-06-23 02:09:28"}
+{"level":"info","message":"Document uploaded: 2f7cad6f-b763-46ab-b5f3-cc8e22235971 by user 4a585ff5-815e-4bee-9525-bb5fe874d8f9","timestamp":"2026-06-23 02:09:28"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/2f7cad6f-b763-46ab-b5f3-cc8e22235971/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:09:35","url":"/api/v1/documents/2f7cad6f-b763-46ab-b5f3-cc8e22235971/validate"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:09:37"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:09:38"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:09:38"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:09:38"}
+{"level":"debug","message":"OCR progress: 23%","timestamp":"2026-06-23 02:09:38"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:09:38"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:09:38"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:09:38"}
+{"level":"debug","message":"OCR progress: 47%","timestamp":"2026-06-23 02:09:38"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:09:38"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:09:38"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:09:38"}
+{"level":"debug","message":"OCR progress: 100%","timestamp":"2026-06-23 02:09:38"}
+{"level":"info","message":"OCR completed. Confidence: 33%","timestamp":"2026-06-23 02:09:38"}
+{"level":"info","message":"Fraud analysis complete. Score: 15, Fraudulent: false","timestamp":"2026-06-23 02:09:38"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/2f7cad6f-b763-46ab-b5f3-cc8e22235971/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:09:51","url":"/api/v1/documents/2f7cad6f-b763-46ab-b5f3-cc8e22235971/validate"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\010a054d-2bdc-4f1f-b85a-16dadecaba94-1782162721111.jpg","timestamp":"2026-06-23 02:12:01"}
+{"level":"info","message":"OCR processing: 010a054d-2bdc-4f1f-b85a-16dadecaba94-1782162721111.jpg","timestamp":"2026-06-23 02:12:02"}
+{"level":"info","message":"Document uploaded: bc5ffc63-3c07-4c39-a093-ea29f5f10831 by user 4a585ff5-815e-4bee-9525-bb5fe874d8f9","timestamp":"2026-06-23 02:12:02"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/bc5ffc63-3c07-4c39-a093-ea29f5f10831/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:12:20","url":"/api/v1/documents/bc5ffc63-3c07-4c39-a093-ea29f5f10831/validate"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:12:22"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:12:23"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:12:24"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:12:24"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:12:24"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:12:25"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:12:25"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:12:25"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:12:25"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:12:25"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:12:25"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:12:25"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:12:25"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 23%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 34%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:12:26"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:12:27"}
+{"level":"debug","message":"OCR progress: 47%","timestamp":"2026-06-23 02:12:27"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:12:27"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:12:27"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:12:27"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:12:27"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:12:27"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:12:27"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:12:27"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:12:27"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:12:27"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:12:28"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:12:28"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:12:28"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:12:28"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:12:28"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:12:28"}
+{"level":"debug","message":"OCR progress: 100%","timestamp":"2026-06-23 02:12:28"}
+{"level":"info","message":"OCR completed. Confidence: 58%","timestamp":"2026-06-23 02:12:28"}
+{"level":"info","message":"Fraud analysis complete. Score: 15, Fraudulent: false","timestamp":"2026-06-23 02:12:29"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\eac8b03a-88be-4f51-a85c-45ee20624038-1782162867362.jpg","timestamp":"2026-06-23 02:14:27"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\7784392d-d81a-488f-8efa-4b972e57846c-1782162878750.jpg","timestamp":"2026-06-23 02:14:38"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\02076c1c-c6c4-475e-b878-7804432218ad-1782162897568.jpg","timestamp":"2026-06-23 02:14:57"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\91e749c5-cd63-4293-aa5e-cc9eed2da5eb-1782162937415.jpg","timestamp":"2026-06-23 02:15:37"}
+{"level":"info","message":"OCR processing: 91e749c5-cd63-4293-aa5e-cc9eed2da5eb-1782162937415.jpg","timestamp":"2026-06-23 02:15:39"}
+{"level":"info","message":"Document uploaded: d3dd9508-0dca-41b3-b2db-f5f3df8b559e by user 4a585ff5-815e-4bee-9525-bb5fe874d8f9","timestamp":"2026-06-23 02:15:39"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:15:52"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:15:52"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:15:52"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 23%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:15:53"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 34%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 47%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:15:54"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:15:55"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:15:55"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:15:55"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:15:55"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:15:55"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:15:55"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:15:56"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:15:56"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:15:56"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:15:56"}
+{"level":"debug","message":"OCR progress: 100%","timestamp":"2026-06-23 02:15:56"}
+{"level":"info","message":"OCR completed. Confidence: 58%","timestamp":"2026-06-23 02:15:56"}
+{"0":"D","1":"o","10":"p","11":"d","12":"a","13":"t","14":"e","15":" ","16":"f","17":"a","18":"i","19":"l","2":"c","20":"e","21":"d","22":":","23":" ","24":"C","25":"a","26":"n","27":"n","28":"o","29":"t","3":"u","30":" ","31":"c","32":"o","33":"e","34":"r","35":"c","36":"e","37":" ","38":"t","39":"h","4":"m","40":"e","41":" ","42":"r","43":"e","44":"s","45":"u","46":"l","47":"t","48":" ","49":"t","5":"e","50":"o","51":" ","52":"a","53":" ","54":"s","55":"i","56":"n","57":"g","58":"l","59":"e","6":"n","60":" ","61":"J","62":"S","63":"O","64":"N","65":" ","66":"o","67":"b","68":"j","69":"e","7":"t","70":"c","71":"t","8":".","9":"u","level":"error","message":"Document processing failed for d3dd9508-0dca-41b3-b2db-f5f3df8b559e:","timestamp":"2026-06-23 02:15:56"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\0c4bafcd-0f96-478b-afb2-3b68ee8ebe62-1782163245334.jpeg","timestamp":"2026-06-23 02:20:45"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\a6c87eec-7a3e-43dc-97ac-95d19f59aa24-1782163270894.jpeg","timestamp":"2026-06-23 02:21:10"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\09302f14-2528-4604-9e17-8e70d86afa53-1782163301410.jpeg","timestamp":"2026-06-23 02:21:41"}
+{"level":"info","message":"[Supabase] Clients initialised","timestamp":"2026-06-23 02:23:45"}
+{"level":"info","message":"[Supabase] Connection verified successfully","timestamp":"2026-06-23 02:23:51"}
+{"level":"info","message":"[Server] Blockchain config detected","timestamp":"2026-06-23 02:23:51"}
+{"level":"info","message":"\n╔════════════════════════════════════════════╗\n║        BlockDegree API — v3.0             ║\n╠════════════════════════════════════════════╣\n║  Environment : development                 \n║  Port         : 5001                              \n║  Database     : Supabase (PostgreSQL)     \n║  Queue        : BullMQ (if enabled)        \n║  Blockchain   : Enabled\n╚════════════════════════════════════════════╝\n      ","timestamp":"2026-06-23 02:23:51"}
+{"0":"I","1":"n","10":"g","100":"h","101":"t","102":"t","103":"p","104":"s","105":":","106":"/","107":"/","108":"s","109":"u","11":"i","110":"p","111":"p","112":"o","113":"r","114":"t","115":".","116":"g","117":"o","118":"o","119":"g","12":"n","120":"l","121":"e","122":".","123":"c","124":"o","125":"m","126":"/","127":"m","128":"a","129":"i","13":":","130":"l","131":"/","132":"?","133":"p","134":"=","135":"B","136":"a","137":"d","138":"C","139":"r","14":" ","140":"e","141":"d","142":"e","143":"n","144":"t","145":"i","146":"a","147":"l","148":"s","149":" ","15":"5","150":"4","151":"1","152":"b","153":"e","154":"0","155":"3","156":"b","157":"0","158":"0","159":"d","16":"3","160":"2","161":"f","162":"7","163":"-","164":"c","165":"8","166":"b","167":"c","168":"5","169":"6","17":"5","170":"3","171":"c","172":"6","173":"e","174":"e","175":"s","176":"m","177":"7","178":"8","179":"5","18":"-","180":"6","181":"5","182":"0","183":"6","184":"a","185":"1","186":"2","187":".","188":"2","189":"1","19":"5","190":" ","191":"-","192":" ","193":"g","194":"s","195":"m","196":"t","197":"p","2":"v","20":".","21":"7","22":".","23":"8","24":" ","25":"U","26":"s","27":"e","28":"r","29":"n","3":"a","30":"a","31":"m","32":"e","33":" ","34":"a","35":"n","36":"d","37":" ","38":"P","39":"a","4":"l","40":"s","41":"s","42":"w","43":"o","44":"r","45":"d","46":" ","47":"n","48":"o","49":"t","5":"i","50":" ","51":"a","52":"c","53":"c","54":"e","55":"p","56":"t","57":"e","58":"d","59":".","6":"d","60":" ","61":"F","62":"o","63":"r","64":" ","65":"m","66":"o","67":"r","68":"e","69":" ","7":" ","70":"i","71":"n","72":"f","73":"o","74":"r","75":"m","76":"a","77":"t","78":"i","79":"o","8":"l","80":"n","81":",","82":" ","83":"g","84":"o","85":" ","86":"t","87":"o","88":"\n","89":"5","9":"o","90":"3","91":"5","92":" ","93":"5","94":".","95":"7","96":".","97":"8","98":" ","99":" ","level":"warn","message":"⚠️ Email transporter not configured:","timestamp":"2026-06-23 02:23:53"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/3a49f279-f9a9-4ec5-9331-8befa31ca54a/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:29:18","url":"/api/v1/documents/3a49f279-f9a9-4ec5-9331-8befa31ca54a/validate"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/3a49f279-f9a9-4ec5-9331-8befa31ca54a/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:29:20","url":"/api/v1/documents/3a49f279-f9a9-4ec5-9331-8befa31ca54a/validate"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\b1be560c-3339-4be4-92b9-0ef1e9cd97bd-1782163779362.jpeg","timestamp":"2026-06-23 02:29:39"}
+{"level":"info","message":"OCR processing: b1be560c-3339-4be4-92b9-0ef1e9cd97bd-1782163779362.jpeg","timestamp":"2026-06-23 02:29:40"}
+{"level":"info","message":"Document uploaded: 6fc6a476-d1f8-47ac-b983-5a766914a5ef by user 4a585ff5-815e-4bee-9525-bb5fe874d8f9","timestamp":"2026-06-23 02:29:40"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/6fc6a476-d1f8-47ac-b983-5a766914a5ef/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:29:48","url":"/api/v1/documents/6fc6a476-d1f8-47ac-b983-5a766914a5ef/validate"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:29:49"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:29:50"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:29:51"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:29:51"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:29:51"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:29:51"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:29:52"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:29:52"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:29:52"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:29:52"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:29:52"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:29:52"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:29:52"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:29:52"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:29:52"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:29:53"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:29:53"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:29:53"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:29:53"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:29:53"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:29:53"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:29:53"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:29:53"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:29:53"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:29:53"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:29:53"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:29:53"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:29:54"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:29:54"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:29:54"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:29:54"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:29:54"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:29:54"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:29:54"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:29:54"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:29:54"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:29:55"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:29:55"}
+{"level":"debug","message":"OCR progress: 100%","timestamp":"2026-06-23 02:29:55"}
+{"level":"info","message":"OCR completed. Confidence: 50%","timestamp":"2026-06-23 02:29:56"}
+{"level":"info","message":"Fraud analysis complete. Score: 15, Fraudulent: false","timestamp":"2026-06-23 02:29:57"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/6fc6a476-d1f8-47ac-b983-5a766914a5ef/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:30:05","url":"/api/v1/documents/6fc6a476-d1f8-47ac-b983-5a766914a5ef/validate"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/6fc6a476-d1f8-47ac-b983-5a766914a5ef/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:30:40","url":"/api/v1/documents/6fc6a476-d1f8-47ac-b983-5a766914a5ef/validate"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\f843152c-7b42-4f72-a4c5-f214f4148a51-1782163868478.jpeg","timestamp":"2026-06-23 02:31:08"}
+{"level":"info","message":"OCR processing: f843152c-7b42-4f72-a4c5-f214f4148a51-1782163868478.jpeg","timestamp":"2026-06-23 02:31:08"}
+{"level":"info","message":"Document uploaded: ac944a26-8572-4ee8-bf32-8980038964b5 by user 4a585ff5-815e-4bee-9525-bb5fe874d8f9","timestamp":"2026-06-23 02:31:09"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:31:21"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/ac944a26-8572-4ee8-bf32-8980038964b5/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:31:21","url":"/api/v1/documents/ac944a26-8572-4ee8-bf32-8980038964b5/validate"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:31:23"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:31:23"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:31:24"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:31:24"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:31:24"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:31:24"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:31:24"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:31:25"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:31:25"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:31:25"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:31:25"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:31:25"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:31:25"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:31:25"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:31:25"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:31:25"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:31:25"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:31:26"}
+{"level":"debug","message":"OCR progress: 23%","timestamp":"2026-06-23 02:31:26"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:31:26"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:31:26"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:31:26"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:31:26"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:31:26"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:31:26"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:31:26"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:31:26"}
+{"level":"debug","message":"OCR progress: 34%","timestamp":"2026-06-23 02:31:29"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:31:30"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:31:31"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:31:32"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:31:33"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:31:34"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:31:39"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:31:39"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:31:39"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:31:39"}
+{"level":"debug","message":"OCR progress: 47%","timestamp":"2026-06-23 02:31:40"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:31:40"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:31:40"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:31:40"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:31:40"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:31:40"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:31:41"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:31:41"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:31:41"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:31:41"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:31:41"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:31:41"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:31:43"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:31:43"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:31:44"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:31:44"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:31:44"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:31:45"}
+{"level":"debug","message":"OCR progress: 70%","timestamp":"2026-06-23 02:31:47"}
+{"level":"debug","message":"OCR progress: 100%","timestamp":"2026-06-23 02:31:47"}
+{"level":"info","message":"OCR completed. Confidence: 45%","timestamp":"2026-06-23 02:31:47"}
+{"level":"info","message":"Fraud analysis complete. Score: 15, Fraudulent: false","timestamp":"2026-06-23 02:31:47"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/ac944a26-8572-4ee8-bf32-8980038964b5/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:32:05","url":"/api/v1/documents/ac944a26-8572-4ee8-bf32-8980038964b5/validate"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\3e66f5c9-c979-4e43-9c56-5c20fed4e928-1782163934491.jpg","timestamp":"2026-06-23 02:32:14"}
+{"level":"info","message":"OCR processing: 3e66f5c9-c979-4e43-9c56-5c20fed4e928-1782163934491.jpg","timestamp":"2026-06-23 02:32:15"}
+{"level":"info","message":"Document uploaded: 2c9a20b3-7727-4134-b710-1ed5d50fb15d by user 4a585ff5-815e-4bee-9525-bb5fe874d8f9","timestamp":"2026-06-23 02:32:15"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/2c9a20b3-7727-4134-b710-1ed5d50fb15d/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:32:21","url":"/api/v1/documents/2c9a20b3-7727-4134-b710-1ed5d50fb15d/validate"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:32:29"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:32:29"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:32:29"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:32:29"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:32:29"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:32:30"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:32:30"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:32:30"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:32:30"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:32:30"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:32:30"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:32:30"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:32:30"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:32:30"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:32:31"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:32:31"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:32:31"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:32:31"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:32:31"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:32:34"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:32:41"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:32:43"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:32:43"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:32:43"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:32:43"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:32:44"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:32:44"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:32:44"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:32:44"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:32:44"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:32:44"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:32:44"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:32:44"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:32:45"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:32:45"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:32:45"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:32:45"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:32:46"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:32:46"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:32:46"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:32:46"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:32:46"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:32:46"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:32:47"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:32:47"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:32:47"}
+{"level":"debug","message":"OCR progress: 23%","timestamp":"2026-06-23 02:32:47"}
+{"level":"debug","message":"OCR progress: 23%","timestamp":"2026-06-23 02:32:48"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:32:48"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:32:48"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:32:48"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:32:48"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:32:48"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:32:48"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:32:48"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:32:49"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:32:50"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:32:50"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:32:50"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:32:50"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:32:50"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:32:50"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:32:50"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:32:50"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:32:51"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:32:51"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:32:51"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:32:51"}
+{"level":"debug","message":"OCR progress: 34%","timestamp":"2026-06-23 02:32:51"}
+{"level":"debug","message":"OCR progress: 34%","timestamp":"2026-06-23 02:32:51"}
+{"level":"debug","message":"OCR progress: 34%","timestamp":"2026-06-23 02:32:51"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:32:52"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:32:53"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:32:53"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:32:53"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:32:53"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:32:53"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:32:53"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:32:54"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:32:56"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:32:56"}
+{"level":"debug","message":"OCR progress: 47%","timestamp":"2026-06-23 02:32:56"}
+{"level":"debug","message":"OCR progress: 47%","timestamp":"2026-06-23 02:32:58"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:32:59"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:32:59"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:33:00"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:33:00"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:33:00"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:33:00"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:33:00"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:33:00"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:33:00"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:33:00"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:33:01"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:33:01"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:33:01"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:33:01"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:33:01"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:33:01"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:33:01"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:33:01"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:33:02"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:33:02"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:33:02"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:33:02"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:33:02"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:33:02"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:33:02"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:33:02"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:33:02"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:33:02"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:33:02"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:33:02"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:33:03"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:33:03"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:33:03"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:33:03"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:33:03"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:33:03"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:33:03"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:33:03"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:33:03"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:33:03"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:33:03"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:33:03"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:33:03"}
+{"level":"debug","message":"OCR progress: 70%","timestamp":"2026-06-23 02:33:04"}
+{"level":"debug","message":"OCR progress: 70%","timestamp":"2026-06-23 02:33:04"}
+{"level":"debug","message":"OCR progress: 100%","timestamp":"2026-06-23 02:33:04"}
+{"level":"info","message":"OCR completed. Confidence: 68%","timestamp":"2026-06-23 02:33:05"}
+{"level":"info","message":"Fraud analysis complete. Score: 15, Fraudulent: false","timestamp":"2026-06-23 02:33:06"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/2c9a20b3-7727-4134-b710-1ed5d50fb15d/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:33:31","url":"/api/v1/documents/2c9a20b3-7727-4134-b710-1ed5d50fb15d/validate"}
+{"level":"info","message":"[Auth] Registered: madan.70618@iqra.edu.pk (student)","timestamp":"2026-06-23 02:37:28"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\8bf88491-5ae2-4174-85a3-3081a3cff040-1782164287040.jpeg","timestamp":"2026-06-23 02:38:07"}
+{"level":"error","message":"Document.create failed: duplicate key value violates unique constraint \"documents_file_hash_key\"","method":"POST","requestId":"fd574769-77f2-4e82-aba3-715f06bb749d","stack":"Error: Document.create failed: duplicate key value violates unique constraint \"documents_file_hash_key\"\n    at Object.create (C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\models\\Document.js:52:22)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\controllers\\documentController.js:57:22","timestamp":"2026-06-23 02:38:07","url":"/api/v1/documents/upload","userId":"6ff69d8e-b6b7-4854-a0c5-da880420394a"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\95f0e685-9c4e-4d84-985f-b5dec7021c79-1782164404534.jpeg","timestamp":"2026-06-23 02:40:04"}
+{"level":"info","message":"OCR processing: 95f0e685-9c4e-4d84-985f-b5dec7021c79-1782164404534.jpeg","timestamp":"2026-06-23 02:40:05"}
+{"level":"info","message":"Document uploaded: 0f1e2e56-c0aa-4e75-ae25-7c126151413d by user 6ff69d8e-b6b7-4854-a0c5-da880420394a","timestamp":"2026-06-23 02:40:05"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/0f1e2e56-c0aa-4e75-ae25-7c126151413d/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:40:13","url":"/api/v1/documents/0f1e2e56-c0aa-4e75-ae25-7c126151413d/validate"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:40:15"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:40:16"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:40:17"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:40:17"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:40:17"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:40:17"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:40:17"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:40:17"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:40:18"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:40:18"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:40:18"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:40:18"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:40:18"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:40:18"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:40:18"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:40:19"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:40:19"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:40:19"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:40:19"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:40:19"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:40:19"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:40:20"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:40:20"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:40:20"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:40:20"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:40:20"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:40:20"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:40:20"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:40:20"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:40:21"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:40:21"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:40:21"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/0f1e2e56-c0aa-4e75-ae25-7c126151413d/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:40:21","url":"/api/v1/documents/0f1e2e56-c0aa-4e75-ae25-7c126151413d/validate"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:40:21"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:40:21"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:40:21"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:40:21"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:40:22"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:40:22"}
+{"level":"debug","message":"OCR progress: 100%","timestamp":"2026-06-23 02:40:22"}
+{"level":"info","message":"OCR completed. Confidence: 50%","timestamp":"2026-06-23 02:40:22"}
+{"level":"info","message":"Fraud analysis complete. Score: 15, Fraudulent: false","timestamp":"2026-06-23 02:40:22"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\647da1a0-109a-4440-92da-ff53def92348-1782164432120.jpg","timestamp":"2026-06-23 02:40:32"}
+{"level":"info","message":"OCR processing: 647da1a0-109a-4440-92da-ff53def92348-1782164432120.jpg","timestamp":"2026-06-23 02:40:33"}
+{"level":"info","message":"Document uploaded: 485e2183-d5ae-459e-a304-6834a7cad858 by user 6ff69d8e-b6b7-4854-a0c5-da880420394a","timestamp":"2026-06-23 02:40:33"}
+{"level":"debug","message":"[uploadDocument] File saved at C:\\Users\\mehun\\OneDrive\\Desktop\\Courses\\BLOCKCHAIN SECURITY\\CCP\\ai-blockchain-degree-verification\\BACKEND\\uploads\\documents\\4c58855b-4e50-445d-814e-59cb23c677af-1782164445048.jpeg","timestamp":"2026-06-23 02:40:45"}
+{"level":"info","message":"OCR processing: 4c58855b-4e50-445d-814e-59cb23c677af-1782164445048.jpeg","timestamp":"2026-06-23 02:40:46"}
+{"level":"info","message":"Document uploaded: c6b8cad2-a0a1-4deb-90c6-3cfdbdb79f09 by user 6ff69d8e-b6b7-4854-a0c5-da880420394a","timestamp":"2026-06-23 02:40:47"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/485e2183-d5ae-459e-a304-6834a7cad858/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:40:47","url":"/api/v1/documents/485e2183-d5ae-459e-a304-6834a7cad858/validate"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/c6b8cad2-a0a1-4deb-90c6-3cfdbdb79f09/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:40:58","url":"/api/v1/documents/c6b8cad2-a0a1-4deb-90c6-3cfdbdb79f09/validate"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:41:00"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:41:01"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:41:01"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:41:01"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:41:02"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:41:02"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:41:02"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:41:02"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:41:02"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:41:02"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:41:02"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:41:02"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:41:02"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:41:02"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:41:03"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:41:03"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:41:03"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:41:03"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:41:03"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:41:03"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:41:04"}
+{"level":"debug","message":"OCR progress: 0%","timestamp":"2026-06-23 02:41:04"}
+{"level":"debug","message":"OCR progress: 23%","timestamp":"2026-06-23 02:41:04"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:41:04"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:41:04"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:41:04"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:41:04"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:41:04"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:41:04"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 1%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 3%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 4%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 6%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:41:05"}
+{"level":"debug","message":"OCR progress: 34%","timestamp":"2026-06-23 02:41:06"}
+{"level":"debug","message":"OCR progress: 7%","timestamp":"2026-06-23 02:41:06"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:41:06"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:41:06"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/485e2183-d5ae-459e-a304-6834a7cad858/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:41:06","url":"/api/v1/documents/485e2183-d5ae-459e-a304-6834a7cad858/validate"}
+{"level":"debug","message":"OCR progress: 9%","timestamp":"2026-06-23 02:41:06"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:41:06"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:41:07"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:41:07"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:41:08"}
+{"level":"debug","message":"OCR progress: 10%","timestamp":"2026-06-23 02:41:08"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:41:08"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:41:08"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:41:09"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:41:09"}
+{"level":"debug","message":"OCR progress: 11%","timestamp":"2026-06-23 02:41:10"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:41:10"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:41:10"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:41:10"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:41:10"}
+{"level":"debug","message":"OCR progress: 13%","timestamp":"2026-06-23 02:41:10"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:41:10"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:41:10"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:41:11"}
+{"level":"debug","message":"OCR progress: 47%","timestamp":"2026-06-23 02:41:11"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:41:11"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:41:11"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:41:11"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:41:11"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:41:11"}
+{"level":"debug","message":"OCR progress: 14%","timestamp":"2026-06-23 02:41:11"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:41:11"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:41:11"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:41:11"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:41:11"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:41:11"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:41:12"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:41:12"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:41:12"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:41:12"}
+{"level":"debug","message":"OCR progress: 16%","timestamp":"2026-06-23 02:41:12"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:41:12"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:41:12"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:41:12"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:41:12"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:41:12"}
+{"level":"debug","message":"OCR progress: 17%","timestamp":"2026-06-23 02:41:12"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:41:12"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:41:12"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:41:13"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:41:13"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:41:13"}
+{"level":"debug","message":"OCR progress: 70%","timestamp":"2026-06-23 02:41:13"}
+{"level":"debug","message":"OCR progress: 100%","timestamp":"2026-06-23 02:41:13"}
+{"level":"debug","message":"OCR progress: 19%","timestamp":"2026-06-23 02:41:13"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:41:13"}
+{"level":"info","message":"OCR completed. Confidence: 45%","timestamp":"2026-06-23 02:41:14"}
+{"level":"info","message":"Fraud analysis complete. Score: 15, Fraudulent: false","timestamp":"2026-06-23 02:41:14"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:41:14"}
+{"level":"debug","message":"OCR progress: 20%","timestamp":"2026-06-23 02:41:14"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:41:15"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:41:15"}
+{"level":"debug","message":"OCR progress: 21%","timestamp":"2026-06-23 02:41:16"}
+{"level":"debug","message":"OCR progress: 23%","timestamp":"2026-06-23 02:41:16"}
+{"level":"debug","message":"OCR progress: 23%","timestamp":"2026-06-23 02:41:17"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:41:17"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:41:17"}
+{"level":"debug","message":"OCR progress: 24%","timestamp":"2026-06-23 02:41:17"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:41:17"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:41:17"}
+{"level":"debug","message":"OCR progress: 26%","timestamp":"2026-06-23 02:41:17"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:41:18"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:41:18"}
+{"level":"debug","message":"OCR progress: 27%","timestamp":"2026-06-23 02:41:18"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:41:18"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:41:18"}
+{"level":"debug","message":"OCR progress: 29%","timestamp":"2026-06-23 02:41:18"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:41:18"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:41:18"}
+{"level":"debug","message":"OCR progress: 30%","timestamp":"2026-06-23 02:41:18"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:41:18"}
+{"level":"debug","message":"OCR progress: 31%","timestamp":"2026-06-23 02:41:19"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:41:19"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:41:19"}
+{"level":"debug","message":"OCR progress: 33%","timestamp":"2026-06-23 02:41:19"}
+{"level":"debug","message":"OCR progress: 34%","timestamp":"2026-06-23 02:41:19"}
+{"level":"debug","message":"OCR progress: 34%","timestamp":"2026-06-23 02:41:19"}
+{"level":"debug","message":"OCR progress: 34%","timestamp":"2026-06-23 02:41:19"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:41:19"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:41:19"}
+{"level":"debug","message":"OCR progress: 36%","timestamp":"2026-06-23 02:41:19"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:41:20"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:41:20"}
+{"level":"debug","message":"OCR progress: 37%","timestamp":"2026-06-23 02:41:20"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:41:20"}
+{"level":"debug","message":"OCR progress: 39%","timestamp":"2026-06-23 02:41:20"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:41:20"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:41:20"}
+{"level":"debug","message":"OCR progress: 40%","timestamp":"2026-06-23 02:41:20"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:41:20"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:41:20"}
+{"level":"debug","message":"OCR progress: 41%","timestamp":"2026-06-23 02:41:20"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:41:21"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:41:21"}
+{"level":"debug","message":"OCR progress: 43%","timestamp":"2026-06-23 02:41:21"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:41:21"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:41:22"}
+{"level":"debug","message":"OCR progress: 44%","timestamp":"2026-06-23 02:41:22"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:41:22"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:41:22"}
+{"level":"debug","message":"OCR progress: 46%","timestamp":"2026-06-23 02:41:22"}
+{"level":"debug","message":"OCR progress: 47%","timestamp":"2026-06-23 02:41:22"}
+{"level":"debug","message":"OCR progress: 47%","timestamp":"2026-06-23 02:41:23"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:41:23"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:41:23"}
+{"level":"debug","message":"OCR progress: 49%","timestamp":"2026-06-23 02:41:23"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:41:23"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:41:24"}
+{"level":"debug","message":"OCR progress: 50%","timestamp":"2026-06-23 02:41:24"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:41:24"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:41:24"}
+{"level":"debug","message":"OCR progress: 51%","timestamp":"2026-06-23 02:41:24"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:41:24"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:41:24"}
+{"level":"debug","message":"OCR progress: 53%","timestamp":"2026-06-23 02:41:24"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:41:24"}
+{"level":"debug","message":"OCR progress: 54%","timestamp":"2026-06-23 02:41:24"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:41:24"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 56%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 57%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 59%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 60%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 61%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:41:25"}
+{"level":"debug","message":"OCR progress: 63%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 64%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 66%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 67%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 69%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 70%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 70%","timestamp":"2026-06-23 02:41:26"}
+{"level":"debug","message":"OCR progress: 100%","timestamp":"2026-06-23 02:41:26"}
+{"level":"info","message":"OCR completed. Confidence: 68%","timestamp":"2026-06-23 02:41:28"}
+{"level":"info","message":"Fraud analysis complete. Score: 15, Fraudulent: false","timestamp":"2026-06-23 02:41:28"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/0f1e2e56-c0aa-4e75-ae25-7c126151413d/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:42:18","url":"/api/v1/documents/0f1e2e56-c0aa-4e75-ae25-7c126151413d/validate"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/485e2183-d5ae-459e-a304-6834a7cad858/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:42:19","url":"/api/v1/documents/485e2183-d5ae-459e-a304-6834a7cad858/validate"}
+{"level":"warn","message":"Route not found: POST /api/v1/documents/c6b8cad2-a0a1-4deb-90c6-3cfdbdb79f09/validate","method":"POST","statusCode":404,"timestamp":"2026-06-23 02:42:24","url":"/api/v1/documents/c6b8cad2-a0a1-4deb-90c6-3cfdbdb79f09/validate"}
