@@ -5,6 +5,10 @@ node_modules/
 .env
 uploads/
 uploads/documents/
+logs/
+com
+
+
 # Expo
 .expo/
 dist/
