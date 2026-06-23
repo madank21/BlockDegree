@@ -1,189 +1,392 @@
 // BACKEND/controllers/adminController.js
-const Degree = require('../models/Degree');
-const Document = require('../models/Document');
-const User = require('../models/User');
-const AuditLog = require('../models/AuditLog');
-const { supabase } = require('../database/supabase');
-const fs = require('fs');
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin Controller — fully rewritten to use Supabase model methods
+// (replaces all Sequelize calls: findAll, findByPk, destroy, count)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const Degree    = require('../models/Degree');
+const Document  = require('../models/Document');
+const User      = require('../models/User');
+const AuditLog  = require('../models/AuditLog');
+const { getSupabaseAdmin } = require('../database/supabase');
+const fs   = require('fs');
 const path = require('path');
 
-// GET /api/v1/admin/stats
+// ── GET /api/v1/admin/stats ───────────────────────────────────────────────────
 exports.getStats = async (req, res) => {
   try {
-    // Example: count documents, users, degrees, and compute storage used
-    const [totalDocs, totalUsers, totalDegrees] = await Promise.all([
-      Document.count(),
+    // Use Supabase model methods (count / findMany with count)
+    const [userCount, degreeStats, docResult] = await Promise.all([
       User.count(),
-      Degree.count(),
+      Degree.getStats(),                         // returns { total, issued, pending, revoked, … }
+      Document.findAll({ page: 1, limit: 1 }),   // we only need .total
     ]);
-    // For disk usage, you might query Supabase storage or use fs if local
-    // This is just a placeholder; adjust to your actual data source
+
     const stats = {
-      total: 100 * 1024 * 1024, // placeholder: 100 MB total
-      used: 45 * 1024 * 1024,   // placeholder: 45 MB used
-      documents: totalDocs,
-      users: totalUsers,
-      degrees: totalDegrees,
+      totalUsers:    userCount,
+      totalDegrees:  degreeStats.total,
+      totalDocuments: docResult.total,
+      degreesByStatus: {
+        issued:  degreeStats.issued,
+        pending: degreeStats.pending,
+        revoked: degreeStats.revoked,
+      },
+      // Storage placeholders — update if you track actual disk usage
+      storage: {
+        total: 100 * 1024 * 1024,
+        used:   45 * 1024 * 1024,
+      },
     };
-    res.json(stats);
+
+    res.json({ success: true, data: stats });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Admin] getStats error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-// GET /api/v1/admin/integrity
+// ── GET /api/v1/admin/integrity ───────────────────────────────────────────────
 exports.checkIntegrity = async (req, res) => {
   try {
-    const errors = [];
-    // Example: check if any degree has a null hash
-    const invalidDegrees = await Degree.findAll({ where: { degreeHash: null } });
-    if (invalidDegrees.length) {
-      errors.push(`${invalidDegrees.length} degrees have missing hash.`);
+    const supabase = getSupabaseAdmin();
+    const errors   = [];
+
+    // 1. Degrees with a null degree_hash
+    const { data: nullHashDegrees, error: e1 } = await supabase
+      .from('degrees')
+      .select('id')
+      .is('degree_hash', null);
+
+    if (e1) throw new Error(e1.message);
+    if (nullHashDegrees?.length) {
+      errors.push(`${nullHashDegrees.length} degree(s) have a missing hash.`);
     }
-    // Add more checks as needed (orphaned documents, mismatched blockchain status, etc.)
+
+    // 2. Issued degrees with no blockchain tx hash
+    const { data: unconfirmed, error: e2 } = await supabase
+      .from('degrees')
+      .select('id')
+      .eq('status', 'issued')
+      .is('blockchain_tx_hash', null);
+
+    if (e2) throw new Error(e2.message);
+    if (unconfirmed?.length) {
+      errors.push(`${unconfirmed.length} issued degree(s) have no blockchain transaction hash.`);
+    }
+
+    // 3. Documents with no linked user
+    const { data: orphanedDocs, error: e3 } = await supabase
+      .from('documents')
+      .select('id')
+      .is('user_id', null);
+
+    if (e3) throw new Error(e3.message);
+    if (orphanedDocs?.length) {
+      errors.push(`${orphanedDocs.length} document(s) have no associated user.`);
+    }
+
     const valid = errors.length === 0;
-    res.json({ valid, errors });
+    res.json({ success: true, data: { valid, errors } });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Admin] checkIntegrity error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-// POST /api/v1/admin/backup
+// ── POST /api/v1/admin/backup ─────────────────────────────────────────────────
 exports.createBackup = async (req, res) => {
   try {
-    // Fetch all relevant data
-    const [users, degrees, documents, auditLogs] = await Promise.all([
-      User.findAll(),
-      Degree.findAll(),
-      Document.findAll(),
-      AuditLog.findAll(),
+    // Fetch all data using proper Supabase model methods
+    const [usersResult, degreesResult, docsResult] = await Promise.all([
+      User.findMany({ page: 1, limit: 10000 }),
+      Degree.findMany({ page: 1, limit: 10000 }),
+      Document.findAll({ page: 1, limit: 10000 }),
     ]);
-    const backupData = { users, degrees, documents, auditLogs, timestamp: new Date().toISOString() };
-    const backupId = `backup_${Date.now()}`;
-    const backupPath = path.join(__dirname, '../backups', `${backupId}.json`);
-    // Ensure backups directory exists
-    if (!fs.existsSync(path.dirname(backupPath))) {
-      fs.mkdirSync(path.dirname(backupPath), { recursive: true });
+
+    // AuditLog uses raw supabase (no findMany method exposed)
+    const supabase = getSupabaseAdmin();
+    const { data: auditRows } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(10000);
+
+    const backupData = {
+      users:     usersResult.data,
+      degrees:   degreesResult.data,
+      documents: docsResult.data,
+      auditLogs: auditRows || [],
+      timestamp: new Date().toISOString(),
+      version:   '1.0.0',
+    };
+
+    const backupId   = `backup_${Date.now()}`;
+    const backupDir  = path.join(__dirname, '../backups');
+    const backupPath = path.join(backupDir, `${backupId}.json`);
+
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
     }
+
     fs.writeFileSync(backupPath, JSON.stringify(backupData, null, 2));
-    // Optionally store backup info in a separate table (e.g., BackupLog)
-    // Return the backup ID so frontend can reference it
-    res.json({ backupId, message: 'Backup created successfully' });
+
+    res.json({
+      success: true,
+      data: {
+        backupId,
+        message: 'Backup created successfully',
+        timestamp: backupData.timestamp,
+        counts: {
+          users:     usersResult.data.length,
+          degrees:   degreesResult.data.length,
+          documents: docsResult.data.length,
+          auditLogs: (auditRows || []).length,
+        },
+      },
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Admin] createBackup error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-// GET /api/v1/admin/backup/last
+// ── GET /api/v1/admin/backup/last ─────────────────────────────────────────────
 exports.getLastBackupInfo = async (req, res) => {
   try {
-    // Read the backups directory and return the most recent backup's timestamp
     const backupDir = path.join(__dirname, '../backups');
+
     if (!fs.existsSync(backupDir)) {
-      return res.json({ lastBackup: null });
+      return res.json({ success: true, data: { lastBackup: null } });
     }
-    const files = fs.readdirSync(backupDir).filter(f => f.endsWith('.json'));
+
+    const files = fs.readdirSync(backupDir).filter((f) => f.endsWith('.json'));
+
     if (files.length === 0) {
-      return res.json({ lastBackup: null });
+      return res.json({ success: true, data: { lastBackup: null } });
     }
-    // Sort by modification time descending
+
     const sorted = files.sort((a, b) => {
-      return fs.statSync(path.join(backupDir, b)).mtimeMs - fs.statSync(path.join(backupDir, a)).mtimeMs;
+      return (
+        fs.statSync(path.join(backupDir, b)).mtimeMs -
+        fs.statSync(path.join(backupDir, a)).mtimeMs
+      );
     });
+
     const lastFile = sorted[0];
-    const stats = fs.statSync(path.join(backupDir, lastFile));
-    res.json({ lastBackup: stats.mtime.toISOString() });
+    const stats    = fs.statSync(path.join(backupDir, lastFile));
+
+    res.json({
+      success: true,
+      data: {
+        lastBackup: stats.mtime.toISOString(),
+        backupId:   lastFile.replace('.json', ''),
+        totalFiles: files.length,
+      },
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Admin] getLastBackupInfo error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-// POST /api/v1/admin/restore
+// ── POST /api/v1/admin/restore ────────────────────────────────────────────────
 exports.restoreBackup = async (req, res) => {
   try {
-    // You need to decide which backup to restore. Could accept a backupId in body.
-    // For simplicity, restore the most recent backup.
-    const backupDir = path.join(__dirname, '../backups');
-    const files = fs.readdirSync(backupDir).filter(f => f.endsWith('.json'));
-    if (files.length === 0) {
-      return res.status(404).json({ error: 'No backup found' });
+    const { backupId } = req.body;
+    const backupDir    = path.join(__dirname, '../backups');
+
+    let targetFile;
+
+    if (backupId) {
+      targetFile = path.join(backupDir, `${backupId}.json`);
+      if (!fs.existsSync(targetFile)) {
+        return res.status(404).json({ success: false, error: `Backup ${backupId} not found` });
+      }
+    } else {
+      // Restore most recent
+      if (!fs.existsSync(backupDir)) {
+        return res.status(404).json({ success: false, error: 'No backups found' });
+      }
+      const files = fs.readdirSync(backupDir).filter((f) => f.endsWith('.json'));
+      if (!files.length) {
+        return res.status(404).json({ success: false, error: 'No backup files found' });
+      }
+      const sorted = files.sort((a, b) => {
+        return (
+          fs.statSync(path.join(backupDir, b)).mtimeMs -
+          fs.statSync(path.join(backupDir, a)).mtimeMs
+        );
+      });
+      targetFile = path.join(backupDir, sorted[0]);
     }
-    const sorted = files.sort((a, b) => {
-      return fs.statSync(path.join(backupDir, b)).mtimeMs - fs.statSync(path.join(backupDir, a)).mtimeMs;
+
+    // NOTE: Full restore is destructive — log and return info for safety.
+    // A production restore should be done via a dedicated migration script.
+    const backupMeta = JSON.parse(fs.readFileSync(targetFile, 'utf8'));
+
+    res.json({
+      success: true,
+      data: {
+        message: 'Restore acknowledged. Run the restore migration script to apply.',
+        backupTimestamp: backupMeta.timestamp,
+        counts: {
+          users:     (backupMeta.users     || []).length,
+          degrees:   (backupMeta.degrees   || []).length,
+          documents: (backupMeta.documents || []).length,
+          auditLogs: (backupMeta.auditLogs || []).length,
+        },
+      },
     });
-    const latestBackup = sorted[0];
-    const backupData = JSON.parse(fs.readFileSync(path.join(backupDir, latestBackup), 'utf8'));
-    // Wipe existing data and insert backup data
-    // This is a DANGEROUS operation – use transactions and confirm
-    // For simplicity, we use Supabase's upsert or truncate+insert
-    // You'll need to implement careful re-insertion with correct foreign keys
-    // Consider using a transaction
-    // Placeholder: just return success
-    res.json({ message: 'Restore initiated (not fully implemented)' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Admin] restoreBackup error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-// GET /api/v1/admin/export
+// ── GET /api/v1/admin/export ─────────────────────────────────────────────────
 exports.exportData = async (req, res) => {
   try {
-    const [users, degrees, documents, auditLogs] = await Promise.all([
-      User.findAll(),
-      Degree.findAll(),
-      Document.findAll(),
-      AuditLog.findAll(),
+    // Use proper Supabase model methods (not findAll Sequelize)
+    const [usersResult, degreesResult, docsResult] = await Promise.all([
+      User.findMany({ page: 1, limit: 10000 }),
+      Degree.findMany({ page: 1, limit: 10000 }),
+      Document.findAll({ page: 1, limit: 10000 }),
     ]);
-    const exportData = { users, degrees, documents, auditLogs, exportedAt: new Date().toISOString() };
+
+    const supabase = getSupabaseAdmin();
+    const { data: auditRows } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(10000);
+
+    const exportPayload = {
+      exportedAt: new Date().toISOString(),
+      users:      usersResult.data,
+      degrees:    degreesResult.data,
+      documents:  docsResult.data,
+      auditLogs:  auditRows || [],
+    };
+
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename=data_export_${Date.now()}.json`);
-    res.json(exportData);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="blockdegree_export_${Date.now()}.json"`
+    );
+    res.json(exportPayload);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Admin] exportData error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-// POST /api/v1/admin/import
+// ── POST /api/v1/admin/import ─────────────────────────────────────────────────
 exports.importData = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
     }
-    const fileContent = req.file.buffer.toString('utf8');
-    const importData = JSON.parse(fileContent);
-    // Validate structure and insert into DB
-    // Again, this is a destructive operation – implement carefully
-    res.json({ message: 'Import completed (not fully implemented)' });
+
+    let importPayload;
+    try {
+      importPayload = JSON.parse(req.file.buffer.toString('utf8'));
+    } catch {
+      return res.status(400).json({ success: false, error: 'Invalid JSON file' });
+    }
+
+    if (!importPayload.users && !importPayload.degrees) {
+      return res.status(400).json({ success: false, error: 'Unrecognised import format' });
+    }
+
+    // Return import summary — full import requires careful ordering due to FK constraints
+    res.json({
+      success: true,
+      data: {
+        message: 'Import validated. Use migration scripts to apply to database.',
+        preview: {
+          users:     (importPayload.users     || []).length,
+          degrees:   (importPayload.degrees   || []).length,
+          documents: (importPayload.documents || []).length,
+          auditLogs: (importPayload.auditLogs || []).length,
+          exportedAt: importPayload.exportedAt || 'unknown',
+        },
+      },
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Admin] importData error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-// DELETE /api/v1/admin/cleanup?days=90
+// ── DELETE /api/v1/admin/cleanup?days=90 ─────────────────────────────────────
 exports.cleanupOldDocuments = async (req, res) => {
   try {
-    const days = parseInt(req.query.days) || 90;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    // Example: delete documents older than cutoff
-    const deleted = await Document.destroy({
-      where: { createdAt: { [Op.lt]: cutoff } }
+    const days   = parseInt(req.query.days) || 90;
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+    const supabase = getSupabaseAdmin();
+
+    // Find old un-verified documents first
+    const { data: toDelete, error: findErr } = await supabase
+      .from('documents')
+      .select('id, file_path')
+      .lt('created_at', cutoff)
+      .eq('is_verified', false);
+
+    if (findErr) throw new Error(findErr.message);
+
+    if (!toDelete || toDelete.length === 0) {
+      return res.json({ success: true, data: { deletedCount: 0 } });
+    }
+
+    const ids = toDelete.map((d) => d.id);
+
+    // Delete from DB
+    const { error: delErr } = await supabase.from('documents').delete().in('id', ids);
+    if (delErr) throw new Error(delErr.message);
+
+    // Optionally delete files from disk
+    toDelete.forEach(({ file_path }) => {
+      if (file_path) {
+        const abs = path.join(__dirname, '..', file_path);
+        if (fs.existsSync(abs)) {
+          try { fs.unlinkSync(abs); } catch (_) { /* ignore individual file errors */ }
+        }
+      }
     });
-    res.json({ deletedCount: deleted });
+
+    res.json({
+      success: true,
+      data: { deletedCount: ids.length, cutoffDate: cutoff },
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Admin] cleanupOldDocuments error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
-// DELETE /api/v1/admin/reset
+// ── DELETE /api/v1/admin/reset ────────────────────────────────────────────────
 exports.resetData = async (req, res) => {
   try {
-    // WARNING: This will wipe all data. Use only in development.
-    // For production, you might want to require a special token or second confirmation.
-    // Implementation: truncate all tables (order matters due to foreign keys)
-    // Using Supabase raw SQL or truncate operations.
-    res.json({ message: 'Data reset (not implemented)' });
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({
+        success: false,
+        error: 'Data reset is disabled in production',
+      });
+    }
+
+    // Development only — truncate non-user tables
+    const supabase = getSupabaseAdmin();
+    await supabase.from('verification_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('fraud_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('blockchain_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('documents').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('degrees').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('audit_logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+    res.json({ success: true, data: { message: 'Data reset completed (development only)' } });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Admin] resetData error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
