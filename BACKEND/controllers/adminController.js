@@ -1,19 +1,25 @@
 // BACKEND/controllers/adminController.js
 //
-// FIXES applied (Audit Report §7):
+// FIXES applied (Audit Report §7, re-verified against current codebase):
 //   FIX-1: Degree.count()   → (await Degree.findMany({ limit:1 })).total
 //   FIX-2: User.count()     → User.count() — method exists in User model ✓
-//   FIX-3: Document.count() → (await Document.findMany({ limit:1 })).total
+//   FIX-3: Document.count() → (await Document.findAll({ limit:1 })).total
 //   FIX-4: Degree.findAll() → (await Degree.findMany({ limit:9999 })).data
 //   FIX-5: User.findAll()   → (await User.findMany({ limit:9999 })).data
-//   FIX-6: Document.findAll() → (await Document.findMany({ limit:9999 })).data
+//   FIX-6: Document.findAll() → (await Document.findAll({ limit:9999 })).data
 //   FIX-7: AuditLog.findAll() → (await AuditLog.findMany({ limit:9999 })).data
-//   FIX-8: Document.destroy({ where: {...} }) → Document.deleteOlderThan(days)
-//          (method added here via direct Supabase call as Document model has no destroy)
+//   FIX-8: Document.destroy({ where: {...} }) → direct Supabase delete (Document
+//          model has no destroy/bulk-delete method)
 //   FIX-9: Degree.findAll({ where: { degreeHash: null } }) → Supabase .is('degree_hash', null)
 //   FIX-10: sendPaginated signature aligned with response.js (data, paginationObj, message)
 //   FIX-11: asyncHandler wrapper added to all handlers
 //   FIX-12: Added { getSupabaseAdmin } for direct DB queries where needed
+//   FIX-13 (NEW): Document model only exposes findAll() — NOT findMany(). A
+//          previous pass renamed every OTHER model's findAll→findMany but
+//          accidentally did the same to Document, which has no findMany().
+//          getStats(), createBackup(), and exportData() were throwing
+//          "Document.findMany is not a function" on every single call.
+//          Reverted those three call sites back to Document.findAll().
 
 'use strict';
 
@@ -47,7 +53,7 @@ exports.getStats = asyncHandler(async (req, res) => {
     // FIX-1: Degree has no .count() — use findMany with limit:1 to get total
     Degree.findMany({ page: 1, limit: 1 }).then(r => r.total),
     // FIX-3: Document has no .count() — same pattern
-    Document.findMany({ limit: 1 }).then(r => r.total),
+    Document.findAll({ page: 1, limit: 1 }).then(r => r.total), // FIX: Document model has findAll(), not findMany()
     // Today's audit log count
     AuditLog.getTodayCount().catch(() => 0),
   ]);
@@ -160,7 +166,7 @@ exports.createBackup = asyncHandler(async (req, res) => {
   const [usersRes, degreesRes, docsRes, auditRes] = await Promise.all([
     User.findMany({ limit: 9999 }),
     Degree.findMany({ limit: 9999 }),
-    Document.findMany({ limit: 9999 }),
+    Document.findAll({ limit: 9999 }), // FIX: Document model has findAll(), not findMany()
     AuditLog.findMany({ limit: 9999 }),
   ]);
 
@@ -290,7 +296,7 @@ exports.exportData = asyncHandler(async (req, res) => {
   const [usersRes, degreesRes, docsRes, auditRes] = await Promise.all([
     User.findMany({ limit: 9999 }),
     Degree.findMany({ limit: 9999 }),
-    Document.findMany({ limit: 9999 }),
+    Document.findAll({ limit: 9999 }), // FIX: Document model has findAll(), not findMany()
     AuditLog.findMany({ limit: 9999 }),
   ]);
 

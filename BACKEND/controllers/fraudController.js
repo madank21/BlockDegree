@@ -1,50 +1,104 @@
 // BACKEND/controllers/fraudController.js
-// ─────────────────────────────────────────────────────────────────────────────
-// Fraud Controller — fully rewritten to use Supabase model methods
-// (replaces all Sequelize calls: findAll, findByPk, save, findAll on User/Degree/Document)
-// ─────────────────────────────────────────────────────────────────────────────
+//
+// FIXES applied (verified directly against current FRONTEND/src/pages/FraudDetection.tsx):
+//   FIX-1: getReports/getFraudChecks now return RAW ARRAYS (res.json(array)),
+//          not { success, data: { reports: [...] } }. FraudDetection.tsx does
+//          `Array.isArray(reportsRaw) ? reportsRaw : []` — wrapping the array
+//          in an object made every list render empty.
+//   FIX-2: getStats() now returns the EXACT field names FraudStats expects:
+//          unresolvedCount, resolvedCount, highCount, mediumCount, lowCount,
+//          duplicateCnicCount, fraudulentDocCount, safetyScore, totalApplications.
+//          The previous version returned fraudLogs/totalUsers/totalDegrees/etc,
+//          none of which the page reads.
+//   FIX-3: getReports no longer filters is_fraudulent when the caller passes
+//          ?resolved=true|false — that was filtering the wrong column. Now
+//          passes `resolved` straight through to FraudLog (which maps it to
+//          is_resolved).
+//   FIX-4: resolveReport now updates is_resolved/resolved_at/resolved_by
+//          (real columns — see migration 003) instead of overloading
+//          is_fraudulent, which conflates "false positive" with "reviewed".
+//   FIX-5: studentName is now resolved via the linked degree for both
+//          getReports and getFraudChecks.
 
-const FraudLog  = require('../models/FraudLog');
-const User      = require('../models/User');
-const Degree    = require('../models/Degree');
-const Document  = require('../models/Document');
+const FraudLog = require('../models/FraudLog');
+const User = require('../models/User');
+const Degree = require('../models/Degree');
+const Document = require('../models/Document');
 const { getSupabaseAdmin } = require('../database/supabase');
 
+const ALL_ROWS_LIMIT = 100000;
+
+// Map this app's risk_level (MINIMAL/LOW/MEDIUM/HIGH/CRITICAL) onto the
+// 'high' | 'medium' | 'low' | 'safe' severity scale FraudDetection.tsx renders.
+function riskLevelToSeverity(riskLevel) {
+  switch (riskLevel) {
+    case 'CRITICAL':
+    case 'HIGH':
+      return 'high';
+    case 'MEDIUM':
+      return 'medium';
+    case 'LOW':
+      return 'low';
+    default:
+      return 'safe';
+  }
+}
+
+// Best-effort studentName lookup for a batch of FraudLog rows via their
+// linked degree_id (fraud logs aren't guaranteed to have one yet).
+async function attachStudentNames(rows) {
+  const degreeIds = [...new Set(rows.map((r) => r.degree_id).filter(Boolean))];
+  if (!degreeIds.length) return rows.map((r) => ({ ...r, studentName: 'Unknown' }));
+
+  const degrees = await Promise.all(degreeIds.map((id) => Degree.findById(id)));
+  const degreeMap = new Map(degreeIds.map((id, i) => [id, degrees[i]]));
+
+  return rows.map((r) => ({
+    ...r,
+    studentName: r.degree_id ? (degreeMap.get(r.degree_id)?.studentName || 'Unknown') : 'Unknown',
+  }));
+}
+
 // ── GET /api/v1/fraud/reports ─────────────────────────────────────────────────
-// Query params: resolved (bool), severity/riskLevel (string), page, limit
+// FIX-1: returns a raw array. FIX-3: `resolved` is passed straight through.
 exports.getReports = async (req, res) => {
   try {
     const {
       resolved,
       riskLevel,
-      severity,   // alias
-      page  = 1,
-      limit = 20,
+      severity, // alias
+      page = 1,
+      limit = 50,
     } = req.query;
 
-    const filters = {};
-    if (resolved !== undefined) {
-      filters.isFraudulent = resolved === 'true';
-    }
-    if (riskLevel || severity) {
-      filters.riskLevel = (riskLevel || severity).toUpperCase();
-    }
-
     const result = await FraudLog.findMany({
-      ...filters,
-      page:  parseInt(page),
-      limit: parseInt(limit),
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      resolved: resolved !== undefined ? resolved === 'true' : undefined,
+      riskLevel: (riskLevel || severity) ? (riskLevel || severity).toUpperCase() : undefined,
     });
 
-    res.json({
-      success: true,
-      data: {
-        reports: result.data,
-        total:   result.total,
-        page:    parseInt(page),
-        limit:   parseInt(limit),
-      },
-    });
+    const withNames = await attachStudentNames(result.data);
+
+    const reports = withNames.map((log) => ({
+      id: log.id,
+      type: (log.findings && log.findings[0]) || 'Document Fraud Check',
+      description:
+        log.findings && log.findings.length
+          ? log.findings.join('; ')
+          : 'Automated fraud analysis flagged this document for review.',
+      severity: riskLevelToSeverity(log.risk_level),
+      riskLevel: log.risk_level,
+      studentName: log.studentName,
+      timestamp: log.created_at,
+      createdAt: log.created_at,
+      resolved: !!log.is_resolved,
+      isFraudulent: log.is_fraudulent,
+      fraudScore: log.fraud_score,
+      findings: log.findings || [],
+    }));
+
+    res.json(reports);
   } catch (err) {
     console.error('[Fraud] getReports error:', err);
     res.status(500).json({ success: false, error: err.message });
@@ -52,44 +106,49 @@ exports.getReports = async (req, res) => {
 };
 
 // ── GET /api/v1/fraud/stats ───────────────────────────────────────────────────
+// FIX-2: exact field names FraudDetection.tsx's FraudStats interface expects.
 exports.getStats = async (req, res) => {
   try {
-    // FraudLog stats from model
     const fraudStats = await FraudLog.getStats();
 
-    // User, Degree, Document counts via Supabase model methods
-    const [userCount, degreeStats, docResult] = await Promise.all([
-      User.count(),
+    const [{ data: students }, degreeStats] = await Promise.all([
+      User.findMany({ page: 1, limit: ALL_ROWS_LIMIT, role: 'student' }),
       Degree.getStats(),
-      Document.findAll({ page: 1, limit: 1 }),
     ]);
 
-    // Count fraudulent documents via supabase
+    // No CNIC field exists anywhere in this schema. The closest real signal
+    // for "duplicate accounts" available is more than one student account
+    // sharing the same student_id.
+    const studentIdCounts = new Map();
+    students.forEach((s) => {
+      if (s.studentId) studentIdCounts.set(s.studentId, (studentIdCounts.get(s.studentId) || 0) + 1);
+    });
+    const duplicateCnicCount = [...studentIdCounts.values()].filter((c) => c > 1).length;
+
     const supabase = getSupabaseAdmin();
-    const { count: fraudDocCount } = await supabase
+    const { count: fraudulentDocCount } = await supabase
       .from('documents')
       .select('id', { count: 'exact', head: true })
       .gt('fraud_score', 0.7);
 
-    // Simple safety score: 100 minus weighted fraud indicators
     const safetyScore = Math.max(
       0,
-      100 -
-        fraudStats.critical * 20 -
-        fraudStats.high * 10 -
-        (fraudDocCount || 0) * 5
+      Math.min(
+        100,
+        100 - fraudStats.critical * 20 - fraudStats.high * 10 - (fraudulentDocCount || 0) * 5
+      )
     );
 
     res.json({
-      success: true,
-      data: {
-        fraudLogs: fraudStats,
-        totalUsers:       userCount,
-        totalDegrees:     degreeStats.total,
-        totalDocuments:   docResult.total,
-        fraudulentDocs:   fraudDocCount || 0,
-        safetyScore:      Math.min(100, safetyScore),
-      },
+      unresolvedCount: fraudStats.unresolved || 0,
+      resolvedCount: fraudStats.resolved || 0,
+      highCount: (fraudStats.critical || 0) + (fraudStats.high || 0),
+      mediumCount: fraudStats.medium || 0,
+      lowCount: fraudStats.low || 0,
+      duplicateCnicCount,
+      fraudulentDocCount: fraudulentDocCount || 0,
+      safetyScore,
+      totalApplications: degreeStats.total || 0,
     });
   } catch (err) {
     console.error('[Fraud] getStats error:', err);
@@ -98,42 +157,36 @@ exports.getStats = async (req, res) => {
 };
 
 // ── GET /api/v1/fraud/checks ──────────────────────────────────────────────────
-// Returns a paginated list of documents with their fraud scores for review.
+// FIX-1: raw array. FIX-5: studentName resolved via the linked degree.
 exports.getFraudChecks = async (req, res) => {
   try {
-    const { page = 1, limit = 20, minScore } = req.query;
+    const { page = 1, limit = 50, minScore } = req.query;
 
     const result = await Document.findAll({
-      page:          parseInt(page),
-      limit:         parseInt(limit),
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
       fraudScoreMin: minScore ? parseFloat(minScore) : null,
     });
 
-    // Map to a fraud-check shape expected by the frontend
-    const checks = result.data.map((doc) => ({
-      id:            doc.id,
-      documentId:    doc.id,
-      fileName:      doc.original_name || doc.file_name,
-      documentType:  doc.document_type,
-      fraudScore:    doc.fraud_score || 0,
-      ocrConfidence: doc.ocr_confidence || 0,
-      yoloValid:     doc.yolo_valid,
-      yoloStatus:    doc.yolo_status,
-      isVerified:    doc.is_verified,
-      userId:        doc.user_id,
-      degreeId:      doc.degree_id,
-      createdAt:     doc.created_at,
-    }));
+    const degreeIds = [...new Set(result.data.map((d) => d.degree_id).filter(Boolean))];
+    const degrees = await Promise.all(degreeIds.map((id) => Degree.findById(id)));
+    const degreeMap = new Map(degreeIds.map((id, i) => [id, degrees[i]]));
 
-    res.json({
-      success: true,
-      data: {
-        checks,
-        total: result.total,
-        page:  parseInt(page),
-        limit: parseInt(limit),
-      },
+    const checks = result.data.map((doc) => {
+      const fraudScore = doc.fraud_score || 0;
+      const severity = fraudScore >= 0.6 ? 'high' : fraudScore >= 0.3 ? 'medium' : 'safe';
+      const degree = doc.degree_id ? degreeMap.get(doc.degree_id) : null;
+
+      return {
+        applicationId: doc.degree_id || doc.id,
+        studentName: degree?.studentName || 'Unknown',
+        fraudScore,
+        severity,
+        flags: doc.validation_errors || [],
+      };
     });
+
+    res.json(checks);
   } catch (err) {
     console.error('[Fraud] getFraudChecks error:', err);
     res.status(500).json({ success: false, error: err.message });
@@ -141,12 +194,12 @@ exports.getFraudChecks = async (req, res) => {
 };
 
 // ── POST /api/v1/fraud/check/:applicationId ───────────────────────────────────
-// Runs a lightweight in-line fraud assessment for a specific document/degree.
+// applicationId is a Degree ID — runs a lightweight in-line fraud assessment
+// over every document linked to that degree.
 exports.runFraudCheck = async (req, res) => {
   try {
     const { applicationId } = req.params;
 
-    // Look up degree first, then documents attached to it
     const degree = await Degree.findById(applicationId);
     if (!degree) {
       return res.status(404).json({ success: false, error: 'Application not found' });
@@ -159,35 +212,34 @@ exports.runFraudCheck = async (req, res) => {
       .eq('degree_id', applicationId);
 
     const documents = docs || [];
-    const avgFraud  = documents.length
+    const avgFraud = documents.length
       ? documents.reduce((s, d) => s + (d.fraud_score || 0), 0) / documents.length
       : 0;
 
     const riskLevel =
       avgFraud >= 0.8 ? 'CRITICAL' :
-      avgFraud >= 0.6 ? 'HIGH'     :
-      avgFraud >= 0.4 ? 'MEDIUM'   :
-      avgFraud >= 0.2 ? 'LOW'      : 'MINIMAL';
+      avgFraud >= 0.6 ? 'HIGH' :
+      avgFraud >= 0.4 ? 'MEDIUM' :
+      avgFraud >= 0.2 ? 'LOW' : 'MINIMAL';
 
     const result = {
       applicationId,
-      degreeId:       degree.id,
-      studentName:    degree.studentName,
-      fraudScore:     parseFloat(avgFraud.toFixed(4)),
+      degreeId: degree.id,
+      studentName: degree.studentName,
+      fraudScore: parseFloat(avgFraud.toFixed(4)),
       riskLevel,
       documentsChecked: documents.length,
-      isFraudulent:   avgFraud >= 0.8,
+      isFraudulent: avgFraud >= 0.8,
     };
 
-    // Persist a fraud log entry if risk is high
     if (avgFraud >= 0.6) {
       await FraudLog.create({
-        degreeId:     applicationId,
-        fraudScore:   avgFraud,
+        degreeId: applicationId,
+        fraudScore: avgFraud,
         riskLevel,
         isFraudulent: avgFraud >= 0.8,
-        findings:     [`Automated check: average fraud score ${avgFraud.toFixed(2)}`],
-        reportedBy:   req.user?.id || null,
+        findings: [`Automated check: average fraud score ${avgFraud.toFixed(2)}`],
+        reportedBy: req.user?.id || null,
       });
     }
 
@@ -199,42 +251,25 @@ exports.runFraudCheck = async (req, res) => {
 };
 
 // ── PATCH /api/v1/fraud/reports/:reportId/resolve ────────────────────────────
+// FIX-4: resolves via is_resolved/resolved_at/resolved_by, not is_fraudulent.
 exports.resolveReport = async (req, res) => {
   try {
     const { reportId } = req.params;
 
-    const supabase = getSupabaseAdmin();
-
-    // Check the record exists first
-    const { data: existing, error: findErr } = await supabase
-      .from('fraud_logs')
-      .select('id, is_fraudulent')
-      .eq('id', reportId)
-      .single();
-
-    if (findErr || !existing) {
+    const existing = await FraudLog.findById(reportId);
+    if (!existing) {
       return res.status(404).json({ success: false, error: 'Fraud report not found' });
     }
 
-    // Mark as resolved by setting is_fraudulent = false and adding a resolved_at note in findings
-    const { data: updated, error: updateErr } = await supabase
-      .from('fraud_logs')
-      .update({
-        is_fraudulent: false,
-        findings: [`Resolved by admin (${new Date().toISOString()})`],
-      })
-      .eq('id', reportId)
-      .select('*')
-      .single();
-
-    if (updateErr) throw new Error(updateErr.message);
+    const updated = await FraudLog.update(reportId, {
+      resolved: true,
+      resolvedAt: new Date().toISOString(),
+      resolved_by: req.user?.id || null,
+    });
 
     res.json({
       success: true,
-      data: {
-        message: 'Fraud report resolved successfully',
-        report:  updated,
-      },
+      data: { message: 'Fraud report resolved successfully', report: updated },
     });
   } catch (err) {
     console.error('[Fraud] resolveReport error:', err);
