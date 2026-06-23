@@ -1,4 +1,3 @@
-// FRONTEND/src/api/api.ts
 //
 // Single source of truth for all backend calls. No page or lib file should
 // call Supabase directly for mutations, and nothing in the browser should
@@ -190,7 +189,7 @@ export const authApi = {
 
 // --- Users -------------------------------------------------------------
 export const usersApi = {
-  // List users with optional filters (role, search, etc.)
+  // List users with optional filters (role, page, limit, search, isActive)
   list: (params?: { role?: string; page?: number; limit?: number; search?: string; isActive?: boolean }) => {
     const query = new URLSearchParams();
     if (params?.role) query.append('role', params.role);
@@ -272,6 +271,11 @@ export const documentsApi = {
   checkFraud: (documentId: string) =>
     post<{ fraudScore: number; status: string; flags?: string[] }>(
       `/documents/${documentId}/check-fraud`
+    ),
+  // ─── NEW: Verify identity – calls backend POST /documents/:id/verify ────
+  verify: (id: string) =>
+    post<{ validation_status: string; validation_errors: string[]; document: any }>(
+      `/documents/${id}/verify`
     ),
 };
 

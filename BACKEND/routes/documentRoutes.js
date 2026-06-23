@@ -1,4 +1,3 @@
-// BACKEND/routes/documentRoutes.js
 const express = require("express");
 const router = express.Router();
 
@@ -10,7 +9,8 @@ const {
   deleteDocument,
   getAllDocuments,
   reanalyzeDocument,
-  updateDocument,      // new
+  updateDocument,
+  verifyDocument,          // <-- new import
 } = require("../controllers/documentController");
 
 const { authenticate } = require("../middleware/authMiddleware");
@@ -34,6 +34,9 @@ router.post(
 
 // NEW: Update document (for OCR/YOLO/validation statuses)
 router.put("/:id", ...uuidParamValidator(), updateDocument);
+
+// NEW: Verify document identity (compare extracted name with user profile)
+router.post("/:id/verify", ...uuidParamValidator(), verifyDocument);
 
 router.post("/:id/reanalyze", 
   authorizeAdmin,

@@ -4,6 +4,7 @@ const { asyncHandler } = require("../middleware/errorMiddleware");
 const { sendSuccess, sendError, sendCreated, sendPaginated } = require("../src/utils/response");
 const Document = require("../models/Document");
 const AuditLog = require("../models/AuditLog");
+const User = require("../models/User"); // <-- Added
 const ocrService = require("../services/ocrService");
 const fraudDetectionService = require("../services/fraudDetectionService");
 const { cleanupFile } = require("../middleware/uploadMiddleware");
@@ -295,6 +296,64 @@ const updateDocument = asyncHandler(async (req, res) => {
   return sendSuccess(res, updated, "Document updated successfully");
 });
 
+// ─── NEW: Verify Document Identity ─────────────────────────────────────────────
+const verifyDocument = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // 1. Fetch the document
+  const document = await Document.findById(id);
+  if (!document) {
+    return sendError(res, "Document not found.", 404);
+  }
+
+  // 2. Authorization: only the owner or admin can verify
+  if (req.user.role !== "admin" && document.user_id !== req.user.id) {
+    return sendError(res, "Access denied.", 403);
+  }
+
+  // 3. Fetch the user to get the official name
+  const user = await User.findById(document.user_id);
+  if (!user) {
+    return sendError(res, "User not found.", 404);
+  }
+
+  // 4. Get the extracted name from the document (case‑insensitive compare)
+  const extractedName = (document.extracted_data?.Name || "").trim();
+  const officialName = (user.name || user.full_name || "").trim();
+
+  let status = "valid";
+  let errors = [];
+
+  if (!extractedName) {
+    status = "mismatch";
+    errors.push("No name extracted from document.");
+  } else if (!officialName) {
+    status = "mismatch";
+    errors.push("User profile name is missing.");
+  } else if (extractedName.toLowerCase() !== officialName.toLowerCase()) {
+    status = "mismatch";
+    errors.push(`Extracted name "${extractedName}" does not match profile name "${officialName}".`);
+  }
+
+  // 5. Update the document
+  const updated = await Document.update(id, {
+    validation_status: status,
+    validation_errors: errors,
+  });
+
+  // 6. Audit log
+  await AuditLog.log("document_verified", {
+    userId: req.user.id,
+    resourceType: "document",
+    resourceId: id,
+    newData: { status, errors },
+    ipAddress: req.ip,
+  });
+
+  return sendSuccess(res, updated, "Document verified successfully.");
+});
+
+// ─── Export ─────────────────────────────────────────────────────────────────────
 module.exports = {
   uploadDocument,
   getMyDocuments,
@@ -304,4 +363,5 @@ module.exports = {
   getAllDocuments,
   reanalyzeDocument,
   updateDocument,
+  verifyDocument,   // <-- new export
 };
