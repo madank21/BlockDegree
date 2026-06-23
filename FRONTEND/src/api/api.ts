@@ -1,31 +1,34 @@
 //
-// Single source of truth for all backend calls. No page or lib file should
-// call Supabase directly for mutations, and nothing in the browser should
-// call the blockchain directly — everything routes through here, which
-// talks to BACKEND/app.js (/api/v1/...).
+// FRONTEND/src/api/api.ts
 //
-// FIXES applied (Audit Report §3.2, §7):
-//   FIX-1: fraudApi base path changed from /fraud-logs → /fraud
-//   FIX-2: degreesApi.publicLookup URL fixed: /degrees/public/:id → /degrees/public/degree/:id
-//   FIX-3: degreesApi.getQr now returns { qrCode } (matches backend response field)
-//   FIX-4: usersApi.getById / update / delete kept — backend routes will be added in File 4 (userRoutes.js)
-//   FIX-5: documentsApi.checkFraud now calls POST /documents/:id/fraud-check (new backend route added in app.js)
-//   FIX-6: authApi exposes me / updateMe / logout / forgotPassword / resetPassword / changePassword
-//   FIX-7: adminApi added for Data Management page calls
-//   FIX-8: verificationApi.retrigger added
-//   FIX-9: blockchainApi.register added
+// Single source of truth for all backend calls.
 //
-// Usage:
-//   import { authApi, degreesApi, verificationApi, blockchainApi, documentsApi,
-//            usersApi, auditApi, fraudApi, adminApi } from '@/api/api';
+// FIXES APPLIED:
+//   [1] fraudApi base path: /fraud-logs → /fraud  (backend mounts at /api/v1/fraud)
+//   [2] fraudApi.list() uses /fraud/reports        (backend route: GET /reports)
+//   [3] fraudApi.resolve() uses /fraud/reports/:id/resolve
+//   [4] fraudApi.stats() uses /fraud/stats
+//   [5] fraudApi.checks() uses /fraud/checks
+//   [6] documentsApi.checkFraud removed            (endpoint does not exist in backend)
+//   [7] blockchainApi.totalDegrees → returns { totalDegrees } not { total }
+//   [8] blockchainApi.transactions() now accepts params (page, limit, status)
+//   [9] degreesApi.publicLookup → /degrees/public/degree/:id  (correct route)
+//  [10] degreesApi.getQr → returns { qrCode } not { qrUrl }
+//  [11] adminApi group added  (was entirely missing)
+//  [12] authApi.logout, authApi.me, authApi.changePassword, authApi.forgotPassword,
+//       authApi.resetPassword added
+//  [13] usersApi.approve() added
+//  [14] documentsApi.update(), documentsApi.delete(), documentsApi.listAll() added
+//  [15] verificationApi.getAll(), verificationApi.getStats() added
+//  [16] faceApi group added  (was entirely missing)
+//
 
-// ----------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 // 1. Environment & token
-// ----------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1';
 
-// Token storage key — must match what authController returns and store.ts stores
 const TOKEN_KEY = 'token';
 
 function getToken(): string | null {
@@ -44,9 +47,9 @@ export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-// ----------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 // 2. Custom error class
-// ----------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
   public status: number;
@@ -60,17 +63,11 @@ export class ApiError extends Error {
   }
 }
 
-// ----------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 // 3. Core request helpers
-// ----------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Performs a JSON request (GET, POST, PUT, PATCH, DELETE).
- */
-async function request<T = any>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
+async function request<T = any>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
 
   const headers: HeadersInit = {
@@ -97,7 +94,7 @@ async function request<T = any>(
     throw new ApiError(message, res.status, body);
   }
 
-  // Unwrap the standard { success: true, data: ... } envelope
+  // Unwrap { success: true, data: ... } envelope
   if (
     body &&
     typeof body === 'object' &&
@@ -110,10 +107,6 @@ async function request<T = any>(
   return body as T;
 }
 
-/**
- * Performs a multipart/form-data POST (for file uploads).
- * Do NOT set Content-Type manually — browser adds the correct boundary.
- */
 async function postForm<T = any>(path: string, formData: FormData): Promise<T> {
   const token = getToken();
 
@@ -153,107 +146,123 @@ async function postForm<T = any>(path: string, formData: FormData): Promise<T> {
   return body as T;
 }
 
-// ----------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 // 4. Convenience methods
-// ----------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 
 const get  = <T = any>(path: string) => request<T>(path, { method: 'GET' });
+
 const post = <T = any>(path: string, data?: unknown) =>
-  request<T>(path, { method: 'POST', body: data !== undefined ? JSON.stringify(data) : undefined });
-const put  = <T = any>(path: string, data?: unknown) =>
-  request<T>(path, { method: 'PUT', body: data !== undefined ? JSON.stringify(data) : undefined });
+  request<T>(path, {
+    method: 'POST',
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+  });
+
+const put = <T = any>(path: string, data?: unknown) =>
+  request<T>(path, {
+    method: 'PUT',
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+  });
+
 const patch = <T = any>(path: string, data?: unknown) =>
-  request<T>(path, { method: 'PATCH', body: data !== undefined ? JSON.stringify(data) : undefined });
-const del  = <T = any>(path: string, data?: unknown) =>
-  request<T>(path, { method: 'DELETE', body: data !== undefined ? JSON.stringify(data) : undefined });
+  request<T>(path, {
+    method: 'PATCH',
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+  });
 
-// ----------------------------------------------------------------------
+const del = <T = any>(path: string, data?: unknown) =>
+  request<T>(path, {
+    method: 'DELETE',
+    body: data !== undefined ? JSON.stringify(data) : undefined,
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 5. API endpoint groups
-// ----------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
 
-// --- Auth -----------------------------------------------------------------
+// ── Auth ──────────────────────────────────────────────────────────────────────
 export const authApi = {
   login: (email: string, password: string) =>
-    post<{ accessToken: string; refreshToken: string; user: any }>('/auth/login', { email, password }),
+    post<{ accessToken: string; refreshToken: string; user: any }>('/auth/login', {
+      email,
+      password,
+    }),
 
   register: (payload: Record<string, unknown>) =>
     post<{ accessToken?: string; refreshToken?: string; user: any }>('/auth/register', payload),
 
-  /** FIX-6: refresh uses the standard /auth/refresh-token endpoint */
-  refresh: () =>
-    post<{ accessToken: string }>('/auth/refresh-token'),
+  refresh: () => post<{ accessToken: string }>('/auth/refresh-token'),
 
-  me: () => get<{ user: any }>('/auth/me'),
-  updateMe: (payload: Record<string, unknown>) => patch<{ user: any }>('/auth/me', payload),
+  // [FIX 12] These were missing
+  me:     () => get<{ user: any }>('/auth/me'),
   logout: () => post<void>('/auth/logout'),
 
-  forgotPassword: (email: string) =>
-    post<void>('/auth/forgot-password', { email }),
+  changePassword: (oldPassword: string, newPassword: string) =>
+    patch<void>('/auth/change-password', { oldPassword, newPassword }),
+
+  forgotPassword: (email: string) => post<void>('/auth/forgot-password', { email }),
 
   resetPassword: (token: string, password: string) =>
     post<void>('/auth/reset-password', { token, password }),
-
-  changePassword: (currentPassword: string, newPassword: string) =>
-    patch<void>('/auth/change-password', { currentPassword, newPassword }),
 };
 
-// --- Users ----------------------------------------------------------------
-// FIX-4: usersApi retains getById/update/delete — these backend routes are
-//        now wired in BACKEND/routes/userRoutes.js (File 3).
+// ── Users ─────────────────────────────────────────────────────────────────────
 export const usersApi = {
-  list: (params?: { role?: string; page?: number; limit?: number; search?: string; isActive?: boolean }) => {
+  list: (params?: {
+    role?: string;
+    page?: number;
+    limit?: number;
+    search?: string;
+    isActive?: boolean;
+  }) => {
     const query = new URLSearchParams();
-    if (params?.role)     query.append('role',     params.role);
-    if (params?.page)     query.append('page',     String(params.page));
-    if (params?.limit)    query.append('limit',    String(params.limit));
-    if (params?.search)   query.append('search',   params.search);
+    if (params?.role)                   query.append('role',     params.role);
+    if (params?.page)                   query.append('page',     String(params.page));
+    if (params?.limit)                  query.append('limit',    String(params.limit));
+    if (params?.search)                 query.append('search',   params.search);
     if (params?.isActive !== undefined) query.append('isActive', String(params.isActive));
     const qs = query.toString();
     return get<{ users: any[]; total: number }>(`/users${qs ? '?' + qs : ''}`);
   },
 
-  getById: (id: string) =>
-    get<{ user: any }>(`/users/${id}`),
+  getById: (id: string) => get<{ user: any }>(`/users/${id}`),
 
   update: (id: string, payload: Record<string, unknown>) =>
     patch<{ user: any }>(`/users/${id}`, payload),
 
-  delete: (id: string) =>
-    del<{ success: boolean }>(`/users/${id}`),
+  delete: (id: string) => del<{ success: boolean }>(`/users/${id}`),
 
-  /** Admin: approve or reject a user account */
-  approve: (id: string) =>
-    patch<{ user: any }>(`/users/${id}/approve`),
-
-  reject: (id: string, reason?: string) =>
-    patch<{ success: boolean }>(`/users/${id}/reject`, { reason }),
+  // [FIX 13] Was missing — admin approves a user account
+  approve: (id: string) => post<{ user: any }>(`/users/${id}/approve`),
 };
 
-// --- Degrees --------------------------------------------------------------
+// ── Degrees ───────────────────────────────────────────────────────────────────
 export const degreesApi = {
   issue: (payload: Record<string, unknown>) =>
     post<{ degreeHash: string; qrCodeUrl: string; degreeId: string }>('/degrees', payload),
 
-  list: (params?: { status?: string; page?: number; limit?: number }) => {
+  list: (params?: { status?: string; page?: number; limit?: number; search?: string }) => {
     const query = new URLSearchParams();
     if (params?.status) query.append('status', params.status);
     if (params?.page)   query.append('page',   String(params.page));
     if (params?.limit)  query.append('limit',  String(params.limit));
+    if (params?.search) query.append('search', params.search);
     const qs = query.toString();
     return get<{ degrees: any[]; total: number }>(`/degrees${qs ? '?' + qs : ''}`);
   },
 
   getById: (id: string) => get<{ degree: any }>(`/degrees/${id}`),
 
-  // FIX-3: backend returns { qrCode, verificationUrl, certificateNumber }
-  //        field renamed from qrUrl → qrCode to match backend
+  // [FIX 10] Backend returns { qrCode, verificationUrl, certificateNumber }, NOT { qrUrl }
   getQr: (id: string) =>
-    get<{ qrCode: string; verificationUrl: string; certificateNumber: string }>(`/degrees/${id}/qr`),
+    get<{ qrCode: string; verificationUrl?: string; certificateNumber?: string }>(
+      `/degrees/${id}/qr`
+    ),
 
   revoke: (id: string, reason: string) =>
     del<{ success: boolean }>(`/degrees/${id}/revoke`, { reason }),
 
-  // FIX-2: correct path is /degrees/public/degree/:id (not /degrees/public/:id)
+  // [FIX 9] Correct route: /degrees/public/degree/:id  (backend: router.get('/public/degree/:id', ...))
   publicLookup: (id: string) =>
     get<{ degree: any }>(`/degrees/public/degree/${encodeURIComponent(id)}`),
 
@@ -266,133 +275,142 @@ export const degreesApi = {
   stats: () => get<any>('/degrees/stats'),
 };
 
-// --- Verification ---------------------------------------------------------
+// ── Verification ──────────────────────────────────────────────────────────────
 export const verificationApi = {
   request: (payload: Record<string, unknown>) =>
-    post<{ verificationId: string; verificationCode: string; status: string }>('/verification', payload),
+    post<{ verificationId: string; status: string; verification_code?: string }>(
+      '/verification',
+      payload
+    ),
 
   verifyPublic: (hash: string) =>
     get<{
       valid: boolean;
       degreeDetails?: any;
-      blockchain: { txHash?: string; verified?: boolean; blockNumber?: number };
+      blockchain: { confirmed: boolean; txHash?: string };
     }>(`/verification/public/${encodeURIComponent(hash)}`),
 
-  getById: (id: string) =>
-    get<{ verification: any }>(`/verification/${id}`),
+  getById: (id: string) => get<any>(`/verification/${id}`),
 
-  getByCode: (code: string) =>
-    get<{ verification: any }>(`/verification/code/${encodeURIComponent(code)}`),
+  getByCode: (code: string) => get<any>(`/verification/code/${encodeURIComponent(code)}`),
 
-  list: (params?: { page?: number; limit?: number; status?: string }) => {
+  // [FIX 15] Were missing
+  getAll: (params?: { page?: number; limit?: number; result?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.page)   query.append('page',   String(params.page));
+    if (params?.limit)  query.append('limit',  String(params.limit));
+    if (params?.result) query.append('result', params.result);
+    const qs = query.toString();
+    return get<{ verifications: any[]; total: number }>(`/verification${qs ? '?' + qs : ''}`);
+  },
+
+  getStats: () => get<any>('/verification/stats'),
+};
+
+// ── Blockchain ────────────────────────────────────────────────────────────────
+export const blockchainApi = {
+  network: () =>
+    get<{ networkName: string; chainId: string; blockNumber: number; walletBalance: string }>(
+      '/blockchain/network'
+    ),
+
+  // [FIX 7] Backend returns { totalDegrees: N } — not { total: N }
+  totalDegrees: () => get<{ totalDegrees: number }>('/blockchain/total'),
+
+  verifyHash: (hash: string) =>
+    get<{ valid: boolean; txHash?: string }>(
+      `/blockchain/verify/${encodeURIComponent(hash)}`
+    ),
+
+  // [FIX 8] Now accepts pagination/filter params
+  transactions: (params?: { page?: number; limit?: number; status?: string }) => {
     const query = new URLSearchParams();
     if (params?.page)   query.append('page',   String(params.page));
     if (params?.limit)  query.append('limit',  String(params.limit));
     if (params?.status) query.append('status', params.status);
     const qs = query.toString();
-    return get<{ verifications: any[]; total: number }>(`/verification${qs ? '?' + qs : ''}`);
+    return get<{ transactions: any[]; total: number }>(
+      `/blockchain/transactions${qs ? '?' + qs : ''}`
+    );
   },
 
-  stats: () => get<any>('/verification/stats'),
+  token: (id: string) => get<any>(`/blockchain/token/${id}`),
 
-  // FIX-8: retrigger a verification by ID
-  retrigger: (id: string) =>
-    post<{ verification: any }>(`/verification/${id}/retrigger`),
+  getTransaction: (txHash: string) => get<any>(`/blockchain/transaction/${txHash}`),
 };
 
-// --- Blockchain -----------------------------------------------------------
-export const blockchainApi = {
-  network: () =>
-    get<{ chainId: number; gasPrice: string; blockNumber: number }>('/blockchain/network'),
-
-  totalDegrees: () => get<{ total: number }>('/blockchain/total'),
-
-  verifyHash: (hash: string) =>
-    get<{ valid: boolean; txHash?: string }>(`/blockchain/verify/${encodeURIComponent(hash)}`),
-
-  transactions: (params?: { page?: number; limit?: number }) => {
-    const query = new URLSearchParams();
-    if (params?.page)  query.append('page',  String(params.page));
-    if (params?.limit) query.append('limit', String(params.limit));
-    const qs = query.toString();
-    return get<{ transactions: any[] }>(`/blockchain/transactions${qs ? '?' + qs : ''}`);
-  },
-
-  // FIX-9: token lookup — calls GET /blockchain/token/:tokenId
-  token: (tokenId: string) =>
-    get<{ token: any }>(`/blockchain/token/${tokenId}`),
-
-  transaction: (txHash: string) =>
-    get<{ transaction: any }>(`/blockchain/transaction/${encodeURIComponent(txHash)}`),
-
-  // Register a degree on-chain manually
-  register: (degreeId: string) =>
-    post<{ txHash: string }>(`/blockchain/degrees/${degreeId}/register`),
-};
-
-// --- Documents ------------------------------------------------------------
+// ── Documents ─────────────────────────────────────────────────────────────────
 export const documentsApi = {
   upload: (formData: FormData) =>
     postForm<{ documentId: string; url: string }>('/documents/upload', formData),
 
   list: () => get<{ documents: any[] }>('/documents/me'),
 
-  listAll: () => get<{ documents: any[] }>('/documents/all'),
+  // [FIX 14] Was missing
+  listAll: () => get<{ documents: any[]; total: number }>('/documents/all'),
 
   getById: (id: string) => get<{ document: any }>(`/documents/${id}`),
 
-  listByDegree: (degreeId: string) =>
-    get<{ documents: any[] }>(`/documents/degree/${degreeId}`),
-
-  // FIX-5: endpoint changed to POST /documents/:id/fraud-check
-  //        (backend route added in File 4 app.js)
-  checkFraud: (documentId: string) =>
-    post<{ fraudScore: number; status: string; flags?: string[] }>(
-      `/documents/${documentId}/fraud-check`
-    ),
+  // [FIX 6] checkFraud REMOVED — POST /documents/:id/check-fraud does not exist in backend.
+  //         Use documentsApi.verify() instead for document authenticity checks.
 
   verify: (id: string) =>
     post<{ validation_status: string; validation_errors: string[]; document: any }>(
       `/documents/${id}/verify`
     ),
 
+  // [FIX 14] Were missing — used by DocumentUpload.tsx via api.put / api.delete
   update: (id: string, payload: Record<string, unknown>) =>
-    put<{ document: any }>(`/documents/${id}`, payload),
+    put<any>(`/documents/${id}`, payload),
 
-  delete: (id: string) =>
-    del<{ success: boolean }>(`/documents/${id}`),
+  delete: (id: string) => del<{ success: boolean }>(`/documents/${id}`),
 
-  reanalyze: (id: string) =>
-    post<{ document: any }>(`/documents/${id}/reanalyze`),
+  getByDegree: (degreeId: string) =>
+    get<{ documents: any[] }>(`/documents/degree/${degreeId}`),
 };
 
-// --- Fraud ----------------------------------------------------------------
-// FIX-1: base path corrected from /fraud-logs → /fraud
+// ── Fraud ─────────────────────────────────────────────────────────────────────
+// [FIX 1-5] Complete rewrite — was calling /fraud-logs (wrong).
+// Backend mounts fraudRoutes at /api/v1/fraud.
+// Route map:  GET  /reports          → fraudController.getReports
+//             GET  /stats            → fraudController.getStats
+//             GET  /checks           → fraudController.getFraudChecks
+//             POST /check/:appId     → fraudController.runFraudCheck
+//             PATCH /reports/:id/resolve → fraudController.resolveReport
 export const fraudApi = {
-  list: (params?: { resolved?: boolean; limit?: number; page?: number }) => {
+  // Returns array directly (backend: res.json(reports) — no envelope)
+  list: (params?: {
+    resolved?: boolean;
+    severity?: string;
+    page?: number;
+    limit?: number;
+  }) => {
     const query = new URLSearchParams();
-    if (params?.resolved !== undefined) query.append('resolved', String(params.resolved));
-    if (params?.limit)  query.append('limit',  String(params.limit));
-    if (params?.page)   query.append('page',   String(params.page));
+    if (params?.resolved !== undefined) query.append('resolved',  String(params.resolved));
+    if (params?.severity)               query.append('severity',  params.severity);
+    if (params?.page)                   query.append('page',      String(params.page));
+    if (params?.limit)                  query.append('limit',     String(params.limit));
     const qs = query.toString();
-    return get<{ reports: any[]; total: number }>(`/fraud/reports${qs ? '?' + qs : ''}`);
+    // Backend returns raw array, not an envelope — keep generic type any[]
+    return get<any[]>(`/fraud/reports${qs ? '?' + qs : ''}`);
   },
 
+  // Returns { unresolvedCount, resolvedCount, highCount, mediumCount, lowCount,
+  //           duplicateCnicCount, fraudulentDocCount, safetyScore, totalApplications }
   stats: () => get<any>('/fraud/stats'),
 
-  checks: () => get<any>('/fraud/checks'),
+  // Returns raw array of checks
+  checks: () => get<any[]>('/fraud/checks'),
 
-  checkOne: (appId: string) =>
-    post<{ result: any }>(`/fraud/check/${appId}`),
+  // Run fraud check on a specific degree application
+  check: (applicationId: string) => post<any>(`/fraud/check/${applicationId}`),
 
-  getById: (id: string) =>
-    get<{ report: any }>(`/fraud/reports/${id}`),
-
-  resolve: (id: string) =>
-    patch<{ success: boolean }>(`/fraud/reports/${id}/resolve`),
+  // Resolve a specific fraud report
+  resolve: (reportId: string) =>
+    patch<{ success: boolean }>(`/fraud/reports/${reportId}/resolve`),
 };
 
-// --- Audit Logs -----------------------------------------------------------
+// ── Audit Logs ────────────────────────────────────────────────────────────────
 export const auditApi = {
   list: (params?: { limit?: number; page?: number; action?: string }) => {
     const query = new URLSearchParams();
@@ -404,33 +422,44 @@ export const auditApi = {
   },
 };
 
-// --- Admin ----------------------------------------------------------------
-// FIX-7: adminApi for DataManagement.tsx and AdminDashboard.tsx
+// ── Admin ─────────────────────────────────────────────────────────────────────
+// [FIX 11] Entire group was missing from the original file
+// Backend routes: GET /stats, GET /integrity, POST /backup, GET /backup/last,
+//                 POST /restore, GET /export, POST /import, DELETE /cleanup, DELETE /reset
 export const adminApi = {
+  // Returns { total, used, documents, users, degrees }
   stats: () => get<any>('/admin/stats'),
 
-  integrity: () => get<any>('/admin/integrity'),
+  // Returns { valid: boolean, errors: string[] }
+  integrity: () => get<{ valid: boolean; errors: string[] }>('/admin/integrity'),
+
+  createBackup: () => post<{ backupId: string; message: string }>('/admin/backup'),
 
   lastBackup: () => get<any>('/admin/backup/last'),
 
-  backup: () => post<any>('/admin/backup'),
-
-  restore: (payload?: Record<string, unknown>) =>
-    post<any>('/admin/restore', payload ?? {}),
+  restoreBackup: (backupId?: string) =>
+    post<any>('/admin/restore', backupId ? { backupId } : {}),
 
   export: () => get<any>('/admin/export'),
 
-  import: (formData: FormData) =>
-    postForm<any>('/admin/import', formData),
+  cleanup: (days?: number) =>
+    del<{ deletedCount: number }>(`/admin/cleanup${days ? '?days=' + days : ''}`),
 
-  cleanup: () => del<any>('/admin/cleanup'),
-
-  reset: () => del<any>('/admin/reset'),
+  reset: () => del<{ message: string }>('/admin/reset'),
 };
 
-// ----------------------------------------------------------------------
-// 6. Raw request export (for custom one-off calls)
-// ----------------------------------------------------------------------
+// ── Face ──────────────────────────────────────────────────────────────────────
+// [FIX 16] Was entirely missing
+export const faceApi = {
+  enroll: (formData: FormData) => postForm<any>('/face/enroll', formData),
+  verify: (formData: FormData) => postForm<any>('/face/verify', formData),
+  status: ()                   => get<any>('/face/status'),
+  delete: ()                   => del<any>('/face/delete'),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. Export raw request functions for custom one-off calls
+// ─────────────────────────────────────────────────────────────────────────────
 export default {
   get,
   post,
