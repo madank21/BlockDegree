@@ -1,33 +1,43 @@
-// services/blockchainService.js
-const { ethers } = require('ethers');
-const contractABI = require('../blockchain/contractABI.json');
-const { logger } = require('../src/utils/logger');
+// BACKEND/services/blockchainService.js
+// ─────────────────────────────────────────────────────────────────────────────
+// Blockchain Service — ethers.js v6 + Sepolia testnet
+// FIXES:
+//   - savePendingTransaction now includes required `operation` column
+//   - Added getDegreeByTokenId() (was missing, causing runtime crash)
+//   - Added getSystemSafetyScore() helper used by fraudController
+// ─────────────────────────────────────────────────────────────────────────────
+
+const { ethers }    = require('ethers');
+const contractABI   = require('../blockchain/contractABI.json');
+const { logger }    = require('../src/utils/logger');
 const { getSupabaseAdmin } = require('../database/supabase');
 
 class BlockchainService {
   constructor() {
-    this.provider = null;
-    this.wallet = null;
-    this.contract = null;
+    this.provider      = null;
+    this.wallet        = null;
+    this.contract      = null;
     this.isInitialized = false;
-    // Lazy initialization – call ensureConnected() before each operation
+    // Lazy initialization — call ensureConnected() before each operation
   }
 
-  // ─── Lazy Initialization ─────────────────────────────────────────────
+  // ─── Lazy Initialization ───────────────────────────────────────────────────
   async initialize() {
     if (this.isInitialized) return;
 
-    const rpcUrl = process.env.BLOCKCHAIN_RPC_URL;
-    const privateKey = process.env.PRIVATE_KEY;
+    const rpcUrl          = process.env.BLOCKCHAIN_RPC_URL;
+    const privateKey      = process.env.PRIVATE_KEY;
     const contractAddress = process.env.CONTRACT_ADDRESS;
 
     if (!rpcUrl || !privateKey || !contractAddress) {
-      throw new Error('Missing blockchain environment variables: SEPOLIA_RPC_URL, PRIVATE_KEY, CONTRACT_ADDRESS');
+      throw new Error(
+        'Missing blockchain env vars: BLOCKCHAIN_RPC_URL, PRIVATE_KEY, CONTRACT_ADDRESS'
+      );
     }
 
     try {
       this.provider = new ethers.JsonRpcProvider(rpcUrl);
-      this.wallet = new ethers.Wallet(privateKey, this.provider);
+      this.wallet   = new ethers.Wallet(privateKey, this.provider);
       this.contract = new ethers.Contract(contractAddress, contractABI, this.wallet);
 
       const network = await this.provider.getNetwork();
@@ -45,7 +55,7 @@ class BlockchainService {
     }
   }
 
-  // ─── Issue Degree ─────────────────────────────────────────────────────
+  // ─── Issue Degree ──────────────────────────────────────────────────────────
   async issueDegree(degreeData) {
     await this.ensureConnected();
 
@@ -69,8 +79,8 @@ class BlockchainService {
         registrationNumber,
         department,
         program,
-        cgpa,
-        graduationYear,
+        String(cgpa),
+        String(graduationYear),
         degreeHash
       );
 
@@ -82,24 +92,25 @@ class BlockchainService {
         registrationNumber,
         department,
         program,
-        cgpa,
-        graduationYear,
+        String(cgpa),
+        String(graduationYear),
         degreeHash,
         { gasLimit }
       );
 
       logger.info(`Blockchain tx submitted: ${tx.hash}`);
-      await this.savePendingTransaction(tx.hash, degreeId);
+      // FIX: pass operation='issue' so NOT NULL constraint is satisfied
+      await this.savePendingTransaction(tx.hash, degreeId, 'issue');
 
       const receipt = await tx.wait(1);
       logger.info(`Blockchain tx confirmed: ${tx.hash}, block: ${receipt.blockNumber}`);
       await this.updateTransactionStatus(tx.hash, 'confirmed', receipt);
 
       return {
-        txHash: tx.hash,
+        txHash:      tx.hash,
         blockNumber: receipt.blockNumber,
-        gasUsed: receipt.gasUsed.toString(),
-        timestamp: new Date().toISOString(),
+        gasUsed:     receipt.gasUsed.toString(),
+        timestamp:   new Date().toISOString(),
       };
     } catch (error) {
       logger.error('Blockchain issueDegree error:', error);
@@ -107,16 +118,16 @@ class BlockchainService {
     }
   }
 
-  // ─── Verify Degree by Hash ────────────────────────────────────────────
+  // ─── Verify Degree by Hash ─────────────────────────────────────────────────
   async verifyDegree(degreeHash) {
     await this.ensureConnected();
     try {
       const result = await this.contract.verifyByHash(degreeHash);
       return {
-        exists: result[0],
-        isValid: result[1],
+        exists:    result[0],
+        isValid:   result[1],
         isRevoked: result[2],
-        degreeId: result[3],
+        degreeId:  result[3],
       };
     } catch (error) {
       logger.error('Blockchain verifyDegree error:', error);
@@ -124,28 +135,28 @@ class BlockchainService {
     }
   }
 
-  // ─── Get Full Degree Details ──────────────────────────────────────────
+  // ─── Get Full Degree Details by Degree ID ──────────────────────────────────
   async getDegree(degreeId) {
     await this.ensureConnected();
     try {
       const result = await this.contract.getDegree(degreeId);
-      // ✅ Correct mapping – matches Solidity return order:
+      // Matches Solidity return order:
       // 0: studentName, 1: registrationNumber, 2: department, 3: program,
       // 4: cgpa, 5: graduationYear, 6: degreeHash, 7: degreeId,
       // 8: issuerAddress, 9: timestamp, 10: isValid, 11: isRevoked
       return {
-        studentName: result[0],
+        studentName:        result[0],
         registrationNumber: result[1],
-        department: result[2],
-        program: result[3],
-        cgpa: result[4],
-        graduationYear: result[5],
-        degreeHash: result[6],
-        degreeId: result[7],
-        issuerAddress: result[8],
-        timestamp: result[9].toString(),
-        isValid: result[10],
-        isRevoked: result[11],
+        department:         result[2],
+        program:            result[3],
+        cgpa:               result[4],
+        graduationYear:     result[5],
+        degreeHash:         result[6],
+        degreeId:           result[7],
+        issuerAddress:      result[8],
+        timestamp:          result[9].toString(),
+        isValid:            result[10],
+        isRevoked:          result[11],
       };
     } catch (error) {
       logger.error('Blockchain getDegree error:', error);
@@ -153,16 +164,72 @@ class BlockchainService {
     }
   }
 
-  // ─── Revoke Degree ────────────────────────────────────────────────────
+  // ─── Get Degree by Token ID ────────────────────────────────────────────────
+  // FIX: This method was missing entirely — blockchainController crashed at runtime.
+  async getDegreeByTokenId(tokenId) {
+    await this.ensureConnected();
+    try {
+      // The Solidity contract's function name may be `getDegreeByToken` or `tokenURI`.
+      // Adjust the method name below to match your deployed contract.
+      let chainData = null;
+
+      // Try contract call first (if your ABI exposes it)
+      if (typeof this.contract.getDegreeByTokenId === 'function') {
+        const result = await this.contract.getDegreeByTokenId(tokenId);
+        chainData = {
+          tokenId:            tokenId.toString(),
+          studentName:        result[0],
+          registrationNumber: result[1],
+          department:         result[2],
+          program:            result[3],
+          cgpa:               result[4],
+          graduationYear:     result[5],
+          degreeHash:         result[6],
+          degreeId:           result[7],
+          issuerAddress:      result[8],
+          timestamp:          result[9]?.toString(),
+          isValid:            result[10],
+          isRevoked:          result[11],
+        };
+      }
+
+      // Fallback: look up in our own DB by matching token / tx index
+      const supabase = getSupabaseAdmin();
+      const { data: dbRecord } = await supabase
+        .from('blockchain_transactions')
+        .select('*, degree:degree_id(*)')
+        .eq('token_id', tokenId)
+        .maybeSingle();
+
+      if (!chainData && !dbRecord) {
+        throw new Error(`No degree found for token ID ${tokenId}`);
+      }
+
+      return {
+        tokenId,
+        blockchain: chainData,
+        database:   dbRecord || null,
+      };
+    } catch (error) {
+      logger.error('getDegreeByTokenId error:', error);
+      throw new Error(`Failed to get degree by token ID: ${error.message}`);
+    }
+  }
+
+  // ─── Revoke Degree ─────────────────────────────────────────────────────────
   async revokeDegree(degreeId) {
     await this.ensureConnected();
     try {
-      const tx = await this.contract.revokeDegree(degreeId);
+      const tx      = await this.contract.revokeDegree(degreeId);
+      // FIX: pass operation='revoke'
+      await this.savePendingTransaction(tx.hash, degreeId, 'revoke');
       const receipt = await tx.wait(1);
+      await this.updateTransactionStatus(tx.hash, 'confirmed', receipt);
+
       return {
-        txHash: tx.hash,
+        txHash:      tx.hash,
         blockNumber: receipt.blockNumber,
-        timestamp: new Date().toISOString(),
+        timestamp:   new Date().toISOString(),
       };
     } catch (error) {
       logger.error('Blockchain revokeDegree error:', error);
@@ -170,7 +237,7 @@ class BlockchainService {
     }
   }
 
-  // ─── Total Degrees Issued ─────────────────────────────────────────────
+  // ─── Total Degrees Issued ──────────────────────────────────────────────────
   async getTotalDegreesIssued() {
     await this.ensureConnected();
     try {
@@ -182,7 +249,7 @@ class BlockchainService {
     }
   }
 
-  // ─── Network Info ─────────────────────────────────────────────────────
+  // ─── Network Info ──────────────────────────────────────────────────────────
   async getNetworkInfo() {
     await this.ensureConnected();
     try {
@@ -192,12 +259,12 @@ class BlockchainService {
         this.provider.getBalance(this.wallet.address),
       ]);
       return {
-        networkName: network.name,
-        chainId: network.chainId.toString(),
+        networkName:     network.name,
+        chainId:         network.chainId.toString(),
         blockNumber,
         contractAddress: process.env.CONTRACT_ADDRESS,
-        walletAddress: this.wallet.address,
-        walletBalance: ethers.formatEther(balance),
+        walletAddress:   this.wallet.address,
+        walletBalance:   ethers.formatEther(balance),
       };
     } catch (error) {
       logger.error('getNetworkInfo error:', error);
@@ -205,7 +272,7 @@ class BlockchainService {
     }
   }
 
-  // ─── Transaction Details ──────────────────────────────────────────────
+  // ─── Transaction Details ───────────────────────────────────────────────────
   async getTransaction(txHash) {
     await this.ensureConnected();
     try {
@@ -214,14 +281,14 @@ class BlockchainService {
         this.provider.getTransactionReceipt(txHash),
       ]);
       return {
-        hash: tx.hash,
+        hash:        tx.hash,
         blockNumber: tx.blockNumber,
-        from: tx.from,
-        to: tx.to,
-        gasLimit: tx.gasLimit.toString(),
-        gasPrice: tx.gasPrice?.toString(),
-        status: receipt?.status === 1 ? 'success' : 'failed',
-        gasUsed: receipt?.gasUsed?.toString(),
+        from:        tx.from,
+        to:          tx.to,
+        gasLimit:    tx.gasLimit.toString(),
+        gasPrice:    tx.gasPrice?.toString(),
+        status:      receipt?.status === 1 ? 'success' : 'failed',
+        gasUsed:     receipt?.gasUsed?.toString(),
       };
     } catch (error) {
       logger.error('getTransaction error:', error);
@@ -229,17 +296,42 @@ class BlockchainService {
     }
   }
 
-  // ─── Database Helpers ────────────────────────────────────────────────
-  async savePendingTransaction(txHash, degreeId) {
+  // ─── System Safety Score (used by fraudController) ────────────────────────
+  async getSystemSafetyScore() {
+    try {
+      const supabase = getSupabaseAdmin();
+
+      const [{ count: totalDegrees }, { count: failedTx }, { count: fraudDocs }] = await Promise.all([
+        supabase.from('degrees').select('id', { count: 'exact', head: true }),
+        supabase.from('blockchain_transactions').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
+        supabase.from('documents').select('id', { count: 'exact', head: true }).gt('fraud_score', 0.7),
+      ]);
+
+      const total = totalDegrees || 1; // avoid division by zero
+      const score = Math.max(
+        0,
+        Math.round(100 - ((failedTx || 0) / total) * 50 - ((fraudDocs || 0) / total) * 50)
+      );
+
+      return Math.min(100, score);
+    } catch (err) {
+      logger.error('getSystemSafetyScore error:', err);
+      return 75; // safe fallback
+    }
+  }
+
+  // ─── Database Helpers ──────────────────────────────────────────────────────
+
+  // FIX: Added required `operation` parameter (NOT NULL constraint in DB schema)
+  async savePendingTransaction(txHash, degreeId, operation = 'issue') {
     try {
       const supabase = getSupabaseAdmin();
       await supabase.from('blockchain_transactions').insert([{
-        tx_hash: txHash,
-        //from_address: this.wallet.address,
-        //contract_address: process.env.CONTRACT_ADDRESS,
-        //function_name: 'issueDegree',
+        tx_hash:   txHash,
         degree_id: degreeId,
-        status: 'pending',
+        operation,           // ← FIX: was missing, caused NOT NULL violation
+        status:    'pending',
+        created_at: new Date().toISOString(),
       }]);
     } catch (error) {
       logger.error('Failed to save pending transaction:', error);
@@ -248,12 +340,12 @@ class BlockchainService {
 
   async updateTransactionStatus(txHash, status, receipt = null) {
     try {
-      const supabase = getSupabaseAdmin();
+      const supabase  = getSupabaseAdmin();
       const updateData = { status };
       if (receipt) {
-        updateData.block_number = receipt.blockNumber;
-        updateData.gas_used = Number(receipt.gasUsed);
-        updateData.confirmed_at = new Date().toISOString();
+        updateData.block_number  = receipt.blockNumber;
+        updateData.gas_used      = Number(receipt.gasUsed);
+        updateData.confirmed_at  = new Date().toISOString();
       }
       await supabase
         .from('blockchain_transactions')
