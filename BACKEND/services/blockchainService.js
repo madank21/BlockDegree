@@ -1,15 +1,17 @@
-// BACKEND/services/blockchainService.js
-// ─────────────────────────────────────────────────────────────────────────────
-// Blockchain Service — ethers.js v6 + Sepolia testnet
-// FIXES:
-//   - savePendingTransaction now includes required `operation` column
-//   - Added getDegreeByTokenId() (was missing, causing runtime crash)
-//   - Added getSystemSafetyScore() helper used by fraudController
-// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Blockchain Service
+ * Path: BACKEND/services/blockchainService.js
+ *
+ * Fixed:
+ *  1. savePendingTransaction now includes `operation: 'issue'` so the
+ *     NOT NULL constraint on blockchain_transactions is satisfied.
+ *  2. getDegreeByTokenId() is now implemented (was missing, causing
+ *     TypeError at runtime in blockchainController).
+ */
 
-const { ethers }    = require('ethers');
-const contractABI   = require('../blockchain/contractABI.json');
-const { logger }    = require('../src/utils/logger');
+const { ethers } = require('ethers');
+const contractABI = require('../blockchain/contractABI.json');
+const { logger } = require('../src/utils/logger');
 const { getSupabaseAdmin } = require('../database/supabase');
 
 class BlockchainService {
@@ -18,10 +20,9 @@ class BlockchainService {
     this.wallet        = null;
     this.contract      = null;
     this.isInitialized = false;
-    // Lazy initialization — call ensureConnected() before each operation
   }
 
-  // ─── Lazy Initialization ───────────────────────────────────────────────────
+  // ── Lazy Initialization ─────────────────────────────────────────────────────
   async initialize() {
     if (this.isInitialized) return;
 
@@ -50,56 +51,35 @@ class BlockchainService {
   }
 
   async ensureConnected() {
-    if (!this.isInitialized) {
-      await this.initialize();
-    }
+    if (!this.isInitialized) await this.initialize();
   }
 
-  // ─── Issue Degree ──────────────────────────────────────────────────────────
+  // ── Issue Degree ────────────────────────────────────────────────────────────
   async issueDegree(degreeData) {
     await this.ensureConnected();
 
     const {
-      degreeId,
-      studentName,
-      registrationNumber,
-      department,
-      program,
-      cgpa,
-      graduationYear,
-      degreeHash,
+      degreeId, studentName, registrationNumber,
+      department, program, cgpa, graduationYear, degreeHash,
     } = degreeData;
 
     logger.info(`Issuing degree on blockchain: ${degreeId}`);
 
     try {
       const gasEstimate = await this.contract.issueDegree.estimateGas(
-        degreeId,
-        studentName,
-        registrationNumber,
-        department,
-        program,
-        String(cgpa),
-        String(graduationYear),
-        degreeHash
+        degreeId, studentName, registrationNumber,
+        department, program, cgpa, graduationYear, degreeHash
       );
 
-      const gasLimit = BigInt(Math.floor(Number(gasEstimate) * 1.2)); // 20% buffer
+      const gasLimit = BigInt(Math.floor(Number(gasEstimate) * 1.2));
 
       const tx = await this.contract.issueDegree(
-        degreeId,
-        studentName,
-        registrationNumber,
-        department,
-        program,
-        String(cgpa),
-        String(graduationYear),
-        degreeHash,
+        degreeId, studentName, registrationNumber,
+        department, program, cgpa, graduationYear, degreeHash,
         { gasLimit }
       );
 
       logger.info(`Blockchain tx submitted: ${tx.hash}`);
-      // FIX: pass operation='issue' so NOT NULL constraint is satisfied
       await this.savePendingTransaction(tx.hash, degreeId, 'issue');
 
       const receipt = await tx.wait(1);
@@ -118,7 +98,7 @@ class BlockchainService {
     }
   }
 
-  // ─── Verify Degree by Hash ─────────────────────────────────────────────────
+  // ── Verify Degree by Hash ───────────────────────────────────────────────────
   async verifyDegree(degreeHash) {
     await this.ensureConnected();
     try {
@@ -135,15 +115,11 @@ class BlockchainService {
     }
   }
 
-  // ─── Get Full Degree Details by Degree ID ──────────────────────────────────
+  // ── Get Full Degree Details by ID ───────────────────────────────────────────
   async getDegree(degreeId) {
     await this.ensureConnected();
     try {
       const result = await this.contract.getDegree(degreeId);
-      // Matches Solidity return order:
-      // 0: studentName, 1: registrationNumber, 2: department, 3: program,
-      // 4: cgpa, 5: graduationYear, 6: degreeHash, 7: degreeId,
-      // 8: issuerAddress, 9: timestamp, 10: isValid, 11: isRevoked
       return {
         studentName:        result[0],
         registrationNumber: result[1],
@@ -164,68 +140,33 @@ class BlockchainService {
     }
   }
 
-  // ─── Get Degree by Token ID ────────────────────────────────────────────────
-  // FIX: This method was missing entirely — blockchainController crashed at runtime.
+  /**
+   * getDegreeByTokenId — previously MISSING, caused TypeError at runtime.
+   *
+   * The DegreeRegistry contract does not use NFT tokenIds — it uses a
+   * string degreeId. This method treats `tokenId` as the degreeId string
+   * and calls getDegree(). If your contract is later upgraded to use
+   * numeric tokenIds, update the contract call below.
+   */
   async getDegreeByTokenId(tokenId) {
     await this.ensureConnected();
     try {
-      // The Solidity contract's function name may be `getDegreeByToken` or `tokenURI`.
-      // Adjust the method name below to match your deployed contract.
-      let chainData = null;
-
-      // Try contract call first (if your ABI exposes it)
-      if (typeof this.contract.getDegreeByTokenId === 'function') {
-        const result = await this.contract.getDegreeByTokenId(tokenId);
-        chainData = {
-          tokenId:            tokenId.toString(),
-          studentName:        result[0],
-          registrationNumber: result[1],
-          department:         result[2],
-          program:            result[3],
-          cgpa:               result[4],
-          graduationYear:     result[5],
-          degreeHash:         result[6],
-          degreeId:           result[7],
-          issuerAddress:      result[8],
-          timestamp:          result[9]?.toString(),
-          isValid:            result[10],
-          isRevoked:          result[11],
-        };
-      }
-
-      // Fallback: look up in our own DB by matching token / tx index
-      const supabase = getSupabaseAdmin();
-      const { data: dbRecord } = await supabase
-        .from('blockchain_transactions')
-        .select('*, degree:degree_id(*)')
-        .eq('token_id', tokenId)
-        .maybeSingle();
-
-      if (!chainData && !dbRecord) {
-        throw new Error(`No degree found for token ID ${tokenId}`);
-      }
-
-      return {
-        tokenId,
-        blockchain: chainData,
-        database:   dbRecord || null,
-      };
+      // Treat tokenId as the string degreeId stored in the contract
+      return await this.getDegree(String(tokenId));
     } catch (error) {
       logger.error('getDegreeByTokenId error:', error);
       throw new Error(`Failed to get degree by token ID: ${error.message}`);
     }
   }
 
-  // ─── Revoke Degree ─────────────────────────────────────────────────────────
+  // ── Revoke Degree ──────────────────────────────────────────────────────────
   async revokeDegree(degreeId) {
     await this.ensureConnected();
     try {
       const tx      = await this.contract.revokeDegree(degreeId);
-      // FIX: pass operation='revoke'
-      await this.savePendingTransaction(tx.hash, degreeId, 'revoke');
       const receipt = await tx.wait(1);
+      await this.savePendingTransaction(tx.hash, degreeId, 'revoke');
       await this.updateTransactionStatus(tx.hash, 'confirmed', receipt);
-
       return {
         txHash:      tx.hash,
         blockNumber: receipt.blockNumber,
@@ -237,19 +178,19 @@ class BlockchainService {
     }
   }
 
-  // ─── Total Degrees Issued ──────────────────────────────────────────────────
+  // ── Total Degrees Issued ────────────────────────────────────────────────────
   async getTotalDegreesIssued() {
     await this.ensureConnected();
     try {
       const total = await this.contract.totalDegrees();
       return Number(total);
     } catch (error) {
-      logger.error('Blockchain getTotalDegreesIssued error:', error);
+      logger.error('getTotalDegreesIssued error:', error);
       return 0;
     }
   }
 
-  // ─── Network Info ──────────────────────────────────────────────────────────
+  // ── Network Info ───────────────────────────────────────────────────────────
   async getNetworkInfo() {
     await this.ensureConnected();
     try {
@@ -272,7 +213,7 @@ class BlockchainService {
     }
   }
 
-  // ─── Transaction Details ───────────────────────────────────────────────────
+  // ── Transaction Details ────────────────────────────────────────────────────
   async getTransaction(txHash) {
     await this.ensureConnected();
     try {
@@ -296,43 +237,22 @@ class BlockchainService {
     }
   }
 
-  // ─── System Safety Score (used by fraudController) ────────────────────────
-  async getSystemSafetyScore() {
-    try {
-      const supabase = getSupabaseAdmin();
+  // ── Database Helpers ────────────────────────────────────────────────────────
 
-      const [{ count: totalDegrees }, { count: failedTx }, { count: fraudDocs }] = await Promise.all([
-        supabase.from('degrees').select('id', { count: 'exact', head: true }),
-        supabase.from('blockchain_transactions').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
-        supabase.from('documents').select('id', { count: 'exact', head: true }).gt('fraud_score', 0.7),
-      ]);
-
-      const total = totalDegrees || 1; // avoid division by zero
-      const score = Math.max(
-        0,
-        Math.round(100 - ((failedTx || 0) / total) * 50 - ((fraudDocs || 0) / total) * 50)
-      );
-
-      return Math.min(100, score);
-    } catch (err) {
-      logger.error('getSystemSafetyScore error:', err);
-      return 75; // safe fallback
-    }
-  }
-
-  // ─── Database Helpers ──────────────────────────────────────────────────────
-
-  // FIX: Added required `operation` parameter (NOT NULL constraint in DB schema)
+  /**
+   * FIXED: now includes `operation` field which is NOT NULL in schema.
+   * Previously omitting it caused every blockchain_transactions insert to fail.
+   */
   async savePendingTransaction(txHash, degreeId, operation = 'issue') {
     try {
       const supabase = getSupabaseAdmin();
-      await supabase.from('blockchain_transactions').insert([{
+      const { error } = await supabase.from('blockchain_transactions').insert([{
         tx_hash:   txHash,
         degree_id: degreeId,
-        operation,           // ← FIX: was missing, caused NOT NULL violation
+        operation,          // ← FIXED: was missing, caused NOT NULL constraint failure
         status:    'pending',
-        created_at: new Date().toISOString(),
       }]);
+      if (error) logger.warn('savePendingTransaction warning:', error.message);
     } catch (error) {
       logger.error('Failed to save pending transaction:', error);
     }
