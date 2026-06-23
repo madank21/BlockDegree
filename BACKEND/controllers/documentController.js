@@ -4,7 +4,7 @@ const { asyncHandler } = require("../middleware/errorMiddleware");
 const { sendSuccess, sendError, sendCreated, sendPaginated } = require("../src/utils/response");
 const Document = require("../models/Document");
 const AuditLog = require("../models/AuditLog");
-const User = require("../models/User"); // <-- Added
+const User = require("../models/User"); // <-- Added for user lookup
 const ocrService = require("../services/ocrService");
 const fraudDetectionService = require("../services/fraudDetectionService");
 const { cleanupFile } = require("../middleware/uploadMiddleware");
@@ -19,29 +19,21 @@ const uploadDocument = asyncHandler(async (req, res) => {
   const { document_type, degree_id } = req.body;
   const filePath = req.file.path;
 
-  // ─── Debug: Verify file exists right after multer saves it ──────────────────
   if (!fs.existsSync(filePath)) {
     logger.error(`[uploadDocument] File was NOT saved to ${filePath} immediately after upload!`);
-    // But we continue – maybe it's a race; the background check will catch it.
   } else {
     logger.debug(`[uploadDocument] File saved at ${filePath}`);
   }
 
   try {
-    // Generate file hash
     const fileHash = Document.generateFileHash(filePath);
-
-    // Check for duplicate (based on hash and user)
     const duplicate = await Document.findByHash(fileHash);
     if (duplicate && duplicate.user_id === req.user.id) {
       cleanupFile(filePath);
       return sendError(res, "You have already uploaded this exact file.", 409);
     }
 
-    // Build file URL
     const fileUrl = `/uploads/documents/${req.file.filename}`;
-
-    // Create document record
     const documentData = {
       user_id: req.user.id,
       degree_id: degree_id || null,
@@ -57,10 +49,8 @@ const uploadDocument = asyncHandler(async (req, res) => {
 
     const document = await Document.create(documentData);
 
-    // ─── Process document asynchronously (OCR + Fraud Detection) ──────────────
     setImmediate(async () => {
       try {
-        // ─── Safety: ensure file still exists ──────────────────────────────────
         if (!fs.existsSync(filePath)) {
           logger.error(`File not found at ${filePath} for document ${document.id}`);
           await Document.update(document.id, {
@@ -78,14 +68,12 @@ const uploadDocument = asyncHandler(async (req, res) => {
             confidence: ocrResult.confidence,
             extractedData: ocrResult.extractedData,
           };
-
           await Document.update(document.id, {
             ocr_data: ocrData,
             ocr_confidence: ocrResult.confidence,
           });
         }
 
-        // Run fraud detection
         const fraudResult = await fraudDetectionService.analyzeDocument(
           { fileHash, userId: req.user.id },
           { ...ocrData.extractedData, confidence: ocrData.confidence }
@@ -107,7 +95,6 @@ const uploadDocument = asyncHandler(async (req, res) => {
       }
     });
 
-    // ─── Log audit event ──────────────────────────────────────────────────────
     await AuditLog.log("document_uploaded", {
       userId: req.user.id,
       resourceType: "document",
@@ -117,12 +104,9 @@ const uploadDocument = asyncHandler(async (req, res) => {
     });
 
     logger.info(`Document uploaded: ${document.id} by user ${req.user.id}`);
-
     return sendCreated(res, document, "Document uploaded successfully. Processing in background.");
   } catch (error) {
-    // Clean up file if any error occurs during the synchronous part
     cleanupFile(filePath);
-    // Log the full error for debugging
     console.error("[uploadDocument] error:", error.message, error.stack);
     throw error;
   }
@@ -153,16 +137,10 @@ const getMyDocuments = asyncHandler(async (req, res) => {
 const getDocumentById = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const document = await Document.findById(id);
-
-  if (!document) {
-    return sendError(res, "Document not found.", 404);
-  }
-
-  // Access control
+  if (!document) return sendError(res, "Document not found.", 404);
   if (req.user.role !== "admin" && document.user_id !== req.user.id) {
     return sendError(res, "Access denied.", 403);
   }
-
   return sendSuccess(res, document, "Document retrieved successfully");
 });
 
@@ -177,20 +155,12 @@ const getDocumentsByDegree = asyncHandler(async (req, res) => {
 const deleteDocument = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const document = await Document.findById(id);
-
-  if (!document) {
-    return sendError(res, "Document not found.", 404);
-  }
-
+  if (!document) return sendError(res, "Document not found.", 404);
   if (req.user.role !== "admin" && document.user_id !== req.user.id) {
     return sendError(res, "Access denied.", 403);
   }
-
-  // Delete physical file
   cleanupFile(document.file_path);
-
   await Document.delete(id);
-
   await AuditLog.log("document_deleted", {
     userId: req.user.id,
     resourceType: "document",
@@ -198,21 +168,18 @@ const deleteDocument = asyncHandler(async (req, res) => {
     oldData: { file_name: document.original_name },
     ipAddress: req.ip,
   });
-
   return sendSuccess(res, null, "Document deleted successfully");
 });
 
 // ─── Get All Documents (Admin) ─────────────────────────────────────────────────
 const getAllDocuments = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, verified, fraud_score_min } = req.query;
-
   const result = await Document.findAll({
     page: parseInt(page),
     limit: parseInt(limit),
     isVerified: verified !== undefined ? verified === "true" : undefined,
     fraudScoreMin: fraud_score_min ? parseFloat(fraud_score_min) : undefined,
   });
-
   return sendPaginated(res, result.data, result, "Documents retrieved successfully");
 });
 
@@ -220,17 +187,10 @@ const getAllDocuments = asyncHandler(async (req, res) => {
 const reanalyzeDocument = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const document = await Document.findById(id);
-
-  if (!document) {
-    return sendError(res, "Document not found.", 404);
-  }
-
-  // ─── Safety: check file exists ──────────────────────────────────────────────
+  if (!document) return sendError(res, "Document not found.", 404);
   if (!fs.existsSync(document.file_path)) {
     return sendError(res, "Document file not found on server.", 404);
   }
-
-  // Re-run OCR
   let ocrData = {};
   if (document.mime_type.startsWith("image/")) {
     const ocrResult = await ocrService.extractText(document.file_path);
@@ -240,13 +200,10 @@ const reanalyzeDocument = asyncHandler(async (req, res) => {
       extractedData: ocrResult.extractedData,
     };
   }
-
-  // Re-run fraud detection
   const fraudResult = await fraudDetectionService.analyzeDocument(
     { fileHash: document.file_hash, userId: document.user_id },
     { ...ocrData.extractedData, confidence: ocrData.confidence }
   );
-
   const updated = await Document.update(id, {
     ocr_data: ocrData,
     ocr_confidence: ocrData.confidence,
@@ -256,7 +213,6 @@ const reanalyzeDocument = asyncHandler(async (req, res) => {
       ? `Fraud flags: ${fraudResult.flags.join(", ")}`
       : "Document passed automated verification",
   });
-
   return sendSuccess(res, {
     document: updated,
     ocrData,
@@ -268,17 +224,11 @@ const reanalyzeDocument = asyncHandler(async (req, res) => {
 const updateDocument = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
-
-  // Ensure the document exists and user has access
   const document = await Document.findById(id);
-  if (!document) {
-    return sendError(res, "Document not found.", 404);
-  }
+  if (!document) return sendError(res, "Document not found.", 404);
   if (req.user.role !== "admin" && document.user_id !== req.user.id) {
     return sendError(res, "Access denied.", 403);
   }
-
-  // Allowed fields to update (prevent overwriting sensitive data)
   const allowedFields = [
     "ocr_status", "yolo_status", "validation_status",
     "ocr_text", "ocr_confidence", "extracted_data",
@@ -291,7 +241,6 @@ const updateDocument = asyncHandler(async (req, res) => {
       filteredUpdates[key] = updates[key];
     }
   }
-
   const updated = await Document.update(id, filteredUpdates);
   return sendSuccess(res, updated, "Document updated successfully");
 });
