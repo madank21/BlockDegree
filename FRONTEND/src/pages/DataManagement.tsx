@@ -1,8 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { store } from '../store'; // ✅ fixed import
+import apiClient, { adminApi, ApiError } from '../api/api'; // FIX: was `{ store }` from '../store'
+
+// FIXES applied (verified against the current store.ts and adminApi):
+//   FIX-1: Every handler previously called store.getStorageStats() /
+//          store.verifyDataIntegrity() / store.createDataBackup() /
+//          store.restoreFromBackup() / store.exportAllData() /
+//          store.importData() / store.clearOldDocuments() — every one of
+//          those is a deliberate no-op stub in store.ts ("Local backup is
+//          disabled. All data is stored on the backend."). The whole page
+//          was cosmetic: every button showed a "success" message while
+//          doing nothing. Replaced with real calls to adminApi, which hits
+//          BACKEND/controllers/adminController.js and actually queries
+//          Supabase.
+//   FIX-2: Restore / Import are honestly reported as "not implemented yet"
+//          (adminController.js returns 501 for both, deliberately, rather
+//          than silently pretending to succeed at a destructive operation
+//          it never built) — shown as an info message, not an error.
+//   FIX-3: Export now actually downloads a JSON file (the backend returns
+//          the export payload directly; this builds a Blob + triggers a
+//          download instead of just claiming success).
+//   FIX-4: "Reset All Data" no longer calls the old store.resetData()
+//          (which really did wipe local browser storage — the one stub
+//          that WASN'T a no-op, despite every neighboring button doing
+//          nothing). It now calls the backend's reset endpoint, which is
+//          also intentionally not implemented (501) for safety.
 
 const DataManagement: React.FC = () => {
-  const [stats, setStats] = useState<{ total: number; used: number; documents: number }>({
+  const [stats, setStats] = useState<{ total: number; used: number; documents: number; users?: number; degrees?: number }>({
     total: 0,
     used: 0,
     documents: 0,
@@ -12,111 +36,149 @@ const DataManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-  const [dataSizes, setDataSizes] = useState({
-    userDataSize: 0,
-    documentDataSize: 0,
-    degreeDataSize: 0,
-  });
+  // FIX-1: real counts from the backend now, not a Blob-size estimate of
+  // whatever happens to still be in localStorage.
+  const refreshStats = async () => {
+    try {
+      const data = await adminApi.stats();
+      setStats({
+        total: data.total ?? 0,
+        used: data.used ?? 0,
+        documents: data.documents ?? 0,
+        users: data.users,
+        degrees: data.degrees,
+      });
+    } catch (err) {
+      console.error('Failed to load storage stats:', err);
+    }
 
-  const refreshStats = () => {
-    const storageStats = store.getStorageStats();
-    setStats(storageStats);
-
-    const state = store.getState();
-    const userStr = JSON.stringify(state.users);
-    // ✅ added type annotation to prevent implicit any
-    const docStr = JSON.stringify(state.users.flatMap((u: any) => u.documents || []));
-    const degreeStr = JSON.stringify(state.degreeApplications);
-
-    setDataSizes({
-      userDataSize: new Blob([userStr]).size,
-      documentDataSize: new Blob([docStr]).size,
-      degreeDataSize: new Blob([degreeStr]).size,
-    });
-
-    const lastBackup = localStorage.getItem('last_backup_time') || null;
-    setBackupInfo({ lastBackup });
-  };
-
-  const runIntegrityCheck = () => {
-    const result = store.verifyDataIntegrity();
-    if (result) {
-      setIntegrityResult(result);
-    } else {
-      setIntegrityResult({ valid: false, errors: ['Integrity check returned null'] });
+    try {
+      const info = await adminApi.lastBackup();
+      setBackupInfo({ lastBackup: info?.lastBackup ?? null });
+    } catch (err) {
+      console.error('Failed to load last backup info:', err);
     }
   };
 
-  const handleBackup = () => {
+  const runIntegrityCheck = async () => {
+    try {
+      const result = await adminApi.integrity();
+      setIntegrityResult(result);
+    } catch (err: any) {
+      setIntegrityResult({ valid: false, errors: [err.message || 'Integrity check failed'] });
+    }
+  };
+
+  const handleBackup = async () => {
     setLoading(true);
     try {
-      const backup = store.createDataBackup();
-      if (backup) {
-        localStorage.setItem('last_backup_time', new Date().toISOString());
-        setBackupInfo({ lastBackup: new Date().toISOString() });
-        setMessage({ type: 'success', text: 'Backup created successfully!' });
-        refreshStats();
-      } else {
-        setMessage({ type: 'error', text: 'Failed to create backup.' });
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: `Error: ${(error as Error).message}` });
+      const result = await adminApi.createBackup();
+      setMessage({ type: 'success', text: result.message || 'Backup created successfully!' });
+      await refreshStats();
+    } catch (error: any) {
+      setMessage({ type: 'error', text: `Error: ${error.message}` });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRestore = () => {
-    if (window.confirm('Restoring will overwrite current data. Are you sure?')) {
-      setLoading(true);
-      try {
-        const restored = store.restoreFromBackup();
-        if (restored) {
-          setMessage({ type: 'success', text: 'Data restored successfully!' });
-          refreshStats();
-          runIntegrityCheck();
-        } else {
-          setMessage({ type: 'error', text: 'No backup found to restore.' });
-        }
-      } catch (error) {
-        setMessage({ type: 'error', text: `Error: ${(error as Error).message}` });
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  const handleExport = () => {
+  const handleRestore = async () => {
+    if (!window.confirm('Restoring will overwrite current data. Are you sure?')) return;
+    setLoading(true);
     try {
-      store.exportAllData();
-      setMessage({ type: 'success', text: 'Data exported successfully!' });
-    } catch (error) {
-      setMessage({ type: 'error', text: `Export failed: ${(error as Error).message}` });
+      await adminApi.restoreBackup();
+      setMessage({ type: 'success', text: 'Data restored successfully!' });
+      await refreshStats();
+      await runIntegrityCheck();
+    } catch (error: any) {
+      // FIX-2: the backend deliberately returns 501 for this — show it as
+      // an honest "not available yet" notice, not a generic error.
+      const isNotImplemented = error instanceof ApiError && error.status === 501;
+      setMessage({
+        type: isNotImplemented ? 'info' : 'error',
+        text: error.message || 'Restore failed.',
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // FIX-3: actually downloads the export as a JSON file.
+  const handleExport = async () => {
+    setLoading(true);
+    try {
+      const data = await adminApi.export();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `blockdegree_export_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setMessage({ type: 'success', text: 'Data exported successfully!' });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: `Export failed: ${error.message}` });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     setLoading(true);
     try {
-      store.importData(file);
+      const formData = new FormData();
+      formData.append('data', file); // field name must match BACKEND uploadImport.single('data')
+      await apiClient.postForm('/admin/import', formData);
       setMessage({ type: 'success', text: 'Data imported successfully!' });
-      refreshStats();
-      runIntegrityCheck();
-    } catch (error) {
-      setMessage({ type: 'error', text: `Import failed: ${(error as Error).message}` });
+      await refreshStats();
+      await runIntegrityCheck();
+    } catch (error: any) {
+      const isNotImplemented = error instanceof ApiError && error.status === 501;
+      setMessage({
+        type: isNotImplemented ? 'info' : 'error',
+        text: error.message || 'Import failed.',
+      });
     } finally {
       setLoading(false);
       event.target.value = '';
     }
   };
 
-  const handleClearOldDocs = () => {
-    if (window.confirm('Delete documents older than 90 days?')) {
-      const count = store.clearOldDocuments(90);
-      setMessage({ type: 'info', text: `Removed ${count} old document(s).` });
-      refreshStats();
+  const handleClearOldDocs = async () => {
+    if (!window.confirm('Delete documents older than 90 days?')) return;
+    setLoading(true);
+    try {
+      const result = await adminApi.cleanup(90);
+      setMessage({ type: 'info', text: `Removed ${result.deletedCount} old document(s).` });
+      await refreshStats();
+    } catch (error: any) {
+      setMessage({ type: 'error', text: `Cleanup failed: ${error.message}` });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!window.confirm('Reset all data? This cannot be undone!')) return;
+    setLoading(true);
+    try {
+      await adminApi.reset();
+      setMessage({ type: 'info', text: 'Data has been reset.' });
+      await refreshStats();
+      await runIntegrityCheck();
+    } catch (error: any) {
+      // FIX-4: also intentionally 501 on the backend for safety.
+      const isNotImplemented = error instanceof ApiError && error.status === 501;
+      setMessage({
+        type: isNotImplemented ? 'info' : 'error',
+        text: error.message || 'Reset failed.',
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -172,15 +234,15 @@ const DataManagement: React.FC = () => {
             <div className="grid grid-cols-3 gap-2 text-sm">
               <div className="bg-gray-50 p-2 rounded text-center">
                 <span className="block text-gray-600">Users</span>
-                <span className="font-semibold">{(dataSizes.userDataSize / 1024).toFixed(1)} KB</span>
+                <span className="font-semibold">{stats.users ?? '—'}</span>
               </div>
               <div className="bg-gray-50 p-2 rounded text-center">
                 <span className="block text-gray-600">Documents</span>
-                <span className="font-semibold">{(dataSizes.documentDataSize / 1024).toFixed(1)} KB</span>
+                <span className="font-semibold">{stats.documents}</span>
               </div>
               <div className="bg-gray-50 p-2 rounded text-center">
                 <span className="block text-gray-600">Degrees</span>
-                <span className="font-semibold">{(dataSizes.degreeDataSize / 1024).toFixed(1)} KB</span>
+                <span className="font-semibold">{stats.degrees ?? '—'}</span>
               </div>
             </div>
           </div>
@@ -252,7 +314,8 @@ const DataManagement: React.FC = () => {
         <div className="flex flex-wrap gap-4 items-center">
           <button
             onClick={handleExport}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            disabled={loading}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
           >
             Export All Data (JSON)
           </button>
@@ -263,24 +326,20 @@ const DataManagement: React.FC = () => {
               accept=".json"
               onChange={handleImport}
               className="hidden"
+              disabled={loading}
             />
           </label>
           <button
             onClick={handleClearOldDocs}
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            disabled={loading}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
           >
             Clear Old Documents (90 days)
           </button>
           <button
-            onClick={() => {
-              if (window.confirm('Reset all data? This cannot be undone!')) {
-                store.resetData();
-                refreshStats();
-                runIntegrityCheck();
-                setMessage({ type: 'info', text: 'Data has been reset.' });
-              }
-            }}
-            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+            onClick={handleReset}
+            disabled={loading}
+            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
           >
             Reset All Data
           </button>
