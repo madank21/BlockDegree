@@ -20,6 +20,10 @@
 //          getStats(), createBackup(), and exportData() were throwing
 //          "Document.findMany is not a function" on every single call.
 //          Reverted those three call sites back to Document.findAll().
+//   FIX-14 (NEW): importData() read req.file.buffer, but uploadImport uses
+//          multer.diskStorage (not memoryStorage) — .buffer is always
+//          undefined there. Switched to req.file.path + fs.readFileSync,
+//          and now cleans up the temp upload afterward.
 
 'use strict';
 
@@ -316,16 +320,30 @@ exports.exportData = asyncHandler(async (req, res) => {
 });
 
 // ─── POST /api/v1/admin/import ────────────────────────────────────────────────
+// FIX-14 (NEW): BACKEND/middleware/uploadMiddleware.js's `uploadImport` is
+// configured with multer.diskStorage (it writes the file to
+// uploads/temp/import-<uuid>.json and gives you req.file.path) — NOT
+// memoryStorage, which is the only kind of multer config that populates
+// req.file.buffer. Every single import attempt was throwing
+// "Cannot read properties of undefined (reading 'toString')" because
+// req.file.buffer is always undefined here. Read from req.file.path
+// instead, and clean up the temp file afterward either way.
 exports.importData = asyncHandler(async (req, res) => {
   if (!req.file) {
-    return sendError(res, 'No file uploaded. Use multipart/form-data with field "file".', 400);
+    return sendError(res, 'No file uploaded. Use multipart/form-data with field "data".', 400);
   }
 
   let importData;
   try {
-    importData = JSON.parse(req.file.buffer.toString('utf8'));
+    const fileContents = fs.readFileSync(req.file.path, 'utf8'); // FIX-14: was req.file.buffer
+    importData = JSON.parse(fileContents);
   } catch (err) {
     return sendError(res, `Invalid JSON file: ${err.message}`, 400);
+  } finally {
+    // Always remove the temp upload, whether parsing succeeded or not.
+    fs.unlink(req.file.path, (err) => {
+      if (err) console.warn(`[adminController] Failed to clean up ${req.file.path}: ${err.message}`);
+    });
   }
 
   if (!importData.users || !importData.degrees) {
