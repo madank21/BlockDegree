@@ -306,8 +306,8 @@ export const verificationApi = {
 export const blockchainApi = {
   network: () => get<{ networkName: string; chainId: string; blockNumber: number; walletBalance: string; contractAddress: string }>('/blockchain/network'),
 
-  /** FIXED: backend returns { totalDegrees: N }, not { total: N } */
-  totalDegrees: () => get<{ totalDegrees: number }>('/blockchain/total'),
+  /** FIXED: backend returns { total: N } */
+  totalDegrees: () => get<{ total: number }>('/blockchain/total'),
 
   verifyHash: (hash: string) => get<{ exists: boolean; isValid: boolean; isRevoked: boolean }>(`/blockchain/verify/${encodeURIComponent(hash)}`),
 
@@ -353,6 +353,9 @@ export const fraudApi = {
   reports: (params?: { resolved?: boolean; severity?: string; page?: number; limit?: number }) =>
     get<{ reports: any[]; total: number }>(`/fraud/reports${buildQuery(params)}`),
 
+  list: (params?: { resolved?: boolean; severity?: string; page?: number; limit?: number }) =>
+    get<any>(`/fraud/reports${buildQuery(params)}`),
+
   stats: () => get<any>('/fraud/stats'),
 
   checks: () => get<any[]>('/fraud/checks'),
@@ -381,10 +384,12 @@ export const adminApi = {
   integrity: () => get<{ valid: boolean; errors: string[] }>('/admin/integrity'),
 
   createBackup: () => post<{ backupId: string; timestamp: string }>('/admin/backup'),
+  backup: () => post<{ backupId: string; timestamp: string }>('/admin/backup'),
 
   lastBackup: () => get<{ lastBackup: string | null; backupId?: string; count?: number }>('/admin/backup/last'),
 
   restoreBackup: (backupId?: string) => post<any>('/admin/restore', backupId ? { backupId } : {}),
+  restore: (backupId?: string) => post<any>('/admin/restore', backupId ? { backupId } : {}),
 
   /** Returns raw Response for blob download */
   export: async (): Promise<Blob> => {

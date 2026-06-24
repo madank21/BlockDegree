@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AlertTriangle, X, CheckCircle2, Camera } from 'lucide-react';
-import Html5Qrcode from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface Props {
   onScan: (result: string) => void;
@@ -54,12 +54,12 @@ export default function QRScanner({ onScan, onClose }: Props) {
           qrbox: { width: 250, height: 250 },
           aspectRatio: 1.0,
         },
-        (decodedText) => {
+        (decodedText: string) => {
           setScanned(decodedText);
           stopScanner();
           onScan(decodedText);
         },
-        (err) => {
+        (err: any) => {
           // Ignore scanning errors
           if (!err.toString().includes('NotFoundException')) {
             console.warn('QR Scan error:', err);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { checkBlockchainConnection } from '../lib/ethereumBlockchain';
+import { blockchainApi } from '../api/api';
 
 export default function BlockchainStatus() {
   const [status, setStatus] = useState<{
@@ -9,7 +9,19 @@ export default function BlockchainStatus() {
   } | null>(null);
 
   useEffect(() => {
-    checkBlockchainConnection().then(setStatus);
+    blockchainApi.network()
+      .then((info) => {
+        setStatus({
+          connected: true,
+          blockNumber: info.blockNumber,
+        });
+      })
+      .catch((err) => {
+        setStatus({
+          connected: false,
+          error: err.message || 'Connection failed',
+        });
+      });
   }, []);
 
   if (!status) return null;
