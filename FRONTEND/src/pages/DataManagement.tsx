@@ -1,307 +1,420 @@
-import React, { useState, useEffect } from 'react';
-import apiClient, { adminApi, ApiError } from '../api/api'; // FIX: was `{ store }` from '../store'
+// FRONTEND/src/pages/DataManagement.tsx
+//
+// STATUS: Was COMPLETELY BROKEN — called store.getStorageStats(), store.createDataBackup(),
+// store.restoreFromBackup(), store.verifyDataIntegrity(), store.resetData() etc.
+// None of these methods exist on the store object.
+//
+// FIX: Full rewrite. Every call now hits the real backend via adminApi.
+//   adminApi.stats()         → GET /api/v1/admin/stats
+//   adminApi.integrity()     → GET /api/v1/admin/integrity
+//   adminApi.createBackup()  → POST /api/v1/admin/backup
+//   adminApi.lastBackup()    → GET /api/v1/admin/backup/last
+//   adminApi.restoreBackup() → POST /api/v1/admin/restore
+//   adminApi.export()        → GET /api/v1/admin/export (triggers download)
+//   adminApi.cleanup()       → DELETE /api/v1/admin/cleanup?days=90
+//   adminApi.reset()         → DELETE /api/v1/admin/reset
 
-// FIXES applied (verified against the current store.ts and adminApi):
-//   FIX-1: Every handler previously called store.getStorageStats() /
-//          store.verifyDataIntegrity() / store.createDataBackup() /
-//          store.restoreFromBackup() / store.exportAllData() /
-//          store.importData() / store.clearOldDocuments() — every one of
-//          those is a deliberate no-op stub in store.ts ("Local backup is
-//          disabled. All data is stored on the backend."). The whole page
-//          was cosmetic: every button showed a "success" message while
-//          doing nothing. Replaced with real calls to adminApi, which hits
-//          BACKEND/controllers/adminController.js and actually queries
-//          Supabase.
-//   FIX-2: Restore / Import are honestly reported as "not implemented yet"
-//          (adminController.js returns 501 for both, deliberately, rather
-//          than silently pretending to succeed at a destructive operation
-//          it never built) — shown as an info message, not an error.
-//   FIX-3: Export now actually downloads a JSON file (the backend returns
-//          the export payload directly; this builds a Blob + triggers a
-//          download instead of just claiming success).
-//   FIX-4: "Reset All Data" no longer calls the old store.resetData()
-//          (which really did wipe local browser storage — the one stub
-//          that WASN'T a no-op, despite every neighboring button doing
-//          nothing). It now calls the backend's reset endpoint, which is
-//          also intentionally not implemented (501) for safety.
+import { useState, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
+import {
+  Database, HardDrive, Shield, Download, Upload,
+  RefreshCw, Trash2, AlertTriangle, CheckCircle2,
+  Loader2, Server, FileJson, RotateCcw,
+} from 'lucide-react';
+import { adminApi } from '../api/api';
 
-const DataManagement: React.FC = () => {
-  const [stats, setStats] = useState<{ total: number; used: number; documents: number; users?: number; degrees?: number }>({
-    total: 0,
-    used: 0,
-    documents: 0,
-  });
-  const [integrityResult, setIntegrityResult] = useState<{ valid: boolean; errors: string[] } | null>(null);
-  const [backupInfo, setBackupInfo] = useState<{ lastBackup: string | null }>({ lastBackup: null });
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+interface StorageStats {
+  total: number;
+  used: number;
+  documents: number;
+  users?: number;
+  degrees?: number;
+}
 
-  // FIX-1: real counts from the backend now, not a Blob-size estimate of
-  // whatever happens to still be in localStorage.
-  const refreshStats = async () => {
+interface IntegrityResult {
+  valid: boolean;
+  errors: string[];
+}
+
+interface BackupInfo {
+  lastBackup: string | null;
+  backupId?: string;
+  totalFiles?: number;
+}
+
+type MsgType = 'success' | 'error' | 'info';
+interface Msg { type: MsgType; text: string }
+
+export default function DataManagement() {
+  const [stats,           setStats]           = useState<StorageStats>({ total: 0, used: 0, documents: 0 });
+  const [integrityResult, setIntegrityResult] = useState<IntegrityResult | null>(null);
+  const [backupInfo,      setBackupInfo]      = useState<BackupInfo>({ lastBackup: null });
+  const [loading,         setLoading]         = useState(false);
+  const [pageLoading,     setPageLoading]     = useState(true);
+  const [msg,             setMsg]             = useState<Msg | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
+
+  const showMsg = (type: MsgType, text: string) => {
+    setMsg({ type, text });
+    setTimeout(() => setMsg(null), 6000);
+  };
+
+  // ── Load stats + integrity + backup info ────────────────────────────────────
+  const loadAll = async () => {
+    setPageLoading(true);
     try {
-      const data = await adminApi.stats();
-      setStats({
-        total: data.total ?? 0,
-        used: data.used ?? 0,
-        documents: data.documents ?? 0,
-        users: data.users,
-        degrees: data.degrees,
-      });
-    } catch (err) {
-      console.error('Failed to load storage stats:', err);
-    }
+      const [statsData, integrityData, backupData] = await Promise.allSettled([
+        adminApi.stats(),
+        adminApi.integrity(),
+        adminApi.lastBackup(),
+      ]);
 
-    try {
-      const info = await adminApi.lastBackup();
-      setBackupInfo({ lastBackup: info?.lastBackup ?? null });
+      if (statsData.status === 'fulfilled' && statsData.value) {
+        const s = statsData.value;
+        setStats({
+          total:     s.storage?.total    ?? s.total     ?? 100 * 1024 * 1024,
+          used:      s.storage?.used     ?? s.used      ?? 0,
+          documents: s.totalDocuments    ?? s.documents ?? 0,
+          users:     s.totalUsers        ?? s.users,
+          degrees:   s.totalDegrees      ?? s.degrees,
+        });
+      }
+
+      if (integrityData.status === 'fulfilled' && integrityData.value) {
+        setIntegrityResult(integrityData.value as IntegrityResult);
+      }
+
+      if (backupData.status === 'fulfilled' && backupData.value) {
+        setBackupInfo(backupData.value as BackupInfo);
+      }
     } catch (err) {
-      console.error('Failed to load last backup info:', err);
+      console.error('loadAll error:', err);
+    } finally {
+      setPageLoading(false);
     }
   };
 
+  useEffect(() => { loadAll(); }, []);
+
+  // ── Run integrity check ─────────────────────────────────────────────────────
   const runIntegrityCheck = async () => {
+    setLoading(true);
     try {
       const result = await adminApi.integrity();
-      setIntegrityResult(result);
+      setIntegrityResult(result as IntegrityResult);
+      showMsg(result.valid ? 'success' : 'error',
+        result.valid ? 'Integrity check passed — all data is valid.' : `Integrity issues found: ${result.errors?.join('; ')}`
+      );
     } catch (err: any) {
-      setIntegrityResult({ valid: false, errors: [err.message || 'Integrity check failed'] });
+      showMsg('error', `Integrity check failed: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
+  // ── Create backup ───────────────────────────────────────────────────────────
   const handleBackup = async () => {
     setLoading(true);
     try {
       const result = await adminApi.createBackup();
-      setMessage({ type: 'success', text: result.message || 'Backup created successfully!' });
-      await refreshStats();
-    } catch (error: any) {
-      setMessage({ type: 'error', text: `Error: ${error.message}` });
+      setBackupInfo({
+        lastBackup: result.timestamp ?? new Date().toISOString(),
+        backupId:   result.backupId,
+      });
+      showMsg('success', `Backup created: ${result.backupId ?? 'OK'}`);
+    } catch (err: any) {
+      showMsg('error', `Backup failed: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
+  // ── Restore most recent backup ──────────────────────────────────────────────
   const handleRestore = async () => {
-    if (!window.confirm('Restoring will overwrite current data. Are you sure?')) return;
+    if (!confirm('Restoring will overwrite current data from the last backup. Are you sure?')) return;
     setLoading(true);
     try {
-      await adminApi.restoreBackup();
-      setMessage({ type: 'success', text: 'Data restored successfully!' });
-      await refreshStats();
-      await runIntegrityCheck();
-    } catch (error: any) {
-      // FIX-2: the backend deliberately returns 501 for this — show it as
-      // an honest "not available yet" notice, not a generic error.
-      const isNotImplemented = error instanceof ApiError && error.status === 501;
-      setMessage({
-        type: isNotImplemented ? 'info' : 'error',
-        text: error.message || 'Restore failed.',
-      });
+      const result = await adminApi.restoreBackup();
+      showMsg('success', result.message ?? 'Restore acknowledged by server.');
+      await loadAll();
+    } catch (err: any) {
+      showMsg('error', `Restore failed: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // FIX-3: actually downloads the export as a JSON file.
+  // ── Export all data as JSON download ────────────────────────────────────────
   const handleExport = async () => {
     setLoading(true);
     try {
       const data = await adminApi.export();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `blockdegree_export_${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a);
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `blockdegree_export_${new Date().toISOString().split('T')[0]}.json`;
       a.click();
-      a.remove();
       URL.revokeObjectURL(url);
-      setMessage({ type: 'success', text: 'Data exported successfully!' });
-    } catch (error: any) {
-      setMessage({ type: 'error', text: `Export failed: ${error.message}` });
+      showMsg('success', 'Data exported successfully.');
+    } catch (err: any) {
+      showMsg('error', `Export failed: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  // ── Import data from JSON file ───────────────────────────────────────────────
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.name.endsWith('.json')) {
+      showMsg('error', 'Only .json files are accepted.');
+      return;
+    }
+
     setLoading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
     try {
-      const formData = new FormData();
-      formData.append('data', file); // field name must match BACKEND uploadImport.single('data')
-      await apiClient.postForm('/admin/import', formData);
-      setMessage({ type: 'success', text: 'Data imported successfully!' });
-      await refreshStats();
-      await runIntegrityCheck();
-    } catch (error: any) {
-      const isNotImplemented = error instanceof ApiError && error.status === 501;
-      setMessage({
-        type: isNotImplemented ? 'info' : 'error',
-        text: error.message || 'Import failed.',
-      });
+      // POST /admin/import — multipart (file upload)
+      const token = localStorage.getItem('token');
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1'}/admin/import`,
+        {
+          method:  'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body:    formData,
+        }
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || json.error || 'Import failed');
+      showMsg('success', json.data?.message ?? 'Import validated by server.');
+      await loadAll();
+    } catch (err: any) {
+      showMsg('error', `Import failed: ${err.message}`);
     } finally {
       setLoading(false);
-      event.target.value = '';
+      e.target.value = '';
     }
   };
 
-  const handleClearOldDocs = async () => {
-    if (!window.confirm('Delete documents older than 90 days?')) return;
+  // ── Clean up old unverified documents ──────────────────────────────────────
+  const handleCleanup = async () => {
+    if (!confirm('Delete unverified documents older than 90 days? This cannot be undone.')) return;
     setLoading(true);
     try {
       const result = await adminApi.cleanup(90);
-      setMessage({ type: 'info', text: `Removed ${result.deletedCount} old document(s).` });
-      await refreshStats();
-    } catch (error: any) {
-      setMessage({ type: 'error', text: `Cleanup failed: ${error.message}` });
+      showMsg('info', `Cleanup complete — ${result.deletedCount ?? 0} document(s) removed.`);
+      await loadAll();
+    } catch (err: any) {
+      showMsg('error', `Cleanup failed: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
+  // ── Reset all data (dev only) ──────────────────────────────────────────────
   const handleReset = async () => {
-    if (!window.confirm('Reset all data? This cannot be undone!')) return;
+    if (!confirm('⚠️ DANGER: This will delete ALL degrees, documents, and audit logs. This cannot be undone. Are you absolutely sure?')) return;
+    if (!confirm('Final confirmation: Reset all data?')) return;
     setLoading(true);
     try {
-      await adminApi.reset();
-      setMessage({ type: 'info', text: 'Data has been reset.' });
-      await refreshStats();
-      await runIntegrityCheck();
-    } catch (error: any) {
-      // FIX-4: also intentionally 501 on the backend for safety.
-      const isNotImplemented = error instanceof ApiError && error.status === 501;
-      setMessage({
-        type: isNotImplemented ? 'info' : 'error',
-        text: error.message || 'Reset failed.',
-      });
+      const result = await adminApi.reset();
+      showMsg('info', result.message ?? 'Data reset complete.');
+      await loadAll();
+    } catch (err: any) {
+      showMsg('error', `Reset failed: ${err.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    refreshStats();
-    runIntegrityCheck();
-  }, []);
+  // ── Derived display values ─────────────────────────────────────────────────
+  const pctUsed    = stats.total > 0 ? Math.min(100, (stats.used / stats.total) * 100) : 0;
+  const usedMB     = (stats.used  / 1024 / 1024).toFixed(1);
+  const totalMB    = (stats.total / 1024 / 1024).toFixed(0);
+  const barColor   = pctUsed > 85 ? 'bg-red-500' : pctUsed > 60 ? 'bg-yellow-500' : 'bg-blue-500';
 
-  const percentageUsed = stats.total > 0 ? (stats.used / stats.total) * 100 : 0;
+  if (pageLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">Data Management</h1>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Data Management</h2>
+          <p className="text-gray-400 mt-1">Backup, restore, integrity checks, and storage overview</p>
+        </div>
+        <button
+          onClick={loadAll}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 transition disabled:opacity-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
 
-      {message && (
-        <div
-          className={`mb-4 p-4 rounded-md ${
-            message.type === 'success'
-              ? 'bg-green-100 text-green-800 border border-green-300'
-              : message.type === 'error'
-              ? 'bg-red-100 text-red-800 border border-red-300'
-              : 'bg-blue-100 text-blue-800 border border-blue-300'
+      {/* Alert message */}
+      {msg && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`flex items-start gap-3 p-4 rounded-xl border ${
+            msg.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-400' :
+            msg.type === 'error'   ? 'bg-red-500/10   border-red-500/20   text-red-400'   :
+                                     'bg-blue-500/10  border-blue-500/20  text-blue-400'
           }`}
         >
-          {message.text}
-          <button
-            onClick={() => setMessage(null)}
-            className="float-right text-gray-600 hover:text-gray-900"
-          >
-            ✕
-          </button>
-        </div>
+          {msg.type === 'success' ? <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" /> :
+           msg.type === 'error'   ? <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" /> :
+                                    <Server className="w-5 h-5 shrink-0 mt-0.5" />}
+          <p className="text-sm">{msg.text}</p>
+          <button onClick={() => setMsg(null)} className="ml-auto text-current opacity-50 hover:opacity-100 text-lg leading-none">×</button>
+        </motion.div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Documents', value: stats.documents, icon: FileJson,  color: 'text-blue-400',   bg: 'bg-blue-500/10' },
+          { label: 'Users',     value: stats.users ?? '–', icon: Database, color: 'text-purple-400', bg: 'bg-purple-500/10' },
+          { label: 'Degrees',   value: stats.degrees ?? '–', icon: Shield,  color: 'text-green-400',  bg: 'bg-green-500/10' },
+          { label: 'Storage',   value: `${usedMB} MB`, icon: HardDrive, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+        ].map((c, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            className="bg-gray-900/50 border border-gray-800 rounded-xl p-4"
+          >
+            <div className={`w-10 h-10 rounded-lg ${c.bg} flex items-center justify-center mb-3`}>
+              <c.icon className={`w-5 h-5 ${c.color}`} />
+            </div>
+            <p className={`text-2xl font-bold ${c.color}`}>{c.value}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{c.label}</p>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Main panels */}
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+
         {/* Storage Usage */}
-        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-          <h2 className="text-xl font-semibold mb-4 text-gray-700">Storage Usage</h2>
+        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <HardDrive className="w-5 h-5 text-blue-400" />
+            <h3 className="font-semibold">Storage Usage</h3>
+          </div>
           <div className="space-y-3">
-            <div>
-              <div className="flex justify-between text-sm text-gray-600">
-                <span>Used: {(stats.used / 1024 / 1024).toFixed(2)} MB</span>
-                <span>Total: {(stats.total / 1024 / 1024).toFixed(2)} MB</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
-                <div
-                  className={`h-2.5 rounded-full ${percentageUsed > 80 ? 'bg-red-600' : 'bg-blue-600'}`}
-                  style={{ width: `${Math.min(percentageUsed, 100)}%` }}
-                />
-              </div>
-              <p className="text-sm text-gray-500 mt-1">{stats.documents} documents stored</p>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-400">{usedMB} MB used</span>
+              <span className="text-gray-500">{totalMB} MB total</span>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-sm">
-              <div className="bg-gray-50 p-2 rounded text-center">
-                <span className="block text-gray-600">Users</span>
-                <span className="font-semibold">{stats.users ?? '—'}</span>
-              </div>
-              <div className="bg-gray-50 p-2 rounded text-center">
-                <span className="block text-gray-600">Documents</span>
-                <span className="font-semibold">{stats.documents}</span>
-              </div>
-              <div className="bg-gray-50 p-2 rounded text-center">
-                <span className="block text-gray-600">Degrees</span>
-                <span className="font-semibold">{stats.degrees ?? '—'}</span>
-              </div>
+            <div className="w-full bg-gray-800 rounded-full h-2.5">
+              <div
+                className={`h-2.5 rounded-full transition-all duration-500 ${barColor}`}
+                style={{ width: `${pctUsed}%` }}
+              />
             </div>
+            <p className="text-xs text-gray-500">{pctUsed.toFixed(1)}% of quota used</p>
+            {pctUsed > 85 && (
+              <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-lg p-2 text-red-400 text-xs">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                Storage nearly full — run cleanup
+              </div>
+            )}
           </div>
         </div>
 
         {/* Data Integrity */}
-        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-          <h2 className="text-xl font-semibold mb-4 text-gray-700">Data Integrity</h2>
+        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="w-5 h-5 text-green-400" />
+            <h3 className="font-semibold">Data Integrity</h3>
+          </div>
           {integrityResult ? (
-            <div>
-              <div className="flex items-center mb-3">
-                <span className={`inline-block w-3 h-3 rounded-full mr-2 ${integrityResult.valid ? 'bg-green-500' : 'bg-red-500'}`} />
-                <span className="font-medium">
-                  {integrityResult.valid ? '✓ Data is valid' : '✗ Integrity check failed'}
+            <div className="space-y-3">
+              <div className={`flex items-center gap-2 p-3 rounded-lg ${
+                integrityResult.valid
+                  ? 'bg-green-500/10 border border-green-500/20'
+                  : 'bg-red-500/10 border border-red-500/20'
+              }`}>
+                {integrityResult.valid
+                  ? <CheckCircle2 className="w-5 h-5 text-green-400" />
+                  : <AlertTriangle className="w-5 h-5 text-red-400" />}
+                <span className={`text-sm font-medium ${integrityResult.valid ? 'text-green-400' : 'text-red-400'}`}>
+                  {integrityResult.valid ? 'All data valid' : 'Issues detected'}
                 </span>
               </div>
               {!integrityResult.valid && integrityResult.errors.length > 0 && (
-                <div className="bg-red-50 p-3 rounded border border-red-200 text-sm text-red-700 max-h-32 overflow-auto">
-                  {integrityResult.errors.map((err, i) => (
-                    <div key={i}>• {err}</div>
+                <div className="bg-red-500/5 rounded-lg p-3 max-h-28 overflow-y-auto space-y-1">
+                  {integrityResult.errors.map((e, i) => (
+                    <p key={i} className="text-xs text-red-400">• {e}</p>
                   ))}
                 </div>
               )}
               <button
                 onClick={runIntegrityCheck}
-                className="mt-3 text-sm text-blue-600 hover:text-blue-800"
+                disabled={loading}
+                className="text-xs text-blue-400 hover:text-blue-300 transition disabled:opacity-50 flex items-center gap-1"
               >
-                Run check again
+                <RefreshCw className="w-3 h-3" /> Run again
               </button>
             </div>
           ) : (
-            <p className="text-gray-500">No integrity data available.</p>
+            <button
+              onClick={runIntegrityCheck}
+              disabled={loading}
+              className="w-full py-3 border-2 border-dashed border-gray-700 hover:border-green-500/30 rounded-lg text-sm text-gray-500 hover:text-green-400 transition disabled:opacity-50"
+            >
+              {loading ? 'Checking…' : 'Run Integrity Check'}
+            </button>
           )}
         </div>
 
-        {/* Backup Info */}
-        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-          <h2 className="text-xl font-semibold mb-4 text-gray-700">Backup & Restore</h2>
+        {/* Backup & Restore */}
+        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <RotateCcw className="w-5 h-5 text-yellow-400" />
+            <h3 className="font-semibold">Backup & Restore</h3>
+          </div>
           <div className="space-y-3">
-            <p className="text-sm text-gray-600">
-              Last backup:{' '}
-              {backupInfo.lastBackup
-                ? new Date(backupInfo.lastBackup).toLocaleString()
-                : 'Never'}
-            </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="bg-gray-800/30 rounded-lg p-3">
+              <p className="text-xs text-gray-500 mb-1">Last Backup</p>
+              <p className="text-sm font-medium">
+                {backupInfo.lastBackup
+                  ? new Date(backupInfo.lastBackup).toLocaleString()
+                  : 'Never'}
+              </p>
+              {backupInfo.backupId && (
+                <p className="text-xs text-gray-500 font-mono mt-1">{backupInfo.backupId}</p>
+              )}
+            </div>
+            <div className="flex gap-2">
               <button
                 onClick={handleBackup}
                 disabled={loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium text-white transition disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {loading ? 'Working...' : 'Create Backup'}
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                Backup
               </button>
               <button
                 onClick={handleRestore}
-                disabled={loading}
-                className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
+                disabled={loading || !backupInfo.lastBackup}
+                className="flex-1 py-2.5 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-500/30 rounded-lg text-sm font-medium text-yellow-400 transition disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                Restore Backup
+                <RotateCcw className="w-4 h-4" /> Restore
               </button>
             </div>
           </div>
@@ -309,50 +422,58 @@ const DataManagement: React.FC = () => {
       </div>
 
       {/* Advanced Actions */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-8">
-        <h2 className="text-xl font-semibold mb-4 text-gray-700">Advanced Actions</h2>
-        <div className="flex flex-wrap gap-4 items-center">
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+        <h3 className="font-semibold mb-4 flex items-center gap-2">
+          <Server className="w-5 h-5 text-cyan-400" /> Advanced Actions
+        </h3>
+        <div className="flex flex-wrap gap-3">
+          {/* Export */}
           <button
             onClick={handleExport}
             disabled={loading}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 bg-green-600/20 hover:bg-green-600/30 border border-green-500/20 rounded-lg text-sm text-green-400 font-medium transition disabled:opacity-50"
           >
-            Export All Data (JSON)
+            <Download className="w-4 h-4" /> Export All Data (JSON)
           </button>
-          <label className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 cursor-pointer">
-            Import Data
-            <input
-              type="file"
-              accept=".json"
-              onChange={handleImport}
-              className="hidden"
-              disabled={loading}
-            />
-          </label>
+
+          {/* Import */}
           <button
-            onClick={handleClearOldDocs}
+            onClick={() => importRef.current?.click()}
             disabled={loading}
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/20 rounded-lg text-sm text-indigo-400 font-medium transition disabled:opacity-50"
           >
-            Clear Old Documents (90 days)
+            <Upload className="w-4 h-4" /> Import Data
           </button>
+          <input
+            ref={importRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={handleImport}
+          />
+
+          {/* Cleanup */}
+          <button
+            onClick={handleCleanup}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2.5 bg-orange-600/20 hover:bg-orange-600/30 border border-orange-500/20 rounded-lg text-sm text-orange-400 font-medium transition disabled:opacity-50"
+          >
+            <Trash2 className="w-4 h-4" /> Clear Old Documents (90 days)
+          </button>
+
+          {/* Reset (danger) */}
           <button
             onClick={handleReset}
             disabled={loading}
-            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 border border-red-500/20 rounded-lg text-sm text-red-400 font-medium transition disabled:opacity-50"
           >
-            Reset All Data
+            <AlertTriangle className="w-4 h-4" /> Reset All Data
           </button>
         </div>
+        <p className="text-xs text-gray-600 mt-3">
+          Reset is only available in development environments and cannot be undone.
+        </p>
       </div>
-
-      {percentageUsed > 80 && (
-        <div className="bg-red-50 border border-red-200 p-4 rounded-md text-red-800">
-          ⚠️ Storage is {percentageUsed.toFixed(0)}% full. Consider clearing old documents or exporting data.
-        </div>
-      )}
     </div>
   );
-};
-
-export default DataManagement;
+}

@@ -1,30 +1,21 @@
-//
-// FRONTEND/src/types.ts
-//
-// FIXES APPLIED:
-//   [1] 'university' added to UserRole union  (was missing — broke login + role-checks)
-//   [2] User: registrationNumber, verificationStatus, createdAt made optional
-//       (backend does not guarantee these for all roles — employer/admin have no regNo)
-//   [3] User: added university-specific fields (institutionId, institutionName, walletAddress)
-//   [4] User: added emailVerified, isActive, lastLogin, avatarUrl, studentId
-//   [5] UploadedDocument: added fileSize, mimeType, fileHash, degreeId, userId,
-//       fraudScore, isVerified, verificationNotes, ocrConfidence, ocrText,
-//       yoloConfidence, yoloDetections, yoloValid
-//   [6] DegreeApplication: blockchainHash renamed → blockchainTxHash
-//       (matches backend DTO field; old alias kept for safety)
-//   [7] DegreeApplication: qrCode field added (backend returns qrCode not qrUrl)
-//   [8] DegreeApplication: many fields made optional to match real API shape
-//   [9] BlockchainTransaction: operation field added (required by backend)
-//  [10] AuditLog: fields made optional, actorId/actorRole/category made optional
-//  [11] FraudReport: riskLevel added as alternate (backend uses riskLevel not severity)
-//  [12] VerificationRequest: added richer fields matching backend response
-//
+/**
+ * Global TypeScript types
+ * Path: FRONTEND/src/types.ts
+ *
+ * FIXES vs original:
+ *  1. Added 'university' to UserRole (backend has 4 roles; frontend only had 3).
+ *  2. User interface now accepts both camelCase (frontend) and snake_case (backend) field names.
+ *  3. Added InstitutionUser sub-type for university accounts.
+ *  4. Added Pagination type used by all listRequest() responses.
+ *  5. Added BlockchainNetworkInfo type.
+ *  6. Extended DegreeApplication with all backend fields.
+ */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Primitive unions
+// Core enums / unions
 // ─────────────────────────────────────────────────────────────────────────────
 
-// [FIX 1] 'university' was missing — caused role-check failures on login
+/** FIXED: Added 'university' — was missing, causing runtime errors for university users */
 export type UserRole = 'student' | 'admin' | 'employer' | 'university';
 
 export type VerificationStatus =
@@ -35,250 +26,256 @@ export type VerificationStatus =
   | 'approved'
   | 'rejected';
 
-export type DegreeStatus = 'pending' | 'processing' | 'approved' | 'issued' | 'revoked' | 'suspended';
+export type DegreeStatus = 'pending' | 'processing' | 'approved' | 'issued' | 'revoked';
 
-export type FraudLevel = 'safe' | 'medium' | 'high';
+export type FraudLevel = 'safe' | 'low' | 'medium' | 'high';
+
+export type BlockchainSyncStatus = 'pending' | 'processing' | 'confirmed' | 'failed';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // User
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-
-  // [FIX 2] Made optional — not present on employer/admin accounts
-  registrationNumber?: string;
-  verificationStatus?: VerificationStatus;
-  createdAt?: string;
-
-  // [FIX 4] Common optional fields
-  passwordHash?:    string;
-  studentId?:       string;
-  isActive?:        boolean;
-  emailVerified?:   boolean;
-  avatarUrl?:       string;
-  lastLogin?:       string;
-  updatedAt?:       string;
+  id:                 string;
+  /** Accepts both full_name (backend) and name (frontend) */
+  name:               string;
+  full_name?:         string;
+  email:              string;
+  role:               UserRole;
+  verificationStatus: VerificationStatus;
 
   // Student-specific
-  fatherName?:    string;
-  cnicNumber?:    string;
-  department?:    string;
-  program?:       string;
-  admissionYear?: number;
-  graduationYear?: number;
-  cgpa?:          number;
-  profilePhoto?:  string;
+  registrationNumber?: string;
+  studentId?:          string;
+  student_id?:         string;
+  fatherName?:         string;
+  father_name?:        string;
+  cnicNumber?:         string;
+  cnic_number?:        string;
+  department?:         string;
+  program?:            string;
+  admissionYear?:      number;
+  admission_year?:     number;
+  graduationYear?:     number;
+  graduation_year?:    number;
+  cgpa?:               number;
+  profilePhoto?:       string;
+  profile_photo_url?:  string;
 
-  // Face verification
-  faceDescriptorHash?: string;
-  faceRegisteredAt?:   string;
+  // University-specific
+  institution_name?:   string;
+  institutionName?:    string;
 
-  // [FIX 3] University-specific fields
-  institutionId?:   string;
-  institutionName?: string;
-  walletAddress?:   string;
+  // Common
+  is_active?:          boolean;
+  status?:             string;
+  createdAt:           string;
+  created_at?:         string;
 
+  // Embedded relations (optional)
   documents?: UploadedDocument[];
-  metadata?:  Record<string, unknown>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UploadedDocument
+// Document
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface UploadedDocument {
-  id: string;
-  // [FIX 5] Added 'degree' and 'other' — backend uses these types
-  type: 'cnic' | 'marksheet' | 'certificate' | 'academic_record' | 'degree' | 'other';
-  fileName: string;
-  uploadedAt: string;
-
-  // Analysis statuses
-  ocrStatus:        'pending' | 'processing' | 'verified' | 'failed' | 'completed';
+  id:               string;
+  type:             'cnic' | 'marksheet' | 'certificate' | 'academic_record';
+  document_type?:   string;
+  fileName:         string;
+  original_name?:   string;
+  uploadedAt:       string;
+  created_at?:      string;
+  ocrStatus:        'pending' | 'processing' | 'verified' | 'failed';
+  ocr_status?:      string;
   yoloStatus:       'pending' | 'processing' | 'valid' | 'suspicious' | 'fraudulent';
-  validationStatus?: 'pending' | 'valid' | 'mismatch' | 'invalid';
-  validationErrors?: string[];
-
-  // [FIX 5] Additional fields returned by backend
-  originalName?:    string;
-  fileUrl?:         string;
-  fileSize?:        number;
-  mimeType?:        string;
-  fileHash?:        string;
-  degreeId?:        string;
-  userId?:          string;
-
-  // OCR data
+  yolo_status?:     string;
   extractedData?:   Record<string, string>;
-  ocrText?:         string;
-  ocrConfidence?:   number;
-
-  // YOLO data
-  yoloDetections?:  unknown[];
-  yoloValid?:       boolean;
-  yoloConfidence?:  number;
-
-  // Fraud
-  fraudScore?:        number;
-  isVerified?:        boolean;
-  verificationNotes?: string;
+  extracted_data?:  Record<string, string>;
+  validationStatus?: 'pending' | 'valid' | 'mismatch' | 'invalid';
+  validation_status?: string;
+  validationErrors?: string[];
+  validation_errors?: string[];
+  fileUrl?:         string;
+  file_url?:        string;
+  user_id?:         string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DegreeApplication
+// Degree Application
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface DegreeApplication {
-  id: string;
-  studentId: string;
-  studentName: string;
-  status: DegreeStatus;
+  id:                   string;
 
-  // [FIX 8] All detail fields made optional — backend may omit them depending on status
-  registrationNumber?: string;
-  department?:         string;
-  program?:            string;
-  degreeTitle?:        string;
-  fieldOfStudy?:       string;
-  cgpa?:               number;
-  gpa?:                number;
-  admissionYear?:      number;
-  graduationYear?:     number;
-  graduationDate?:     string;
-  honors?:             string;
-  appliedAt?:          string;
-  createdAt?:          string;
-  updatedAt?:          string;
-  approvedAt?:         string;
+  // Student info
+  studentId?:           string;
+  student_id?:          string;
+  user_id?:             string;
+  studentName:          string;
+  student_name?:        string;
+  registrationNumber:   string;
+  registration_number?: string;
+
+  // Degree info
+  degreeTitle:          string;
+  degree_title?:        string;
+  department:           string;
+  field_of_study?:      string;
+  program:              string;
+  cgpa:                 number;
+  gpa?:                 number;
+  admissionYear?:       number;
+  admission_year?:      number;
+  graduationYear:       string | number;
+  graduation_year?:     string | number;
+  graduation_date?:     string;
+
+  // Status
+  status:               DegreeStatus;
+  appliedAt?:           string;
+  created_at?:          string;
+  approvedAt?:          string;
+  approved_at?:         string;
+
+  // Blockchain
+  blockchainHash?:      string;
+  blockchainTxHash?:    string;
+  blockchain_tx_hash?:  string;
+  degreeHash?:          string;
+  degree_hash?:         string;
+  blockchainSyncStatus?: BlockchainSyncStatus;
+  blockchain_sync_status?: string;
+
+  // Certificate
+  degreeId?:            string;
+  certificateNumber?:   string;
+  certificate_number?:  string;
+  qrCodeData?:          string;
+  qr_code_url?:         string;
+
+  // Fraud
+  fraudScore:           number;
+  fraud_score?:         number;
 
   // Institution
-  institutionId?:   string;
-  institutionName?: string;
-  issuedBy?:        string;
-
-  // Cryptographic / blockchain
-  degreeHash?:          string;
-  // [FIX 6] blockchainHash → blockchainTxHash (matches backend DTO)
-  blockchainTxHash?:    string;
-  blockchainHash?:      string;  // kept as alias for backward-compat
-  blockchainBlockNumber?: number;
-  blockchainTimestamp?:   number;
-  blockchainSyncStatus?:  'queued' | 'processing' | 'success' | 'failed';
-
-  // QR & certificate
-  certificateNumber?: string;
-  // [FIX 7] Backend returns qrCode (not qrUrl)
-  qrCode?:     string;
-  qrCodeUrl?:  string;  // kept as alias
-  qrCodeData?: string;  // kept for backward-compat
-
-  // IPFS
-  documentHash?:    string;
-  documentUrl?:     string;
-  ipfsCid?:         string;
-  ipfsGatewayUrl?:  string;
-
-  // Revocation
-  revocationReason?: string;
-  revokedAt?:        string;
-  revocationTxHash?: string;
-
-  fraudScore?: number;
-  metadata?:   Record<string, unknown>;
+  institutionName?:     string;
+  institution_name?:    string;
+  issuedBy?:            string;
+  issued_by?:           string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BlockchainTransaction
+// Blockchain
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface BlockchainTransaction {
-  id: string;
-  txHash: string;
-  status: 'confirmed' | 'pending' | 'failed';
-
-  // [FIX 9] operation is required by DB schema (NOT NULL)
-  operation: 'issue' | 'revoke' | 'verify';
-
-  degreeId?:      string;
+  id:             string;
+  txHash:         string;
+  tx_hash?:       string;
+  degreeId:       string;
+  degree_id?:     string;
+  operation?:     string;
   studentRegNo?:  string;
   degreeHash?:    string;
   timestamp?:     string;
+  created_at?:    string;
+  confirmed_at?:  string;
   issuerAddress?: string;
   blockNumber?:   number;
+  block_number?:  number;
   gasUsed?:       number;
-  confirmedAt?:   string;
-  tokenId?:       string;
+  gas_used?:      number;
+  status:         'confirmed' | 'pending' | 'failed';
+}
+
+export interface BlockchainNetworkInfo {
+  networkName:     string;
+  chainId:         string;
+  blockNumber:     number;
+  contractAddress: string;
+  walletAddress:   string;
+  walletBalance:   string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AuditLog
+// Audit Log
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface AuditLog {
-  id: string;
-  action: string;
-
-  // [FIX 10] Optional — not always present
-  userId?:       string;
-  userName?:     string;
-  actorId?:      string;
-  actorRole?:    string;
-  timestamp?:    string;
-  createdAt?:    string;
-  details?:      string | Record<string, unknown>;
-  category?:     'auth' | 'verification' | 'degree' | 'blockchain' | 'fraud' | 'admin';
-  resourceType?: string;
-  resourceId?:   string;
-  ipAddress?:    string;
+  id:          string;
+  action:      string;
+  userId?:     string;
+  user_id?:    string;
+  actor_id?:   string;
+  userName?:   string;
+  timestamp?:  string;
+  created_at?: string;
+  details?:    string | Record<string, any>;
+  metadata?:   Record<string, any>;
+  category?:   'auth' | 'verification' | 'degree' | 'blockchain' | 'fraud' | 'admin';
+  ip_address?: string;
+  ipAddress?:  string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FraudReport
+// Fraud
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface FraudReport {
-  id: string;
-
-  // [FIX 11] Backend uses both riskLevel (new) and severity (old) — support both
-  riskLevel?: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  severity?:  FraudLevel;  // kept for backward-compat with older FraudDetection code
-
+  id:           string;
   studentId?:   string;
   studentName?: string;
+  student_name?: string;
   type?:        string;
+  severity:     FraudLevel;
   description?: string;
   timestamp?:   string;
-  createdAt?:   string;
-  resolved?:    boolean;
-  resolvedAt?:  string;
-  degreeId?:    string;
+  created_at?:  string;
+  resolved:     boolean;
   fraudScore?:  number;
-  findings?:    string[];
-  isFraudulent?: boolean;
+  fraud_score?: number;
+  riskLevel?:   string;
+  risk_level?:  string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VerificationRequest
+// Verification
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface VerificationRequest {
-  id: string;
-  result: 'valid' | 'invalid' | 'revoked';
-
-  // [FIX 12] Made optional / added missing fields
+  id:                     string;
   degreeId?:              string;
+  degree_id?:             string;
   verifierEmail?:         string;
-  requesterEmail?:        string;
-  requesterOrganization?: string;
+  requester_email?:       string;
   verifiedAt?:            string;
+  verified_at?:           string;
+  result?:                'valid' | 'invalid' | 'revoked';
+  status?:                'pending' | 'verified' | 'rejected' | 'flagged' | 'expired';
   blockchainVerified?:    boolean;
-  computedHash?:          string;
-  verificationCode?:      string;
-  status?:                'pending' | 'verified' | 'rejected' | 'expired' | 'flagged';
-  fraudCheckPassed?:      boolean;
-  fraudScore?:            number;
+  blockchain_verified?:   boolean;
+  verification_code?:     string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pagination
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface Pagination {
+  total:      number;
+  page:       number;
+  limit:      number;
+  totalPages: number;
+  hasNext:    boolean;
+  hasPrev:    boolean;
+}
+
+export interface PaginatedResult<T> {
+  data:       T[];
+  total:      number;
+  pagination: Partial<Pagination>;
 }

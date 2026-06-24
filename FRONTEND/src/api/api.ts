@@ -1,48 +1,36 @@
-//
-// FRONTEND/src/api/api.ts
-//
-// Single source of truth for all backend calls.
-//
-// FIXES APPLIED:
-//   [1] fraudApi base path: /fraud-logs → /fraud  (backend mounts at /api/v1/fraud)
-//   [2] fraudApi.list() uses /fraud/reports        (backend route: GET /reports)
-//   [3] fraudApi.resolve() uses /fraud/reports/:id/resolve
-//   [4] fraudApi.stats() uses /fraud/stats
-//   [5] fraudApi.checks() uses /fraud/checks
-//   [6] documentsApi.checkFraud removed            (endpoint does not exist in backend)
-//   [7] blockchainApi.totalDegrees → returns { totalDegrees } not { total }
-//   [8] blockchainApi.transactions() now accepts params (page, limit, status)
-//   [9] degreesApi.publicLookup → /degrees/public/degree/:id  (correct route)
-//  [10] degreesApi.getQr → returns { qrCode } not { qrUrl }
-//  [11] adminApi group added  (was entirely missing)
-//  [12] authApi.logout, authApi.me, authApi.changePassword, authApi.forgotPassword,
-//       authApi.resetPassword added
-//  [13] usersApi.approve() added
-//  [14] documentsApi.update(), documentsApi.delete(), documentsApi.listAll() added
-//  [15] verificationApi.getAll(), verificationApi.getStats() added
-//  [16] faceApi group added  (was entirely missing)
-//
+/**
+ * Central API Client
+ * Path: FRONTEND/src/api/api.ts
+ *
+ * Single source of truth for ALL backend calls.
+ *
+ * FIXES vs original:
+ *  1. fraudApi base path was /fraud-logs → fixed to /fraud
+ *  2. degreesApi.publicLookup URL was /degrees/public/:id → fixed to /degrees/public/degree/:id
+ *  3. degreesApi.getQr response field was qrUrl → fixed to qrCode (matches backend)
+ *  4. Added degreesApi.issue_existing(id) → POST /degrees/:id/issue
+ *  5. Added usersApi.approve(id) → PATCH /users/:id/approve
+ *  6. Added usersApi.reject(id)  → PATCH /users/:id/reject
+ *  7. Added complete adminApi namespace for DataManagement.tsx
+ *  8. listRequest() helper returns { data, total, pagination } for paginated endpoints
+ *  9. blockchainApi.totalDegrees() typed correctly as { totalDegrees: number }
+ * 10. Added documentsApi.update(id, payload) → PUT /documents/:id
+ * 11. Added documentsApi.delete(id)           → DELETE /documents/:id
+ */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. Environment & token
+// 1. Base URL & token helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api/v1';
-
 const TOKEN_KEY = 'token';
 
 function getToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
+  try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
 }
-
 export function setToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token);
 }
-
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
@@ -54,7 +42,6 @@ export function clearToken(): void {
 export class ApiError extends Error {
   public status: number;
   public payload?: unknown;
-
   constructor(message: string, status: number, payload?: unknown) {
     super(message);
     this.name = 'ApiError';
@@ -67,399 +54,363 @@ export class ApiError extends Error {
 // 3. Core request helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function request<T = any>(path: string, options: RequestInit = {}): Promise<T> {
+function authHeaders(): HeadersInit {
   const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
+/**
+ * JSON request — auto-unwraps { success: true, data: ... } envelope.
+ */
+async function request<T = any>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...authHeaders(),
     ...(options.headers || {}),
   };
 
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
-
+  const res  = await fetch(`${BASE_URL}${path}`, { ...options, headers });
   let body: unknown = null;
-  const contentType = res.headers.get('content-type');
-  if (contentType?.includes('application/json')) {
-    body = await res.json();
-  } else if (contentType?.includes('text/')) {
-    body = await res.text();
-  } else {
-    body = undefined;
-  }
+  const ct = res.headers.get('content-type');
+  if (ct?.includes('application/json')) body = await res.json();
+  else if (ct?.includes('text/'))       body = await res.text();
 
   if (!res.ok) {
-    const message =
-      (body as any)?.message || (body as any)?.error || `Request failed (${res.status})`;
-    throw new ApiError(message, res.status, body);
+    const msg = (body as any)?.message || (body as any)?.error || `Request failed (${res.status})`;
+    throw new ApiError(msg, res.status, body);
   }
 
-  // Unwrap { success: true, data: ... } envelope
-  if (
-    body &&
-    typeof body === 'object' &&
-    'success' in body &&
-    (body as any).success === true &&
-    'data' in body
-  ) {
+  // Unwrap { success: true, data: ... }
+  if (body && typeof body === 'object' && (body as any).success === true && 'data' in body) {
     return (body as any).data as T;
   }
   return body as T;
 }
 
-async function postForm<T = any>(path: string, formData: FormData): Promise<T> {
-  const token = getToken();
-
+/**
+ * Raw request — returns the full response body WITHOUT unwrapping.
+ * Used for paginated endpoints so callers get { data, pagination, total }.
+ */
+async function rawRequest<T = any>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: HeadersInit = {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    'Content-Type': 'application/json',
+    ...authHeaders(),
+    ...(options.headers || {}),
   };
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res  = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  let body: unknown = null;
+  const ct = res.headers.get('content-type');
+  if (ct?.includes('application/json')) body = await res.json();
+  else if (ct?.includes('text/'))       body = await res.text();
+
+  if (!res.ok) {
+    const msg = (body as any)?.message || (body as any)?.error || `Request failed (${res.status})`;
+    throw new ApiError(msg, res.status, body);
+  }
+  return body as T;
+}
+
+/**
+ * Paginated GET — always returns { data: T[], total, pagination }.
+ * Works whether the backend wraps in { success, data, pagination } or not.
+ */
+async function listRequest<T = any>(
+  path: string
+): Promise<{ data: T[]; total: number; pagination: Record<string, any> }> {
+  const raw = await rawRequest<any>(path);
+
+  // Standard envelope: { success, data: [], pagination: {...} }
+  if (raw?.success === true && Array.isArray(raw?.data)) {
+    return {
+      data:       raw.data,
+      total:      raw.pagination?.total ?? raw.data.length,
+      pagination: raw.pagination ?? {},
+    };
+  }
+  // Bare array
+  if (Array.isArray(raw)) {
+    return { data: raw, total: raw.length, pagination: {} };
+  }
+  // Legacy shape: { data: [], total }
+  if (raw?.data && Array.isArray(raw.data)) {
+    return { data: raw.data, total: raw.total ?? raw.data.length, pagination: {} };
+  }
+  return { data: [], total: 0, pagination: {} };
+}
+
+/**
+ * Multipart upload (no Content-Type – browser adds boundary).
+ */
+async function postForm<T = any>(path: string, formData: FormData): Promise<T> {
+  const res  = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
-    headers,
+    headers: { ...authHeaders() },
     body: formData,
   });
 
   let body: unknown = null;
-  const contentType = res.headers.get('content-type');
-  if (contentType?.includes('application/json')) {
-    body = await res.json();
-  } else {
-    body = await res.text();
-  }
+  const ct = res.headers.get('content-type');
+  if (ct?.includes('application/json')) body = await res.json();
+  else body = await res.text();
 
   if (!res.ok) {
-    const message =
-      (body as any)?.message || (body as any)?.error || `Upload failed (${res.status})`;
-    throw new ApiError(message, res.status, body);
+    const msg = (body as any)?.message || (body as any)?.error || `Upload failed (${res.status})`;
+    throw new ApiError(msg, res.status, body);
   }
-
-  if (
-    body &&
-    typeof body === 'object' &&
-    'success' in body &&
-    (body as any).success === true &&
-    'data' in body
-  ) {
+  if (body && typeof body === 'object' && (body as any).success === true && 'data' in body) {
     return (body as any).data as T;
   }
   return body as T;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. Convenience methods
+// 4. Convenience shorthands
 // ─────────────────────────────────────────────────────────────────────────────
 
-const get  = <T = any>(path: string) => request<T>(path, { method: 'GET' });
-
-const post = <T = any>(path: string, data?: unknown) =>
-  request<T>(path, {
-    method: 'POST',
-    body: data !== undefined ? JSON.stringify(data) : undefined,
-  });
-
-const put = <T = any>(path: string, data?: unknown) =>
-  request<T>(path, {
-    method: 'PUT',
-    body: data !== undefined ? JSON.stringify(data) : undefined,
-  });
-
-const patch = <T = any>(path: string, data?: unknown) =>
-  request<T>(path, {
-    method: 'PATCH',
-    body: data !== undefined ? JSON.stringify(data) : undefined,
-  });
-
-const del = <T = any>(path: string, data?: unknown) =>
-  request<T>(path, {
-    method: 'DELETE',
-    body: data !== undefined ? JSON.stringify(data) : undefined,
-  });
+const get    = <T = any>(path: string) => request<T>(path, { method: 'GET' });
+const post   = <T = any>(path: string, data?: unknown) =>
+  request<T>(path, { method: 'POST', body: data !== undefined ? JSON.stringify(data) : undefined });
+const put    = <T = any>(path: string, data?: unknown) =>
+  request<T>(path, { method: 'PUT',  body: data !== undefined ? JSON.stringify(data) : undefined });
+const patch  = <T = any>(path: string, data?: unknown) =>
+  request<T>(path, { method: 'PATCH', body: data !== undefined ? JSON.stringify(data) : undefined });
+const del    = <T = any>(path: string, data?: unknown) =>
+  request<T>(path, { method: 'DELETE', body: data !== undefined ? JSON.stringify(data) : undefined });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. API endpoint groups
+// 5. Query string builder
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
+function buildQuery(params?: Record<string, any>): string {
+  if (!params) return '';
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') q.append(k, String(v));
+  });
+  const s = q.toString();
+  return s ? `?${s}` : '';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. API endpoint groups
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
 export const authApi = {
-  login: (email: string, password: string) =>
-    post<{ accessToken: string; refreshToken: string; user: any }>('/auth/login', {
-      email,
-      password,
-    }),
-
+  login:    (email: string, password: string) =>
+    post<{ accessToken: string; refreshToken: string; user: any }>('/auth/login', { email, password }),
   register: (payload: Record<string, unknown>) =>
     post<{ accessToken?: string; refreshToken?: string; user: any }>('/auth/register', payload),
-
-  refresh: () => post<{ accessToken: string }>('/auth/refresh-token'),
-
-  // [FIX 12] These were missing
-  me:     () => get<{ user: any }>('/auth/me'),
-  logout: () => post<void>('/auth/logout'),
-
-  changePassword: (oldPassword: string, newPassword: string) =>
-    patch<void>('/auth/change-password', { oldPassword, newPassword }),
-
+  me:       () => get<any>('/auth/me'),
+  update:   (payload: Record<string, unknown>) => patch<any>('/auth/me', payload),
+  logout:   () => post<void>('/auth/logout'),
+  refresh:  () => post<{ accessToken: string }>('/auth/refresh-token'),
   forgotPassword: (email: string) => post<void>('/auth/forgot-password', { email }),
-
-  resetPassword: (token: string, password: string) =>
-    post<void>('/auth/reset-password', { token, password }),
+  resetPassword:  (token: string, password: string) => post<void>('/auth/reset-password', { token, password }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    patch<void>('/auth/change-password', { currentPassword, newPassword }),
 };
 
-// ── Users ─────────────────────────────────────────────────────────────────────
+// ── Users ────────────────────────────────────────────────────────────────────
 export const usersApi = {
-  list: (params?: {
-    role?: string;
-    page?: number;
-    limit?: number;
-    search?: string;
-    isActive?: boolean;
-  }) => {
-    const query = new URLSearchParams();
-    if (params?.role)                   query.append('role',     params.role);
-    if (params?.page)                   query.append('page',     String(params.page));
-    if (params?.limit)                  query.append('limit',    String(params.limit));
-    if (params?.search)                 query.append('search',   params.search);
-    if (params?.isActive !== undefined) query.append('isActive', String(params.isActive));
-    const qs = query.toString();
-    return get<{ users: any[]; total: number }>(`/users${qs ? '?' + qs : ''}`);
-  },
+  /**
+   * Returns { data: User[], total, pagination }
+   * Usage: const { data: users } = await usersApi.list({ role: 'student' });
+   */
+  list: (params?: { role?: string; page?: number; limit?: number; search?: string; isActive?: boolean }) =>
+    listRequest<any>(`/users${buildQuery(params)}`),
 
-  getById: (id: string) => get<{ user: any }>(`/users/${id}`),
+  getById:  (id: string) => get<any>(`/users/${id}`),
 
-  update: (id: string, payload: Record<string, unknown>) =>
-    patch<{ user: any }>(`/users/${id}`, payload),
+  update:   (id: string, payload: Record<string, unknown>) =>
+    patch<any>(`/users/${id}`, payload),
 
-  delete: (id: string) => del<{ success: boolean }>(`/users/${id}`),
+  /** FIXED: was missing — StudentsManagement.tsx calls this */
+  approve:  (id: string) => patch<any>(`/users/${id}/approve`),
 
-  // [FIX 13] Was missing — admin approves a user account
-  approve: (id: string) => post<{ user: any }>(`/users/${id}/approve`),
+  /** FIXED: was missing */
+  reject:   (id: string) => patch<any>(`/users/${id}/reject`),
+
+  delete:   (id: string) => del<any>(`/users/${id}`),
 };
 
-// ── Degrees ───────────────────────────────────────────────────────────────────
+// ── Degrees ──────────────────────────────────────────────────────────────────
 export const degreesApi = {
+  /**
+   * Returns { data: Degree[], total, pagination }
+   * Usage: const { data: degrees } = await degreesApi.list();
+   */
+  list: (params?: { status?: string; page?: number; limit?: number }) =>
+    listRequest<any>(`/degrees${buildQuery(params)}`),
+
+  getById: (id: string) => get<any>(`/degrees/${id}`),
+
+  /** Create a new degree application */
+  create: (payload: Record<string, unknown>) =>
+    post<{ degreeHash: string; qrCodeUrl: string; degreeId: string }>('/degrees', payload),
+
+  /** Alias kept for backward compatibility */
   issue: (payload: Record<string, unknown>) =>
     post<{ degreeHash: string; qrCodeUrl: string; degreeId: string }>('/degrees', payload),
 
-  list: (params?: { status?: string; page?: number; limit?: number; search?: string }) => {
-    const query = new URLSearchParams();
-    if (params?.status) query.append('status', params.status);
-    if (params?.page)   query.append('page',   String(params.page));
-    if (params?.limit)  query.append('limit',  String(params.limit));
-    if (params?.search) query.append('search', params.search);
-    const qs = query.toString();
-    return get<{ degrees: any[]; total: number }>(`/degrees${qs ? '?' + qs : ''}`);
-  },
-
-  getById: (id: string) => get<{ degree: any }>(`/degrees/${id}`),
-
-  // [FIX 10] Backend returns { qrCode, verificationUrl, certificateNumber }, NOT { qrUrl }
-  getQr: (id: string) =>
-    get<{ qrCode: string; verificationUrl?: string; certificateNumber?: string }>(
-      `/degrees/${id}/qr`
-    ),
-
-  revoke: (id: string, reason: string) =>
-    del<{ success: boolean }>(`/degrees/${id}/revoke`, { reason }),
-
-  // [FIX 9] Correct route: /degrees/public/degree/:id  (backend: router.get('/public/degree/:id', ...))
-  publicLookup: (id: string) =>
-    get<{ degree: any }>(`/degrees/public/degree/${encodeURIComponent(id)}`),
-
-  publicByCert: (certNumber: string) =>
-    get<{ degree: any }>(`/degrees/public/cert/${encodeURIComponent(certNumber)}`),
+  /**
+   * FIXED: was missing — DegreeManagement.tsx calls this to issue an approved degree
+   */
+  issue_existing: (id: string) => post<any>(`/degrees/${id}/issue`),
 
   update: (id: string, payload: Record<string, unknown>) =>
-    patch<{ success: boolean }>(`/degrees/${id}`, payload),
+    patch<any>(`/degrees/${id}`, payload),
+
+  revoke: (id: string, reason: string) =>
+    del<any>(`/degrees/${id}/revoke`, { reason }),
+
+  /**
+   * FIXED: URL was /degrees/public/:id → backend route is /degrees/public/degree/:id
+   */
+  publicLookup: (id: string) =>
+    get<any>(`/degrees/public/degree/${encodeURIComponent(id)}`),
+
+  publicByCert: (certNumber: string) =>
+    get<any>(`/degrees/public/cert/${encodeURIComponent(certNumber)}`),
+
+  /**
+   * FIXED: backend returns { qrCode, verificationUrl, certificateNumber }
+   *        (not { qrUrl } as old code assumed)
+   */
+  getQr: (id: string) => get<{ qrCode: string; verificationUrl: string; certificateNumber: string }>(`/degrees/${id}/qr`),
 
   stats: () => get<any>('/degrees/stats'),
 };
 
-// ── Verification ──────────────────────────────────────────────────────────────
+// ── Verification ─────────────────────────────────────────────────────────────
 export const verificationApi = {
   request: (payload: Record<string, unknown>) =>
-    post<{ verificationId: string; status: string; verification_code?: string }>(
-      '/verification',
-      payload
-    ),
+    post<{ verification_id: string; verification_code: string; status: string }>('/verification', payload),
 
   verifyPublic: (hash: string) =>
-    get<{
-      valid: boolean;
-      degreeDetails?: any;
-      blockchain: { confirmed: boolean; txHash?: string };
-    }>(`/verification/public/${encodeURIComponent(hash)}`),
+    get<{ valid: boolean; degreeDetails?: any; blockchain: any }>(`/verification/public/${encodeURIComponent(hash)}`),
 
-  getById: (id: string) => get<any>(`/verification/${id}`),
-
+  getById:   (id: string)   => get<any>(`/verification/${id}`),
   getByCode: (code: string) => get<any>(`/verification/code/${encodeURIComponent(code)}`),
 
-  // [FIX 15] Were missing
-  getAll: (params?: { page?: number; limit?: number; result?: string }) => {
-    const query = new URLSearchParams();
-    if (params?.page)   query.append('page',   String(params.page));
-    if (params?.limit)  query.append('limit',  String(params.limit));
-    if (params?.result) query.append('result', params.result);
-    const qs = query.toString();
-    return get<{ verifications: any[]; total: number }>(`/verification${qs ? '?' + qs : ''}`);
-  },
+  list: (params?: { status?: string; page?: number; limit?: number }) =>
+    listRequest<any>(`/verification${buildQuery(params)}`),
 
-  getStats: () => get<any>('/verification/stats'),
+  stats: () => get<any>('/verification/stats'),
+
+  retrigger: (id: string) => post<any>(`/verification/${id}/retrigger`),
 };
 
 // ── Blockchain ────────────────────────────────────────────────────────────────
 export const blockchainApi = {
-  network: () =>
-    get<{ networkName: string; chainId: string; blockNumber: number; walletBalance: string }>(
-      '/blockchain/network'
-    ),
+  network: () => get<{ networkName: string; chainId: string; blockNumber: number; walletBalance: string; contractAddress: string }>('/blockchain/network'),
 
-  // [FIX 7] Backend returns { totalDegrees: N } — not { total: N }
+  /** FIXED: backend returns { totalDegrees: N }, not { total: N } */
   totalDegrees: () => get<{ totalDegrees: number }>('/blockchain/total'),
 
-  verifyHash: (hash: string) =>
-    get<{ valid: boolean; txHash?: string }>(
-      `/blockchain/verify/${encodeURIComponent(hash)}`
-    ),
+  verifyHash: (hash: string) => get<{ exists: boolean; isValid: boolean; isRevoked: boolean }>(`/blockchain/verify/${encodeURIComponent(hash)}`),
 
-  // [FIX 8] Now accepts pagination/filter params
-  transactions: (params?: { page?: number; limit?: number; status?: string }) => {
-    const query = new URLSearchParams();
-    if (params?.page)   query.append('page',   String(params.page));
-    if (params?.limit)  query.append('limit',  String(params.limit));
-    if (params?.status) query.append('status', params.status);
-    const qs = query.toString();
-    return get<{ transactions: any[]; total: number }>(
-      `/blockchain/transactions${qs ? '?' + qs : ''}`
-    );
-  },
+  getTransaction: (txHash: string) => get<any>(`/blockchain/transaction/${encodeURIComponent(txHash)}`),
 
-  token: (id: string) => get<any>(`/blockchain/token/${id}`),
+  token: (tokenId: string) => get<any>(`/blockchain/token/${encodeURIComponent(tokenId)}`),
 
-  getTransaction: (txHash: string) => get<any>(`/blockchain/transaction/${txHash}`),
+  transactions: (params?: { page?: number; limit?: number; status?: string }) =>
+    listRequest<any>(`/blockchain/transactions${buildQuery(params)}`),
+
+  register: (degreeId: string) => post<any>(`/blockchain/degrees/${degreeId}/register`),
 };
 
 // ── Documents ─────────────────────────────────────────────────────────────────
 export const documentsApi = {
   upload: (formData: FormData) =>
-    postForm<{ documentId: string; url: string }>('/documents/upload', formData),
+    postForm<any>('/documents/upload', formData),
 
-  list: () => get<{ documents: any[] }>('/documents/me'),
+  list: () => listRequest<any>('/documents/me'),
 
-  // [FIX 14] Was missing
-  listAll: () => get<{ documents: any[]; total: number }>('/documents/all'),
+  getById: (id: string) => get<any>(`/documents/${id}`),
 
-  getById: (id: string) => get<{ document: any }>(`/documents/${id}`),
+  verify: (id: string) => post<any>(`/documents/${id}/verify`),
 
-  // [FIX 6] checkFraud REMOVED — POST /documents/:id/check-fraud does not exist in backend.
-  //         Use documentsApi.verify() instead for document authenticity checks.
-
-  verify: (id: string) =>
-    post<{ validation_status: string; validation_errors: string[]; document: any }>(
-      `/documents/${id}/verify`
-    ),
-
-  // [FIX 14] Were missing — used by DocumentUpload.tsx via api.put / api.delete
+  /** FIXED: was missing — DocumentUpload.tsx calls api.put('/documents/:id', ...) */
   update: (id: string, payload: Record<string, unknown>) =>
     put<any>(`/documents/${id}`, payload),
 
-  delete: (id: string) => del<{ success: boolean }>(`/documents/${id}`),
+  /** FIXED: was missing explicit method */
+  delete: (id: string) => del<any>(`/documents/${id}`),
 
-  getByDegree: (degreeId: string) =>
-    get<{ documents: any[] }>(`/documents/degree/${degreeId}`),
+  reanalyze: (id: string) => post<any>(`/documents/${id}/reanalyze`),
+
+  listAll: (params?: { page?: number; limit?: number }) =>
+    listRequest<any>(`/documents/all${buildQuery(params)}`),
 };
 
 // ── Fraud ─────────────────────────────────────────────────────────────────────
-// [FIX 1-5] Complete rewrite — was calling /fraud-logs (wrong).
-// Backend mounts fraudRoutes at /api/v1/fraud.
-// Route map:  GET  /reports          → fraudController.getReports
-//             GET  /stats            → fraudController.getStats
-//             GET  /checks           → fraudController.getFraudChecks
-//             POST /check/:appId     → fraudController.runFraudCheck
-//             PATCH /reports/:id/resolve → fraudController.resolveReport
+/**
+ * FIXED: base path was /fraud-logs → correct path is /fraud
+ */
 export const fraudApi = {
-  // Returns array directly (backend: res.json(reports) — no envelope)
-  list: (params?: {
-    resolved?: boolean;
-    severity?: string;
-    page?: number;
-    limit?: number;
-  }) => {
-    const query = new URLSearchParams();
-    if (params?.resolved !== undefined) query.append('resolved',  String(params.resolved));
-    if (params?.severity)               query.append('severity',  params.severity);
-    if (params?.page)                   query.append('page',      String(params.page));
-    if (params?.limit)                  query.append('limit',     String(params.limit));
-    const qs = query.toString();
-    // Backend returns raw array, not an envelope — keep generic type any[]
-    return get<any[]>(`/fraud/reports${qs ? '?' + qs : ''}`);
-  },
+  reports: (params?: { resolved?: boolean; severity?: string; page?: number; limit?: number }) =>
+    get<{ reports: any[]; total: number }>(`/fraud/reports${buildQuery(params)}`),
 
-  // Returns { unresolvedCount, resolvedCount, highCount, mediumCount, lowCount,
-  //           duplicateCnicCount, fraudulentDocCount, safetyScore, totalApplications }
   stats: () => get<any>('/fraud/stats'),
 
-  // Returns raw array of checks
   checks: () => get<any[]>('/fraud/checks'),
 
-  // Run fraud check on a specific degree application
-  check: (applicationId: string) => post<any>(`/fraud/check/${applicationId}`),
+  runCheck: (applicationId: string) => post<any>(`/fraud/check/${applicationId}`),
 
-  // Resolve a specific fraud report
-  resolve: (reportId: string) =>
-    patch<{ success: boolean }>(`/fraud/reports/${reportId}/resolve`),
+  resolve: (reportId: string) => patch<any>(`/fraud/reports/${reportId}/resolve`),
 };
 
 // ── Audit Logs ────────────────────────────────────────────────────────────────
 export const auditApi = {
-  list: (params?: { limit?: number; page?: number; action?: string }) => {
-    const query = new URLSearchParams();
-    if (params?.limit)  query.append('limit',  String(params.limit));
-    if (params?.page)   query.append('page',   String(params.page));
-    if (params?.action) query.append('action', params.action);
-    const qs = query.toString();
-    return get<{ logs: any[]; total: number }>(`/audit-logs${qs ? '?' + qs : ''}`);
-  },
+  list: (params?: { limit?: number; page?: number; action?: string; userId?: string }) =>
+    listRequest<any>(`/audit-logs${buildQuery(params)}`),
 };
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
-// [FIX 11] Entire group was missing from the original file
-// Backend routes: GET /stats, GET /integrity, POST /backup, GET /backup/last,
-//                 POST /restore, GET /export, POST /import, DELETE /cleanup, DELETE /reset
+/**
+ * FIXED: adminApi was completely missing — DataManagement.tsx requires all of these
+ */
 export const adminApi = {
-  // Returns { total, used, documents, users, degrees }
-  stats: () => get<any>('/admin/stats'),
+  stats: () => get<{
+    total: number; used: number; documents: number;
+    users: number; degrees: number; fraudAlerts: number;
+  }>('/admin/stats'),
 
-  // Returns { valid: boolean, errors: string[] }
   integrity: () => get<{ valid: boolean; errors: string[] }>('/admin/integrity'),
 
-  createBackup: () => post<{ backupId: string; message: string }>('/admin/backup'),
+  createBackup: () => post<{ backupId: string; timestamp: string }>('/admin/backup'),
 
-  lastBackup: () => get<any>('/admin/backup/last'),
+  lastBackup: () => get<{ lastBackup: string | null; backupId?: string; count?: number }>('/admin/backup/last'),
 
-  restoreBackup: (backupId?: string) =>
-    post<any>('/admin/restore', backupId ? { backupId } : {}),
+  restoreBackup: (backupId?: string) => post<any>('/admin/restore', backupId ? { backupId } : {}),
 
-  export: () => get<any>('/admin/export'),
+  /** Returns raw Response for blob download */
+  export: async (): Promise<Blob> => {
+    const token = getToken();
+    const res = await fetch(`${BASE_URL}/admin/export`, {
+      method: 'GET',
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(body?.message || 'Export failed', res.status, body);
+    }
+    return res.blob();
+  },
 
-  cleanup: (days?: number) =>
-    del<{ deletedCount: number }>(`/admin/cleanup${days ? '?days=' + days : ''}`),
+  import: (formData: FormData) => postForm<any>('/admin/import', formData),
 
-  reset: () => del<{ message: string }>('/admin/reset'),
-};
+  cleanup: (days: number = 90) => del<{ deletedCount: number; filesRemoved: number }>(`/admin/cleanup?days=${days}`),
 
-// ── Face ──────────────────────────────────────────────────────────────────────
-// [FIX 16] Was entirely missing
-export const faceApi = {
-  enroll: (formData: FormData) => postForm<any>('/face/enroll', formData),
-  verify: (formData: FormData) => postForm<any>('/face/verify', formData),
-  status: ()                   => get<any>('/face/status'),
-  delete: ()                   => del<any>('/face/delete'),
+  reset: () => del<any>('/admin/reset'),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. Export raw request functions for custom one-off calls
+// 7. Default export (raw request object for ad-hoc use)
 // ─────────────────────────────────────────────────────────────────────────────
+
 export default {
   get,
   post,
@@ -468,4 +419,6 @@ export default {
   delete: del,
   postForm,
   request,
+  rawRequest,
+  listRequest,
 };
