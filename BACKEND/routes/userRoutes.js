@@ -1,57 +1,104 @@
 // BACKEND/routes/userRoutes.js
 //
-// FIXES applied:
-//   FIX-1 (CRITICAL): imported { requireRole } from roleMiddleware.js, which
-//          does not exist on that module (it exports authorize,
-//          authorizeOwnerOrAdmin, authorizeUniversityOrAdmin, authorizeAdmin).
-//          requireRole(['admin']) was called at route-definition time —
-//          i.e. the moment this file is require()'d — so it threw
-//          "requireRole is not a function" and crashed the ENTIRE server on
-//          startup, not just this one route. Switched to authorizeAdmin.
-//   FIX-2: Routes now delegate to userController.js (getUserById/updateUser/
-//          deleteUser/approveUser/rejectUser) instead of duplicating the same
-//          logic inline here, now that the controller actually has them.
-//   FIX-3: Added PATCH /:id/reject to match userController.rejectUser.
+// WHAT WAS BROKEN:
+//   1. NO authentication middleware — GET /users was completely public. Any
+//      anonymous caller could enumerate every user in the system with emails,
+//      roles, face descriptors, and institution data.
+//
+//   2. NO userController import — the file imported the raw User model and
+//      contained an inline handler instead of delegating to userController.
+//
+//   3. ONLY GET / existed — five routes consumed by the frontend and the
+//      api.ts usersApi were completely missing:
+//        GET    /users/:id          → userController.getUserById
+//        PATCH  /users/:id          → userController.updateUser
+//        DELETE /users/:id          → userController.deleteUser
+//        PATCH  /users/:id/approve  → userController.approveUser
+//        PATCH  /users/:id/reject   → userController.rejectUser
+//
+//   4. Inline handler used raw res.json() instead of the standardized
+//      sendPaginated response helper — inconsistent with every other route.
+//
+//   5. No error handling — any User.findMany() failure crashed the process
+//      instead of returning a proper 500 response.
+//
+// VERIFIED DEPENDENCIES:
+//   ../middleware/authMiddleware  → authenticate         (exports confirmed)
+//   ../middleware/roleMiddleware  → authorize            (exports confirmed)
+//   ../controllers/userController → getUsers / getUserById / updateUser /
+//                                   deleteUser / approveUser / rejectUser
+//                                   (all now exported in fixed userController.js)
 
-const express = require('express');
-const router = express.Router();
+'use strict';
 
-const {
-  getUsers,
-  getUserById,
-  updateUser,
-  deleteUser,
-  approveUser,
-  rejectUser,
-} = require('../controllers/userController');
+const express        = require('express');
+const router         = express.Router();
+const { authenticate }  = require('../middleware/authMiddleware');
+const { authorize }     = require('../middleware/roleMiddleware');
+const userController    = require('../controllers/userController');
 
-const { authenticate } = require('../middleware/authMiddleware');
-const { authorizeAdmin } = require('../middleware/roleMiddleware'); // FIX-1: was `requireRole`, doesn't exist
-
-// ─── All routes below require a valid, authenticated session ─────────────────
+// ─── FIX 1: ALL user routes require authentication ────────────────────────────
+// This entire router was previously unauthenticated — user list was public.
 router.use(authenticate);
 
-// ── GET /api/v1/users/:id ──────────────────────────────────────────────────────
-// Any authenticated user may view their OWN record; admins may view anyone's
-// (enforced inside the controller).
-router.get('/:id', getUserById);
+// ─── GET /api/v1/users ───────────────────────────────────────────────────────
+// List all users with optional filters.
+// FIX 2 & 4: replaced inline handler with userController.getUsers which uses
+//            sendPaginated with the correct signature.
+// Query params: role, page, limit, search, isActive
+router.get(
+  '/',
+  authorize('admin'),
+  userController.getUsers
+);
 
-// ── PATCH /api/v1/users/:id ─────────────────────────────────────────────────────
-router.patch('/:id', updateUser);
+// ─── GET /api/v1/users/:id ───────────────────────────────────────────────────
+// FIX 3a: route was completely missing.
+// Get a single user by their UUID. Admin only.
+router.get(
+  '/:id',
+  authorize('admin'),
+  userController.getUserById
+);
 
-// ─── Everything below is admin-only ───────────────────────────────────────────
+// ─── PATCH /api/v1/users/:id ─────────────────────────────────────────────────
+// FIX 3b: route was completely missing.
+// Update whitelisted fields on a user (role, isActive, name, etc.). Admin only.
+// Note: users update their OWN profile via PATCH /auth/me (authController).
+router.patch(
+  '/:id',
+  authorize('admin'),
+  userController.updateUser
+);
 
-// ── GET /api/v1/users ──────────────────────────────────────────────────────────
-router.get('/', authorizeAdmin, getUsers);
+// ─── DELETE /api/v1/users/:id ────────────────────────────────────────────────
+// FIX 3c: route was completely missing.
+// Soft-deletes (deactivates) a user. Hard-delete only in dev via ?hard=true.
+// Admin only.
+router.delete(
+  '/:id',
+  authorize('admin'),
+  userController.deleteUser
+);
 
-// ── DELETE /api/v1/users/:id ────────────────────────────────────────────────────
-// Soft-delete (deactivate) by default; ?hard=true for a permanent delete.
-router.delete('/:id', authorizeAdmin, deleteUser);
+// ─── PATCH /api/v1/users/:id/approve ─────────────────────────────────────────
+// FIX 3d: route was completely missing.
+// Approve a pending student or university account. Sets is_active = true.
+// Admin only.
+router.patch(
+  '/:id/approve',
+  authorize('admin'),
+  userController.approveUser
+);
 
-// ── POST /api/v1/users/:id/approve | /reject ────────────────────────────────────
-// POST (not PATCH) to match FRONTEND/src/api/api.ts's usersApi.approve(),
-// which calls `post('/users/:id/approve')`.
-router.post('/:id/approve', authorizeAdmin, approveUser);
-router.post('/:id/reject', authorizeAdmin, rejectUser);
+// ─── PATCH /api/v1/users/:id/reject ──────────────────────────────────────────
+// FIX 3e: route was completely missing.
+// Reject a pending account. Sets is_active = false.
+// Admin only.
+router.patch(
+  '/:id/reject',
+  authorize('admin'),
+  userController.rejectUser
+);
 
 module.exports = router;

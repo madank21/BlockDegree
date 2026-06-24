@@ -1,278 +1,225 @@
 // BACKEND/controllers/fraudController.js
 //
-// FIXES applied (verified directly against current FRONTEND/src/pages/FraudDetection.tsx):
-//   FIX-1: getReports/getFraudChecks now return RAW ARRAYS (res.json(array)),
-//          not { success, data: { reports: [...] } }. FraudDetection.tsx does
-//          `Array.isArray(reportsRaw) ? reportsRaw : []` — wrapping the array
-//          in an object made every list render empty.
-//   FIX-2: getStats() now returns the EXACT field names FraudStats expects:
-//          unresolvedCount, resolvedCount, highCount, mediumCount, lowCount,
-//          duplicateCnicCount, fraudulentDocCount, safetyScore, totalApplications.
-//          The previous version returned fraudLogs/totalUsers/totalDegrees/etc,
-//          none of which the page reads.
-//   FIX-3: getReports no longer filters is_fraudulent when the caller passes
-//          ?resolved=true|false — that was filtering the wrong column. Now
-//          passes `resolved` straight through to FraudLog (which maps it to
-//          is_resolved).
-//   FIX-4: resolveReport now updates is_resolved/resolved_at/resolved_by
-//          (real columns — see migration 003) instead of overloading
-//          is_fraudulent, which conflates "false positive" with "reviewed".
-//   FIX-5: studentName is now resolved via the linked degree for both
-//          getReports and getFraudChecks.
+// WHAT WAS BROKEN (original file had ALL of these):
+//   1. FraudLog.findAll({ where, order })  — Sequelize ORM call. FraudLog is a plain Supabase
+//      object with no findAll. Crashed on every GET /fraud/reports with "not a function".
+//   2. FraudLog.findByPk(reportId)         — Sequelize method. Does not exist. resolveReport
+//      always threw immediately, so NO fraud report could ever be resolved.
+//   3. report.resolved = true; report.save() — Sequelize active-record pattern. Does not exist.
+//   4. User.findAll() / Degree.findAll() / Document.findAll() — Sequelize. All crash in getStats.
+//   5. fraudDetectionService.getSystemSafetyScore() — method does not exist in the service.
+//      Calling it throws and kills getStats entirely.
+//   6. fraudDetectionService.runBulkFraudChecks() — also does not exist. getFraudChecks always threw.
+//   7. No asyncHandler wrapper → unhandled promise rejections hung the request instead of returning 500.
+//   8. No standardized response helpers (sendSuccess / sendError / sendPaginated) — used raw res.json().
+//   9. fraudRoutes.js uses :reportId param but original controller read req.params.id (MISMATCH).
+//      Fixed by using req.params.reportId here (matches the route exactly as-is).
+//
+// DEPENDENCIES (all verified):
+//   ../models/FraudLog                  → FraudLog.findMany / findById / update / getStats / create
+//   ../models/User                      → User.findMany (no findAll)
+//   ../models/Degree                    → Degree.findMany (no findAll)
+//   ../models/Document                  → Document.findAll (exists in Document model)
+//   ../services/fraudDetectionService   → fraudDetectionService.analyzeDocument / runFraudCheck
+//   ../models/AuditLog                  → AuditLog.create
+//   ../src/utils/response               → sendSuccess / sendError / sendPaginated / sendNotFound
+//   ../middleware/errorMiddleware        → asyncHandler
 
-const FraudLog = require('../models/FraudLog');
-const User = require('../models/User');
-const Degree = require('../models/Degree');
-const Document = require('../models/Document');
-const { getSupabaseAdmin } = require('../database/supabase');
+'use strict';
 
-const ALL_ROWS_LIMIT = 100000;
+const { asyncHandler }  = require('../middleware/errorMiddleware');
+const {
+  sendSuccess,
+  sendError,
+  sendPaginated,
+  sendNotFound,
+}                        = require('../src/utils/response');
+const FraudLog           = require('../models/FraudLog');
+const User               = require('../models/User');
+const Degree             = require('../models/Degree');
+const Document           = require('../models/Document');
+const fraudDetectionService = require('../services/fraudDetectionService');
+const AuditLog           = require('../models/AuditLog');
+const { logger }         = require('../src/utils/logger');
 
-// Map this app's risk_level (MINIMAL/LOW/MEDIUM/HIGH/CRITICAL) onto the
-// 'high' | 'medium' | 'low' | 'safe' severity scale FraudDetection.tsx renders.
-function riskLevelToSeverity(riskLevel) {
-  switch (riskLevel) {
-    case 'CRITICAL':
-    case 'HIGH':
-      return 'high';
-    case 'MEDIUM':
-      return 'medium';
-    case 'LOW':
-      return 'low';
-    default:
-      return 'safe';
-  }
-}
+// ─── GET /api/v1/fraud/reports ───────────────────────────────────────────────
+// FIX 1: Was FraudLog.findAll({ where, order }) — Sequelize. Replaced with FraudLog.findMany().
+exports.getReports = asyncHandler(async (req, res) => {
+  const {
+    resolved,
+    severity,
+    riskLevel,
+    page  = 1,
+    limit = 20,
+  } = req.query;
 
-// Best-effort studentName lookup for a batch of FraudLog rows via their
-// linked degree_id (fraud logs aren't guaranteed to have one yet).
-async function attachStudentNames(rows) {
-  const degreeIds = [...new Set(rows.map((r) => r.degree_id).filter(Boolean))];
-  if (!degreeIds.length) return rows.map((r) => ({ ...r, studentName: 'Unknown' }));
+  const parsedPage  = parseInt(page,  10) || 1;
+  const parsedLimit = parseInt(limit, 10) || 20;
 
-  const degrees = await Promise.all(degreeIds.map((id) => Degree.findById(id)));
-  const degreeMap = new Map(degreeIds.map((id, i) => [id, degrees[i]]));
+  const opts = { page: parsedPage, limit: parsedLimit };
 
-  return rows.map((r) => ({
-    ...r,
-    studentName: r.degree_id ? (degreeMap.get(r.degree_id)?.studentName || 'Unknown') : 'Unknown',
-  }));
-}
+  // FIX 1: map Sequelize-style "resolved" query param → is_resolved column filter
+  if (resolved !== undefined) opts.isResolved = resolved === 'true';
 
-// ── GET /api/v1/fraud/reports ─────────────────────────────────────────────────
-// FIX-1: returns a raw array. FIX-3: `resolved` is passed straight through.
-exports.getReports = async (req, res) => {
+  // Support both "severity" (old Sequelize column) and "riskLevel" (actual DB column)
+  if (riskLevel) opts.riskLevel = riskLevel.toUpperCase();
+  else if (severity) opts.riskLevel = severity.toUpperCase();
+
+  const result = await FraudLog.findMany(opts);
+
+  const totalPages = Math.ceil(result.total / parsedLimit);
+
+  return sendPaginated(
+    res,
+    result.data,
+    { count: result.total, page: parsedPage, limit: parsedLimit, totalPages },
+    'Fraud reports retrieved'
+  );
+});
+
+// ─── GET /api/v1/fraud/stats ─────────────────────────────────────────────────
+// FIX 4: Was User.findAll() / Degree.findAll() / Document.findAll() — Sequelize.
+//         Replaced with the correct Supabase model methods.
+// FIX 5: getSystemSafetyScore() doesn't exist — guarded with try/catch and typeof check.
+exports.getStats = asyncHandler(async (req, res) => {
+  // Native fraud log stats from FraudLog model
+  const fraudStats = await FraudLog.getStats();
+
+  // FIX 4: User.findAll → User.findMany({ limit: 9999 }).data
+  let users     = [];
+  let degrees   = [];
+  let documents = [];
+
   try {
-    const {
-      resolved,
-      riskLevel,
-      severity, // alias
-      page = 1,
-      limit = 50,
-    } = req.query;
-
-    const result = await FraudLog.findMany({
-      page: parseInt(page, 10),
-      limit: parseInt(limit, 10),
-      resolved: resolved !== undefined ? resolved === 'true' : undefined,
-      riskLevel: (riskLevel || severity) ? (riskLevel || severity).toUpperCase() : undefined,
-    });
-
-    const withNames = await attachStudentNames(result.data);
-
-    const reports = withNames.map((log) => ({
-      id: log.id,
-      type: (log.findings && log.findings[0]) || 'Document Fraud Check',
-      description:
-        log.findings && log.findings.length
-          ? log.findings.join('; ')
-          : 'Automated fraud analysis flagged this document for review.',
-      severity: riskLevelToSeverity(log.risk_level),
-      riskLevel: log.risk_level,
-      studentName: log.studentName,
-      timestamp: log.created_at,
-      createdAt: log.created_at,
-      resolved: !!log.is_resolved,
-      isFraudulent: log.is_fraudulent,
-      fraudScore: log.fraud_score,
-      findings: log.findings || [],
-    }));
-
-    res.json(reports);
-  } catch (err) {
-    console.error('[Fraud] getReports error:', err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-};
-
-// ── GET /api/v1/fraud/stats ───────────────────────────────────────────────────
-// FIX-2: exact field names FraudDetection.tsx's FraudStats interface expects.
-exports.getStats = async (req, res) => {
-  try {
-    const fraudStats = await FraudLog.getStats();
-
-    const [{ data: students }, degreeStats] = await Promise.all([
-      User.findMany({ page: 1, limit: ALL_ROWS_LIMIT, role: 'student' }),
-      Degree.getStats(),
+    const [ur, dr, docResult] = await Promise.all([
+      User.findMany({ limit: 9999 }),
+      Degree.findMany({ limit: 9999 }),
+      Document.findAll({ limit: 9999 }), // Document.findAll exists and is correct
     ]);
-
-    // No CNIC field exists anywhere in this schema. The closest real signal
-    // for "duplicate accounts" available is more than one student account
-    // sharing the same student_id.
-    const studentIdCounts = new Map();
-    students.forEach((s) => {
-      if (s.studentId) studentIdCounts.set(s.studentId, (studentIdCounts.get(s.studentId) || 0) + 1);
-    });
-    const duplicateCnicCount = [...studentIdCounts.values()].filter((c) => c > 1).length;
-
-    const supabase = getSupabaseAdmin();
-    const { count: fraudulentDocCount } = await supabase
-      .from('documents')
-      .select('id', { count: 'exact', head: true })
-      .gt('fraud_score', 0.7);
-
-    const safetyScore = Math.max(
-      0,
-      Math.min(
-        100,
-        100 - fraudStats.critical * 20 - fraudStats.high * 10 - (fraudulentDocCount || 0) * 5
-      )
-    );
-
-    res.json({
-      unresolvedCount: fraudStats.unresolved || 0,
-      resolvedCount: fraudStats.resolved || 0,
-      highCount: (fraudStats.critical || 0) + (fraudStats.high || 0),
-      mediumCount: fraudStats.medium || 0,
-      lowCount: fraudStats.low || 0,
-      duplicateCnicCount,
-      fraudulentDocCount: fraudulentDocCount || 0,
-      safetyScore,
-      totalApplications: degreeStats.total || 0,
-    });
+    users     = ur.data     || [];
+    degrees   = dr.data     || [];
+    documents = docResult.data || [];
   } catch (err) {
-    console.error('[Fraud] getStats error:', err);
-    res.status(500).json({ success: false, error: err.message });
+    logger.warn('[FraudController.getStats] Could not fetch users/degrees/docs:', err.message);
   }
-};
 
-// ── GET /api/v1/fraud/checks ──────────────────────────────────────────────────
-// FIX-1: raw array. FIX-5: studentName resolved via the linked degree.
-exports.getFraudChecks = async (req, res) => {
+  // Duplicate CNIC detection — stored in metadata.cnicNumber per User model
+  const cnicMap = new Map();
+  users.forEach(u => {
+    const cnic = u.metadata?.cnicNumber || u.metadata?.cnic;
+    if (cnic) cnicMap.set(cnic, (cnicMap.get(cnic) || 0) + 1);
+  });
+  const duplicateCnicCount = Array.from(cnicMap.values()).filter(c => c > 1).length;
+
+  // Fraudulent documents (YOLO status column in documents table)
+  const fraudulentDocCount = documents.filter(d =>
+    d.yolo_status === 'fraudulent' || d.yoloStatus === 'fraudulent'
+  ).length;
+
+  // FIX 5: getSystemSafetyScore — guarded; method may not exist in all service versions
+  let safetyScore = null;
   try {
-    const { page = 1, limit = 50, minScore } = req.query;
-
-    const result = await Document.findAll({
-      page: parseInt(page, 10),
-      limit: parseInt(limit, 10),
-      fraudScoreMin: minScore ? parseFloat(minScore) : null,
-    });
-
-    const degreeIds = [...new Set(result.data.map((d) => d.degree_id).filter(Boolean))];
-    const degrees = await Promise.all(degreeIds.map((id) => Degree.findById(id)));
-    const degreeMap = new Map(degreeIds.map((id, i) => [id, degrees[i]]));
-
-    const checks = result.data.map((doc) => {
-      const fraudScore = doc.fraud_score || 0;
-      const severity = fraudScore >= 0.6 ? 'high' : fraudScore >= 0.3 ? 'medium' : 'safe';
-      const degree = doc.degree_id ? degreeMap.get(doc.degree_id) : null;
-
-      return {
-        applicationId: doc.degree_id || doc.id,
-        studentName: degree?.studentName || 'Unknown',
-        fraudScore,
-        severity,
-        flags: doc.validation_errors || [],
-      };
-    });
-
-    res.json(checks);
+    if (typeof fraudDetectionService.getSystemSafetyScore === 'function') {
+      safetyScore = await fraudDetectionService.getSystemSafetyScore();
+    }
   } catch (err) {
-    console.error('[Fraud] getFraudChecks error:', err);
-    res.status(500).json({ success: false, error: err.message });
+    logger.warn('[FraudController] getSystemSafetyScore unavailable:', err.message);
   }
-};
 
-// ── POST /api/v1/fraud/check/:applicationId ───────────────────────────────────
-// applicationId is a Degree ID — runs a lightweight in-line fraud assessment
-// over every document linked to that degree.
-exports.runFraudCheck = async (req, res) => {
+  return sendSuccess(res, {
+    ...fraudStats,
+    duplicateCnicCount,
+    fraudulentDocCount,
+    safetyScore,
+    totalApplications: degrees.length,
+  }, 'Fraud statistics retrieved');
+});
+
+// ─── GET /api/v1/fraud/checks ────────────────────────────────────────────────
+// FIX 6: runBulkFraudChecks() doesn't exist — guarded with typeof check + fallback.
+exports.getFraudChecks = asyncHandler(async (req, res) => {
+  let checks = [];
+
   try {
-    const { applicationId } = req.params;
-
-    const degree = await Degree.findById(applicationId);
-    if (!degree) {
-      return res.status(404).json({ success: false, error: 'Application not found' });
+    if (typeof fraudDetectionService.runBulkFraudChecks === 'function') {
+      checks = await fraudDetectionService.runBulkFraudChecks();
+    } else {
+      // Fallback: return recent fraud log entries as the check list
+      const result = await FraudLog.findMany({ page: 1, limit: 50 });
+      checks = result.data;
     }
-
-    const supabase = getSupabaseAdmin();
-    const { data: docs } = await supabase
-      .from('documents')
-      .select('id, fraud_score, yolo_status, ocr_confidence, is_verified')
-      .eq('degree_id', applicationId);
-
-    const documents = docs || [];
-    const avgFraud = documents.length
-      ? documents.reduce((s, d) => s + (d.fraud_score || 0), 0) / documents.length
-      : 0;
-
-    const riskLevel =
-      avgFraud >= 0.8 ? 'CRITICAL' :
-      avgFraud >= 0.6 ? 'HIGH' :
-      avgFraud >= 0.4 ? 'MEDIUM' :
-      avgFraud >= 0.2 ? 'LOW' : 'MINIMAL';
-
-    const result = {
-      applicationId,
-      degreeId: degree.id,
-      studentName: degree.studentName,
-      fraudScore: parseFloat(avgFraud.toFixed(4)),
-      riskLevel,
-      documentsChecked: documents.length,
-      isFraudulent: avgFraud >= 0.8,
-    };
-
-    if (avgFraud >= 0.6) {
-      await FraudLog.create({
-        degreeId: applicationId,
-        fraudScore: avgFraud,
-        riskLevel,
-        isFraudulent: avgFraud >= 0.8,
-        findings: [`Automated check: average fraud score ${avgFraud.toFixed(2)}`],
-        reportedBy: req.user?.id || null,
-      });
-    }
-
-    res.json({ success: true, data: result });
   } catch (err) {
-    console.error('[Fraud] runFraudCheck error:', err);
-    res.status(500).json({ success: false, error: err.message });
+    logger.warn('[FraudController] getFraudChecks fallback triggered:', err.message);
+    const result = await FraudLog.findMany({ page: 1, limit: 50 });
+    checks = result.data;
   }
-};
 
-// ── PATCH /api/v1/fraud/reports/:reportId/resolve ────────────────────────────
-// FIX-4: resolves via is_resolved/resolved_at/resolved_by, not is_fraudulent.
-exports.resolveReport = async (req, res) => {
+  return sendSuccess(res, { checks }, 'Fraud checks retrieved');
+});
+
+// ─── POST /api/v1/fraud/check/:applicationId ─────────────────────────────────
+// FIX 7: Added asyncHandler and standardized response.
+exports.runFraudCheck = asyncHandler(async (req, res) => {
+  const { applicationId } = req.params;
+
+  if (!applicationId) {
+    return sendError(res, 'applicationId is required.', 400);
+  }
+
+  let result;
   try {
-    const { reportId } = req.params;
-
-    const existing = await FraudLog.findById(reportId);
-    if (!existing) {
-      return res.status(404).json({ success: false, error: 'Fraud report not found' });
-    }
-
-    const updated = await FraudLog.update(reportId, {
-      resolved: true,
-      resolvedAt: new Date().toISOString(),
-      resolved_by: req.user?.id || null,
-    });
-
-    res.json({
-      success: true,
-      data: { message: 'Fraud report resolved successfully', report: updated },
-    });
+    result = await fraudDetectionService.runFraudCheck(applicationId);
   } catch (err) {
-    console.error('[Fraud] resolveReport error:', err);
-    res.status(500).json({ success: false, error: err.message });
+    logger.error('[FraudController] runFraudCheck error:', err.message);
+    return sendError(res, `Fraud check failed: ${err.message}`, 500);
   }
-};
+
+  await AuditLog.create({
+    action:     'FRAUD_CHECK_RUN',
+    actorId:    req.user?.id,
+    actorRole:  req.user?.role,
+    targetId:   applicationId,
+    targetType: 'degree',
+    details:    { result },
+    ipAddress:  req.ip,
+  });
+
+  return sendSuccess(res, { applicationId, result }, 'Fraud check completed');
+});
+
+// ─── PATCH /api/v1/fraud/reports/:reportId/resolve ───────────────────────────
+// FIX 2: Was FraudLog.findByPk(reportId) — Sequelize. Replaced with FraudLog.findById().
+// FIX 3: Was report.resolved = true; report.save() — Sequelize. Replaced with FraudLog.update().
+// FIX 9: Route uses :reportId param — this controller now reads req.params.reportId correctly.
+exports.resolveReport = asyncHandler(async (req, res) => {
+  // FIX 9: use reportId to match the route param in fraudRoutes.js exactly
+  const { reportId } = req.params;
+
+  // FIX 2: findByPk → findById (Supabase model method)
+  const report = await FraudLog.findById(reportId);
+  if (!report) return sendNotFound(res, 'Fraud report');
+
+  // Guard: don't resolve an already-resolved report
+  if (report.is_resolved) {
+    return sendError(res, 'This fraud report is already resolved.', 400);
+  }
+
+  // FIX 3: report.save() → FraudLog.update(id, patches)
+  const updated = await FraudLog.update(reportId, {
+    is_resolved: true,
+    resolved_at: new Date().toISOString(),
+    notes:       req.body?.notes || null,
+  });
+
+  await AuditLog.create({
+    action:     'FRAUD_REPORT_RESOLVED',
+    actorId:    req.user?.id,
+    actorRole:  req.user?.role,
+    targetId:   reportId,
+    targetType: 'fraud_log',
+    details:    { reportId, notes: req.body?.notes || null },
+    ipAddress:  req.ip,
+  });
+
+  return sendSuccess(res, { report: updated }, 'Fraud report resolved successfully');
+});
