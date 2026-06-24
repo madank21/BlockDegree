@@ -36,7 +36,10 @@ export default function BlockchainView() {
         ]);
         setTransactions(txData.transactions || []);
         setNetworkInfo(netData);
-        setTotalDegrees(totalData.total || 0);
+        // FIX: backend (and blockchainApi.totalDegrees()'s own declared
+        // type) return { totalDegrees: N }, not { total: N } — this was
+        // always reading undefined and silently showing 0.
+        setTotalDegrees(totalData.totalDegrees || 0);
       } catch (err: any) {
         setError(err.message || 'Failed to fetch blockchain data');
         console.error(err);
@@ -63,9 +66,13 @@ export default function BlockchainView() {
     );
   }
 
-  // Derive latest block from transactions or fallback
-  const latestBlock = transactions.length > 0
-    ? Math.max(...transactions.map(t => t.blockNumber))
+  // Derive latest block from transactions or fallback.
+  // FIX: pending transactions legitimately have a null block_number (the
+  // DB column is nullable) — filter those out before Math.max, or a single
+  // pending row turns the whole calculation into NaN.
+  const confirmedBlockNumbers = transactions.map(t => t.blockNumber).filter((n): n is number => n != null);
+  const latestBlock = confirmedBlockNumbers.length > 0
+    ? Math.max(...confirmedBlockNumbers)
     : 0;
 
   return (
@@ -180,7 +187,7 @@ export default function BlockchainView() {
                       <p className="text-sm font-medium">Degree Attestation — {tx.degreeId}</p>
                       <p className="text-xs text-gray-500 mt-0.5">Student: {tx.studentRegNo || 'N/A'}</p>
                       <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-500">
-                        <span className="flex items-center gap-1"><Cpu className="w-3 h-3" /> Block #{tx.blockNumber.toLocaleString()}</span>
+                        <span className="flex items-center gap-1"><Cpu className="w-3 h-3" /> Block {tx.blockNumber != null ? `#${tx.blockNumber.toLocaleString()}` : 'Pending'}</span>
                         <span className="flex items-center gap-1"><Fuel className="w-3 h-3" /> Gas: {tx.gasUsed?.toLocaleString() || 'N/A'}</span>
                         <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(tx.timestamp).toLocaleString()}</span>
                       </div>
