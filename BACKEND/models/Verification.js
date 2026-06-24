@@ -1,22 +1,37 @@
 // BACKEND/models/Verification.js
 //
-// FIXES applied (Audit Report §7):
-//   FIX-1: TABLE changed from 'verification_logs' → 'verifications'
-//          (new table per Section 4.2 — see also migration File 7)
-//   FIX-2: create() now maps every field the verificationController passes
-//          (requested_by, requester_email, requester_organization, purpose,
-//           ip_address, user_agent, verification_code, status, expires_at)
-//   FIX-3: findAll() added as alias for findMany() — controller calls findAll()
-//   FIX-4: getStats() added — controller calls Verification.getStats(userId)
-//   FIX-5: findByCode() now queries the correct 'verification_code' column
-//   FIX-6: update() kept and hardened
-//   FIX-7: findMany() supports status + requestedBy filters used by controller
+// FIXES applied (re-verified against the ACTUAL current database schema):
+//   FIX-1 (CRITICAL): TABLE was 'verifications' — that table was never
+//          created. migrations/002_initial_schema.sql instead patched the
+//          EXISTING verification_logs table with verification_code,
+//          status, blockchain_verified, document_verified,
+//          fraud_check_passed, fraud_score, verification_result,
+//          requester_email, requester_organization, requested_by, purpose,
+//          ip_address, user_agent, notes, updated_at, expires_at — a
+//          complete superset of what this model needs. Every single
+//          method here was throwing "relation verifications does not
+//          exist". Changed TABLE to 'verification_logs'.
+//   FIX-2: verification_logs has no created_at column (only verified_at,
+//          which IS NOT NULL DEFAULT NOW() — set automatically on every
+//          insert, so it works as the creation timestamp). findMany(),
+//          getStats(), and getRecentByIp() all referenced the
+//          non-existent created_at; switched to verified_at.
+//   FIX-3: verification_logs.result is NOT NULL with no default (legacy
+//          column from the old hash-check-log workflow: 'valid'/'invalid'/
+//          'revoked'). create() never sets it, because the new
+//          request-lifecycle workflow doesn't know the result yet at
+//          creation time (status starts 'pending'). Paired with migration
+//          003_patches.sql, which drops the NOT NULL constraint on result
+//          — it's simply unused by the new workflow and stays NULL.
+//   (FIX numbering for findAll/getStats/findByCode/update kept from the
+//    previous pass — those were already correct once the table existed.)
 
 const { getSupabaseAdmin } = require('../database/supabase');
 const crypto = require('crypto');
 
-// FIX-1: new table name per Section 4.2 schema
-const TABLE = 'verifications';
+// FIX-1: this is the table that actually exists (patched in migration 002),
+// not 'verifications'.
+const TABLE = 'verification_logs';
 
 /**
  * Generates a unique 12-character verification code.
@@ -36,7 +51,6 @@ function generateVerificationCode() {
 const Verification = {
 
   // ── Create ──────────────────────────────────────────────────────────────────
-  // FIX-2: maps all fields that verificationController.js passes
   async create(data) {
     const supabase = getSupabaseAdmin();
 
@@ -61,8 +75,14 @@ const Verification = {
         ip_address:                data.ip_address              || null,
         user_agent:                data.user_agent              || null,
         expires_at:                expiresAt,
-        verified_at:               data.verified_at             || null,
+        // FIX-3: `result` (legacy, NOT NULL) deliberately left unset —
+        // migration 003_patches.sql drops its NOT NULL constraint. The new
+        // request-lifecycle workflow uses `status` instead.
         notes:                     data.notes                   || null,
+        // verified_at intentionally NOT set here — it defaults to NOW() at
+        // the DB level and doubles as this row's creation timestamp
+        // (FIX-2). It gets overwritten with the real completion time later
+        // via update({ verified_at, status: 'verified'|'rejected' }).
       })
       .select('*')
       .single();
@@ -74,7 +94,6 @@ const Verification = {
   },
 
   // ── findMany (core paginated query) ────────────────────────────────────────
-  // FIX-7: supports status + requestedBy filters
   async findMany({ page = 1, limit = 20, status, requestedBy } = {}) {
     const supabase = getSupabaseAdmin();
     const offset   = (parseInt(page) - 1) * parseInt(limit);
@@ -86,8 +105,10 @@ const Verification = {
     if (status)      query = query.eq('status',       status);
     if (requestedBy) query = query.eq('requested_by', requestedBy);
 
+    // FIX-2: order by verified_at (exists, NOT NULL) — created_at does not
+    // exist on verification_logs.
     const { data, count, error } = await query
-      .order('created_at', { ascending: false })
+      .order('verified_at', { ascending: false })
       .range(offset, offset + parseInt(limit) - 1);
 
     if (error) throw new Error(`Verification.findMany failed: ${error.message}`);
@@ -100,7 +121,7 @@ const Verification = {
     };
   },
 
-  // ── FIX-3: findAll() — alias used by verificationController.getAllVerifications
+  // ── findAll() — alias used by verificationController.getAllVerifications ────
   async findAll(opts) {
     return this.findMany(opts);
   },
@@ -118,7 +139,7 @@ const Verification = {
     return data;
   },
 
-  // ── FIX-5: findByCode() — queries 'verification_code' column (correct column name)
+  // ── findByCode() — queries the 'verification_code' column ──────────────────
   async findByCode(code) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
@@ -134,7 +155,7 @@ const Verification = {
     return data || null;
   },
 
-  // ── FIX-6: update() ─────────────────────────────────────────────────────────
+  // ── update() ─────────────────────────────────────────────────────────────────
   async update(id, updates) {
     const supabase = getSupabaseAdmin();
 
@@ -152,13 +173,14 @@ const Verification = {
     return data;
   },
 
-  // ── FIX-4: getStats() ───────────────────────────────────────────────────────
+  // ── getStats() ────────────────────────────────────────────────────────────────
   // Called by verificationController.getVerificationStats(userId)
   async getStats(userId = null) {
     const supabase = getSupabaseAdmin();
     const today    = new Date().toISOString().split('T')[0];
 
-    let query = supabase.from(TABLE).select('status, blockchain_verified, created_at');
+    // FIX-2: select verified_at, not the non-existent created_at.
+    let query = supabase.from(TABLE).select('status, blockchain_verified, verified_at');
     if (userId) query = query.eq('requested_by', userId);
 
     const { data, error } = await query;
@@ -168,7 +190,7 @@ const Verification = {
 
     return {
       total:              rows.length,
-      today:              rows.filter(r => r.created_at?.startsWith(today)).length,
+      today:              rows.filter(r => r.verified_at?.startsWith(today)).length,
       pending:            rows.filter(r => r.status === 'pending').length,
       verified:           rows.filter(r => r.status === 'verified').length,
       rejected:           rows.filter(r => r.status === 'rejected').length,
@@ -181,29 +203,29 @@ const Verification = {
     };
   },
 
-  // ── findByDegree (utility) ──────────────────────────────────────────────────
+  // ── findByDegree (utility) ────────────────────────────────────────────────────
   async findByDegree(degreeId) {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from(TABLE)
       .select('*')
       .eq('degree_id', degreeId)
-      .order('created_at', { ascending: false });
+      .order('verified_at', { ascending: false }); // FIX-2
 
     if (error) return [];
     return data || [];
   },
 
-  // ── getRecentByIp (anomaly detection) ──────────────────────────────────────
+  // ── getRecentByIp (anomaly detection) ────────────────────────────────────────
   async getRecentByIp(ipAddress, withinMinutes = 60) {
     const supabase = getSupabaseAdmin();
     const since = new Date(Date.now() - withinMinutes * 60000).toISOString();
 
     const { data, error } = await supabase
       .from(TABLE)
-      .select('id, verification_code, status, created_at')
+      .select('id, verification_code, status, verified_at')
       .eq('ip_address', ipAddress)
-      .gte('created_at', since);
+      .gte('verified_at', since); // FIX-2
 
     if (error) return [];
     return data || [];
