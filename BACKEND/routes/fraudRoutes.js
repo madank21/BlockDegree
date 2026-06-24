@@ -21,6 +21,6 @@ router.get('/checks', fraudController.getFraudChecks);
 router.post('/check/:applicationId', fraudController.runFraudCheck);
 
 // Resolve a fraud report
-router.patch('/reports/:reportId/resolve', fraudController.resolveReport);
+router.patch('/reports/:id/resolve', fraudController.resolveReport);
 
 module.exports = router;

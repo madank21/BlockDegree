@@ -76,7 +76,7 @@ const getTransaction = asyncHandler(async (req, res) => {
 // ── GET /api/v1/blockchain/total ─────────────────────────────────────────────
 const getTotalDegreesOnChain = asyncHandler(async (req, res) => {
   const total = await blockchainService.getTotalDegreesIssued();
-  return sendSuccess(res, { totalDegrees: total }, 'Total degrees retrieved');
+  return res.status(200).json({ total: total });
 });
 
 // ── GET /api/v1/blockchain/transactions ─────────────────────────────────────
