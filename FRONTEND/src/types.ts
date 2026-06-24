@@ -44,6 +44,7 @@ export interface User {
   email:              string;
   role:               UserRole;
   verificationStatus: VerificationStatus;
+  passwordHash?:      string;
 
   // Student-specific
   registrationNumber?: string;

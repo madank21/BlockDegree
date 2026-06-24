@@ -530,7 +530,7 @@ export const store = {
       fraudScore: 100,
     };
     state = { ...state, degreeApplications: [...state.degreeApplications, newApp] };
-    store.addAuditLog('Degree Issued', app.studentId, app.studentName, `Issued ${app.degreeTitle}`, 'degree');
+    store.addAuditLog('Degree Issued', app.studentId || '', app.studentName, `Issued ${app.degreeTitle}`, 'degree');
     notify();
     return newApp;
   },
@@ -681,7 +681,7 @@ export const store = {
     console.warn('Export is disabled. Data is available via backend APIs.');
   },
 
-  importData(file: File) {
+  importData(_file: File) {
     console.warn('Import is disabled. Data is managed via backend APIs.');
     return null;
   },
@@ -698,7 +698,7 @@ export const store = {
     return null;
   },
 
-  clearOldDocuments(daysOld: number = 90) {
+  clearOldDocuments(_daysOld: number = 90) {
     console.warn('Clear old local documents is disabled.');
     return 0;
   },
