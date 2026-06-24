@@ -26,7 +26,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "ignoreDeprecations": "6.0" // To silence the 'baseUrl' deprecation warning
+    "ignoreDeprecations": "5.0" // To silence the 'baseUrl' deprecation warning
   },
   "include": ["src", "vite.config.ts"]
 }
