@@ -10,17 +10,20 @@ interface Props {
 
 export default function EmployerDashboard({ onNavigate }: Props) {
   const { currentUser, verificationRequests } = useStore();
+  const [showQRScanner, setShowQRScanner] = useState(false);
+
+  const handleQRScanned = (result: string) => {
+    setShowQRScanner(false);
+    // Parse QR data and extract degree ID
+    console.log('QR Code scanned:', result);
+    if (result.startsWith('http')) {
+      window.open(result, '_blank');
+    } else {
+      alert(`Scanned Code: ${result}`);
+    }
+  };
 
   if (!currentUser) return null;
-    const [showQRScanner, setShowQRScanner] = useState(false);
-    const [scannedQR, setScannedQR] = useState<string | null>(null);
-
-    const handleQRScanned = (result: string) => {
-      setScannedQR(result);
-      setShowQRScanner(false);
-      // Parse QR data and extract degree ID
-      console.log('QR Code scanned:', result);
-    };
 
   return (
     <div className="space-y-6">
@@ -75,7 +78,6 @@ export default function EmployerDashboard({ onNavigate }: Props) {
           whileHover={{ scale: 1.02 }}
           className="bg-gray-900/50 border border-gray-800 hover:border-purple-500/30 rounded-xl p-8 text-center group transition"
           onClick={() => {
-              onNavigate('verify');
               setShowQRScanner(true);
             }}
         >
@@ -96,7 +98,7 @@ export default function EmployerDashboard({ onNavigate }: Props) {
               <div key={v.id} className="flex items-center justify-between bg-gray-800/30 rounded-lg p-4">
                 <div>
                   <p className="text-sm font-medium">Degree: {v.degreeId}</p>
-                  <p className="text-xs text-gray-500">{new Date(v.verifiedAt).toLocaleString()}</p>
+                  <p className="text-xs text-gray-500">{new Date(v.verifiedAt || v.verified_at || '').toLocaleString()}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   {v.blockchainVerified && (
@@ -115,6 +117,12 @@ export default function EmployerDashboard({ onNavigate }: Props) {
           </div>
         )}
       </div>
+      {showQRScanner && (
+        <QRScanner
+          onScan={handleQRScanned}
+          onClose={() => setShowQRScanner(false)}
+        />
+      )}
     </div>
   );
 }

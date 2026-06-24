@@ -288,7 +288,7 @@ export default function DocumentUpload() {
         }
 
         setUploadedImages(prev => {
-          const newState = { ...prev, [backendDocId]: imageData };
+          const newState: any = { ...prev, [backendDocId]: imageData };
           delete newState[tempId];
           return newState;
         });

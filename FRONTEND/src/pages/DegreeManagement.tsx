@@ -81,7 +81,7 @@ export default function DegreeManagement() {
     try {
       setLoading(true);
       const data = await degreesApi.list({ limit: 200 });
-      const raw  = data.degrees || data.data || [];
+      const raw  = data.data || [];
       setDegrees(raw.map(normaliseDegree));
       setError(null);
     } catch (err: any) {

@@ -70,7 +70,7 @@ export default function DataManagement() {
       ]);
 
       if (statsData.status === 'fulfilled' && statsData.value) {
-        const s = statsData.value;
+        const s = statsData.value as any;
         setStats({
           total:     s.storage?.total    ?? s.total     ?? 100 * 1024 * 1024,
           used:      s.storage?.used     ?? s.used      ?? 0,
@@ -116,7 +116,7 @@ export default function DataManagement() {
   const handleBackup = async () => {
     setLoading(true);
     try {
-      const result = await adminApi.createBackup();
+      const result = await adminApi.backup();
       setBackupInfo({
         lastBackup: result.timestamp ?? new Date().toISOString(),
         backupId:   result.backupId,
@@ -134,7 +134,7 @@ export default function DataManagement() {
     if (!confirm('Restoring will overwrite current data from the last backup. Are you sure?')) return;
     setLoading(true);
     try {
-      const result = await adminApi.restoreBackup();
+      const result = await adminApi.restore();
       showMsg('success', result.message ?? 'Restore acknowledged by server.');
       await loadAll();
     } catch (err: any) {
