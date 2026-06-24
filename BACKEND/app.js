@@ -8,7 +8,12 @@
  *  3. Removed duplicate /uploads static route.
  */
 
+const path        = require('path');
 require('dotenv').config();
+
+// Add the tensorflow.dll directory to process.env.PATH so Windows can load the native addon successfully.
+const tfjsNodeLibPath = path.join(__dirname, 'node_modules', '@tensorflow', 'tfjs-node', 'deps', 'lib');
+process.env.PATH = `${tfjsNodeLibPath};${process.env.PATH}`;
 
 const express     = require('express');
 const cors        = require('cors');
@@ -17,7 +22,6 @@ const morgan      = require('morgan');
 const compression = require('compression');
 const rateLimit   = require('express-rate-limit');
 const hpp         = require('hpp');
-const path        = require('path');
 
 const { logger }                   = require('./src/utils/logger');
 const { errorHandler, notFound }   = require('./middleware/errorMiddleware');
