@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Loader2 } from 'lucide-react';
-import api from '@/api/api';
+import { auditApi } from '../api/api';
 
 interface AuditLog {
   id: string;
@@ -22,8 +22,8 @@ export default function AuditLogs() {
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      const data = await api.request<{ logs: AuditLog[] }>('/audit-logs');
-      setLogs(data.logs || []);
+      const res = await auditApi.list();
+      setLogs(res.data || []);
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to load audit logs');

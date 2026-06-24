@@ -34,12 +34,10 @@ export default function BlockchainView() {
           blockchainApi.network(),
           blockchainApi.totalDegrees(),
         ]);
-        setTransactions(txData.transactions || []);
+        setTransactions(txData.data || []);
         setNetworkInfo(netData);
-        // FIX: backend (and blockchainApi.totalDegrees()'s own declared
-        // type) return { totalDegrees: N }, not { total: N } — this was
-        // always reading undefined and silently showing 0.
-        setTotalDegrees(totalData.totalDegrees || 0);
+        // FIX: aligned to read total directly from backend response
+        setTotalDegrees(totalData.total || 0);
       } catch (err: any) {
         setError(err.message || 'Failed to fetch blockchain data');
         console.error(err);

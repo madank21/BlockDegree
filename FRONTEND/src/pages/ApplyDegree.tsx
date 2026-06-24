@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../useStore';
-import { GraduationCap, AlertCircle, CheckCircle2, Lock } from 'lucide-react';
+import { GraduationCap, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { degreesApi } from '../api/api';
 
 interface Props {
@@ -69,7 +69,7 @@ export default function ApplyDegree({ onNavigate }: Props) {
       // After the API response unwrapping (Phase 3), result contains the degree data
       // The backend returns: { degree: { id, degreeHash, ... } } but after unwrap we get the inner data
       // We'll handle both cases
-      const degreeData = result?.degree || result;
+      const degreeData = result;
       setDegreeHash(degreeData?.degreeHash || null);
       setQrCodeUrl(degreeData?.qrCodeUrl || null); // if backend adds this later
       setSuccess(true);

@@ -53,7 +53,7 @@ export default function AdminDashboard({ onNavigate }: Props) {
       // 1. Students list
       try {
         const usersRes = await usersApi.list({ role: 'student', limit: 100 });
-        setStudents(usersRes.users || []);
+        setStudents(usersRes.data || []);
       } catch (err: any) {
         console.error('Students fetch error:', err);
         setError(
@@ -66,7 +66,7 @@ export default function AdminDashboard({ onNavigate }: Props) {
       // 2. Degrees list
       try {
         const degreesRes = await degreesApi.list({ limit: 100 });
-        const degrees    = degreesRes.degrees || [];
+        const degrees    = degreesRes.data || [];
         setDegreeApps(degrees);
         setIssuedDegreesCount(degrees.filter((d: any) => d.status === 'issued').length);
       } catch (err: any) {
@@ -79,10 +79,10 @@ export default function AdminDashboard({ onNavigate }: Props) {
       }
 
       // 3. Blockchain total
-      // [FIX 1] Backend returns { totalDegrees: N } not { total: N }
+      // [FIX 1] Backend returns { total: N }
       try {
         const bcRes = await blockchainApi.totalDegrees();
-        setTotalAttestations(bcRes.totalDegrees ?? 0);
+        setTotalAttestations(bcRes.total ?? 0);
       } catch (err: any) {
         console.warn('Blockchain total fetch failed:', err);
         setBlockchainError(
@@ -104,7 +104,7 @@ export default function AdminDashboard({ onNavigate }: Props) {
       // [FIX 4] Recent audit log activity
       try {
         const auditRes = await auditApi.list({ limit: 5 });
-        setRecentActivity(auditRes.logs || []);
+        setRecentActivity(auditRes.data || []);
       } catch (err) {
         console.warn('Audit log fetch failed:', err);
         // Non-critical — keep []
