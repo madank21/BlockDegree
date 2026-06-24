@@ -51,9 +51,10 @@ export default function VerifyDegree() {
         try {
           const degreeData = await degreesApi.publicLookup(q);
           const degree = degreeData.degree;
-          if (degree?.blockchainHash) {
+          const hash = degree?.blockchainTxHash || degree?.blockchain_tx_hash || degree?.blockchainHash;
+          if (hash) {
             // Verify the hash on-chain
-            const verifyData = await verificationApi.verifyPublic(degree.blockchainHash);
+            const verifyData = await verificationApi.verifyPublic(hash);
             res = {
               valid: verifyData.valid,
               status: verifyData.valid ? 'issued' : 'invalid',
@@ -65,7 +66,7 @@ export default function VerifyDegree() {
               department: degree.department || degree.field_of_study,
               cgpa: degree.cgpa || degree.gpa,
               graduationYear: degree.graduationYear || degree.graduation_date,
-              blockchainHash: degree.blockchainHash || degree.blockchain_tx_hash,
+              blockchainHash: degree.blockchainTxHash || degree.blockchain_tx_hash || degree.blockchainHash,
               fraudScore: degree.fraudScore || 0,
               qrCodeData: degree.qrCodeData || degree.qr_code_url,
             };

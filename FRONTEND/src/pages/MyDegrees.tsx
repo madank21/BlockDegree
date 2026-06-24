@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../useStore';
-import { QRCodeSVG } from 'qrcode.react';
 import {
-  GraduationCap, Printer, CheckCircle2, Link2,
+  GraduationCap, Printer, Link2,
   X, Eye
 } from 'lucide-react';
 import DegreeCertificate from '../components/DegreeCertificate';
@@ -22,8 +21,8 @@ export default function MyDegrees() {
     const fetchDegrees = async () => {
       try {
         const data = await degreesApi.list();
-        // data.degrees is the array
-        setDegrees(data.degrees || []);
+        // data.data is the array
+        setDegrees(data.data || []);
       } catch (err) {
         console.error('Failed to fetch degrees:', err);
         setDegrees([]);
@@ -36,9 +35,8 @@ export default function MyDegrees() {
 
   if (!currentUser) return null;
 
-  // Filter degrees: only current user's degrees, then by search and status
+  // Filter degrees: search and status (backend already constrains scoping to current user)
   const myDegrees = degrees
-    .filter(d => d.studentId === currentUser.id) // or maybe d.studentId === currentUser.id
     .filter(d =>
       d.degreeTitle?.toLowerCase().includes(search.toLowerCase()) ||
       d.department?.toLowerCase().includes(search.toLowerCase())
@@ -81,7 +79,7 @@ export default function MyDegrees() {
   const totalDegrees = myDegrees.length;
   const issuedCount = myDegrees.filter(d => d.status === 'issued').length;
   const pendingCount = myDegrees.filter(d => d.status === 'pending').length;
-  const verifiedCount = myDegrees.filter(d => d.blockchainHash).length;
+  const verifiedCount = myDegrees.filter(d => d.blockchainHash || d.blockchainTxHash || d.blockchain_tx_hash).length;
 
   // Loading state
   if (loading) {
@@ -200,10 +198,10 @@ export default function MyDegrees() {
                 <div><span className="text-gray-500">Fraud Score:</span> <span className={deg.fraudScore >= 71 ? 'text-green-400' : deg.fraudScore >= 41 ? 'text-yellow-400' : 'text-red-400'}>{deg.fraudScore}/100</span></div>
               </div>
 
-              {deg.blockchainHash && (
+              {(deg.blockchainHash || deg.blockchainTxHash || deg.blockchain_tx_hash) && (
                 <div className="mt-3 flex items-center gap-2 bg-gray-800/30 rounded-lg px-3 py-2">
                   <Link2 className="w-4 h-4 text-blue-400 shrink-0" />
-                  <span className="text-xs text-gray-400 truncate font-mono">{deg.blockchainHash}</span>
+                  <span className="text-xs text-gray-400 truncate font-mono">{deg.blockchainHash || deg.blockchainTxHash || deg.blockchain_tx_hash}</span>
                 </div>
               )}
 
@@ -287,7 +285,7 @@ export default function MyDegrees() {
                   <div>
                     <span className="text-gray-400">Blockchain Hash:</span>
                     <p className="font-mono text-xs break-all text-white">
-                      {activeDegree.blockchainHash || 'Not yet recorded'}
+                      {activeDegree.blockchainHash || activeDegree.blockchainTxHash || activeDegree.blockchain_tx_hash || 'Not yet recorded'}
                     </p>
                   </div>
                 </div>

@@ -201,7 +201,7 @@ export default function StudentDashboard({ onNavigate }: Props) {
               <div key={deg.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-800/30 rounded-lg p-4">
                 <div>
                   <p className="font-medium">{deg.degreeTitle}</p>
-                  <p className="text-sm text-gray-400">{deg.degreeId || 'ID Pending'} • Applied {new Date(deg.appliedAt).toLocaleDateString()}</p>
+                  <p className="text-sm text-gray-400">{deg.degreeId || 'ID Pending'} • Applied {deg.appliedAt ? new Date(deg.appliedAt).toLocaleDateString() : 'N/A'}</p>
                 </div>
                 <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border ${
                   deg.status === 'issued' ? 'text-green-400 bg-green-400/10 border-green-400/20' :
