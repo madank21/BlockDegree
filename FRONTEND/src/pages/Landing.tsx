@@ -346,7 +346,7 @@ export default function Landing({ onNavigate }: LandingProps) {
             <p className="text-sm text-gray-500">© 2026 BlockDegree — AI-Enhanced Blockchain Degree Attestation System</p>
             <div className="flex gap-6 text-sm text-gray-500">
               <span>Iqra University</span>
-              <span>CCP Project</span>
+              <span>Designed ⚙️ Managed by Madan</span>
             </div>
           </div>
         </div>
