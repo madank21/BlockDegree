@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { getSupabaseAdmin } = require("../database/supabase");
+const { sanitizeSearchInput } = require("../src/utils/searchSanitizer");
 
 const TABLE = "degrees";
 
@@ -211,12 +212,15 @@ const Degree = {
     if (status) query = query.eq("status", status);
 
     if (search) {
-      query = query.or(
-        `student_name.ilike.%${search}%,` +
-        `student_id.ilike.%${search}%,` +
-        `degree_title.ilike.%${search}%,` +
-        `field_of_study.ilike.%${search}%`
-      );
+      const safe = sanitizeSearchInput(search);
+      if (safe) {
+        query = query.or(
+          `student_name.ilike.%${safe}%,` +
+          `student_id.ilike.%${safe}%,` +
+          `degree_title.ilike.%${safe}%,` +
+          `field_of_study.ilike.%${safe}%`
+        );
+      }
     }
 
     const { data, count, error } = await query
@@ -268,6 +272,12 @@ const Degree = {
       gpa: "gpa",
       honors: "honors",
       metadata: "metadata",
+      institutionId: "institution_id",
+      institution_id: "institution_id",
+      institutionName: "institution_name",
+      institution_name: "institution_name",
+      issuedBy: "issued_by",
+      issued_by: "issued_by",
     };
 
     for (const [key, col] of Object.entries(map)) {
