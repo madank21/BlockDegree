@@ -78,18 +78,23 @@ export default function DegreeManagement() {
 
   // ── Fetch degrees ───────────────────────────────────────────────────────────
   const fetchDegrees = async () => {
-    try {
-      setLoading(true);
-      const data = await degreesApi.list({ limit: 200 });
-      const raw  = data.data || [];
-      setDegrees(raw.map(normaliseDegree));
-      setError(null);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load degrees');
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    // Use a safer limit and include page to satisfy pagination requirements
+    const data = await degreesApi.list({ page: 1, limit: 100 });
+    const raw  = data.data || [];
+    setDegrees(raw.map(normaliseDegree));
+    setError(null);
+  } catch (err: any) {
+    // Log the full error response for debugging
+    console.error('Failed to fetch degrees:', err);
+    // If the error has a response body, show it
+    const detail = err.response?.data?.message || err.message || 'Failed to load degrees';
+    setError(detail);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => { fetchDegrees(); }, []);
 
