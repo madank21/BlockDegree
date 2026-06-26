@@ -6,7 +6,7 @@ import { auditApi } from '../api/api';
 interface AuditLog {
   id: string;
   action: string;
-  details: string;
+  details: any; // can be string or object
   category: string;
   userName: string;
   timestamp: string;
@@ -19,14 +19,29 @@ export default function AuditLogs() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
 
+  // Helper to safely convert details to a string
+  const getDetailsDisplay = (details: any): string => {
+    if (typeof details === 'string') return details;
+    if (typeof details === 'object' && details !== null) {
+      // Prefer a 'message' property if present
+      if (details.message) return details.message;
+      // Otherwise stringify the object
+      return JSON.stringify(details);
+    }
+    return String(details);
+  };
+
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      const res = await auditApi.list();
+      // Add pagination parameters to avoid 422
+      const res = await auditApi.list({ page: 1, limit: 100 });
       setLogs(res.data || []);
       setError(null);
     } catch (err: any) {
-      setError(err.message || 'Failed to load audit logs');
+      console.error('Failed to fetch audit logs:', err);
+      const detail = err.response?.data?.message || err.message || 'Failed to load audit logs';
+      setError(detail);
     } finally {
       setLoading(false);
     }
@@ -48,7 +63,13 @@ export default function AuditLogs() {
 
   const filtered = [...logs].reverse().filter(log => {
     if (filter !== 'all' && log.category !== filter) return false;
-    if (search && !log.action.toLowerCase().includes(search.toLowerCase()) && !log.details.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search) {
+      const searchLower = search.toLowerCase();
+      const actionMatch = log.action?.toLowerCase().includes(searchLower);
+      const detailsStr = getDetailsDisplay(log.details).toLowerCase();
+      const detailsMatch = detailsStr.includes(searchLower);
+      if (!actionMatch && !detailsMatch) return false;
+    }
     return true;
   });
 
@@ -125,7 +146,8 @@ export default function AuditLogs() {
                     {log.category}
                   </span>
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5 truncate">{log.details}</p>
+                {/* Use helper to render details safely */}
+                <p className="text-xs text-gray-400 mt-0.5 truncate">{getDetailsDisplay(log.details)}</p>
                 <p className="text-[10px] text-gray-600 mt-0.5">{log.userName} • {new Date(log.timestamp).toLocaleString()}</p>
               </div>
             </motion.div>
