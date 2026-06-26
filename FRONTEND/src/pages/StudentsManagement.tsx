@@ -41,7 +41,7 @@ import { motion } from 'framer-motion';
 import {
   Search, Eye, UserCheck, UserX, FileText, RefreshCw
 } from 'lucide-react';
-import { usersApi } from '@/api/api';
+import { usersApi } from '../api/api';
 
 interface Student {
   id: string;
@@ -82,18 +82,19 @@ export default function StudentsManagement() {
 
   // FIX 1: use usersApi.list() — typed, uses correct endpoint, unwraps envelope
   const fetchStudents = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const result = await usersApi.list({ role: 'student', limit: 200 });
-      // usersApi.list returns { users, total } after envelope unwrap
-      setStudents((result as any).users || result as any || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load students');
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    setError(null);
+    const result = await usersApi.list({ role: 'student', limit: 200 });
+    // Use result.data (same as AdminDashboard does)
+    const users = Array.isArray(result) ? result : (result.data || []);
+    setStudents(users);
+  } catch (err: any) {
+    setError(err.message || 'Failed to load students');
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => { fetchStudents(); }, []);
 
