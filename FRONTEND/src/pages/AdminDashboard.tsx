@@ -8,6 +8,8 @@
 //   [4] Added auditApi.list() call to populate Recent Activity section
 //   [5] Removed @/ path alias → relative import ../api/api  (vite alias may not be configured)
 //   [6] Each async fetch is independently try/caught so one failure doesn't blank the whole dashboard
+//   [7] Added applicationsApi integration for pending degree applications
+//       → displays pending applications with "Approve & Issue" button
 //
 
 import { motion }    from 'framer-motion';
@@ -16,7 +18,7 @@ import {
   Users, GraduationCap, AlertTriangle, Link2, ClipboardList,
   CheckCircle2, Clock, Activity, FileText, Database,
 } from 'lucide-react';
-import { usersApi, degreesApi, blockchainApi, fraudApi, auditApi, adminApi } from '../api/api';
+import { usersApi, degreesApi, blockchainApi, fraudApi, auditApi, adminApi, applicationsApi } from '../api/api';
 
 interface Props {
   onNavigate: (page: string) => void;
@@ -30,6 +32,7 @@ export default function AdminDashboard({ onNavigate }: Props) {
   const [fraudAlerts,        setFraudAlerts]        = useState(0);
   const [recentActivity,     setRecentActivity]     = useState<any[]>([]);
   const [adminStats,         setAdminStats]         = useState<any>(null);
+  const [pendingApplications, setPendingApplications] = useState<any[]>([]);  // NEW
 
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState<string | null>(null);
@@ -41,7 +44,18 @@ export default function AdminDashboard({ onNavigate }: Props) {
   const pendingStudents  = students.filter(
     s => s.verificationStatus && s.verificationStatus !== 'approved' && s.verificationStatus !== 'rejected'
   );
+  // Keep existing pendingDegrees for backward compatibility (if any), but we'll show applications instead
   const pendingDegrees   = degreeApps.filter(d => d.status === 'pending' || d.status === 'approved');
+
+  // Refresh pending applications
+  const fetchPendingApplications = async () => {
+    try {
+      const res = await applicationsApi.list({ status: 'pending' });
+      setPendingApplications(res.data || []);
+    } catch (err) {
+      console.warn('Failed to fetch pending applications:', err);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -119,11 +133,31 @@ export default function AdminDashboard({ onNavigate }: Props) {
         // Non-critical
       }
 
+      // [FIX 7] Fetch pending applications
+      await fetchPendingApplications();
+
       setLoading(false);
     };
 
     fetchData();
   }, []);
+
+  // Handler for approving an application
+  const handleApproveApplication = async (applicationId: string) => {
+    try {
+      await applicationsApi.updateStatus(applicationId, 'approved');
+      // Refresh the list
+      await fetchPendingApplications();
+      // Optionally also refresh degree counts if needed
+      const degreesRes = await degreesApi.list({ limit: 100 });
+      const degrees = degreesRes.data || [];
+      setDegreeApps(degrees);
+      setIssuedDegreesCount(degrees.filter((d: any) => d.status === 'issued').length);
+    } catch (err) {
+      console.error('Failed to approve application:', err);
+      alert('Failed to approve application. Please try again.');
+    }
+  };
 
   const stats = [
     {
@@ -149,7 +183,7 @@ export default function AdminDashboard({ onNavigate }: Props) {
     },
     {
       label:    'Pending Apps',
-      value:    loading ? '…' : pendingDegrees.length,
+      value:    loading ? '…' : pendingApplications.length,  // Updated
       icon:     Clock,
       gradient: 'from-yellow-600 to-orange-600',
       color:    'text-yellow-400',
@@ -305,11 +339,11 @@ export default function AdminDashboard({ onNavigate }: Props) {
           )}
         </div>
 
-        {/* Pending Degrees */}
+        {/* Pending Degree Applications (NEW) */}
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold flex items-center gap-2">
-              <GraduationCap className="w-5 h-5 text-purple-400" /> Pending Degrees
+              <GraduationCap className="w-5 h-5 text-purple-400" /> Pending Applications
             </h3>
             <button
               onClick={() => onNavigate('degree-management')}
@@ -331,23 +365,27 @@ export default function AdminDashboard({ onNavigate }: Props) {
             </div>
           ) : loading ? (
             <p className="text-sm text-gray-500 text-center py-6">Loading…</p>
-          ) : pendingDegrees.length === 0 ? (
+          ) : pendingApplications.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-6">No pending degree applications</p>
           ) : (
             <div className="space-y-3">
-              {pendingDegrees.slice(0, 4).map(d => (
-                <div key={d.id} className="flex items-center justify-between bg-gray-800/30 rounded-lg p-3">
+              {pendingApplications.slice(0, 4).map(app => (
+                <div key={app.id} className="flex items-center justify-between bg-gray-800/30 rounded-lg p-3">
                   <div>
-                    <p className="text-sm font-medium">{d.studentName}</p>
-                    <p className="text-xs text-gray-500">{d.degreeTitle}</p>
+                    <p className="text-sm font-medium">{app.student?.full_name || 'Student'}</p>
+                    <p className="text-xs text-gray-500">{app.degree_title}</p>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded border capitalize ${
-                    d.status === 'approved'
-                      ? 'bg-blue-400/10 text-blue-400 border-blue-400/20'
-                      : 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20'
-                  }`}>
-                    {d.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs px-2 py-1 rounded bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 capitalize">
+                      pending
+                    </span>
+                    <button
+                      onClick={() => handleApproveApplication(app.id)}
+                      className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-white transition"
+                    >
+                      Approve & Issue
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

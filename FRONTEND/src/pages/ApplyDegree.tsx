@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../useStore';
 import { GraduationCap, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { degreesApi } from '../api/api';
+import { applicationsApi } from '../api/api'; // ← changed import
 
 interface Props {
   onNavigate: (page: string) => void;
@@ -13,8 +13,7 @@ export default function ApplyDegree({ onNavigate }: Props) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [degreeHash, setDegreeHash] = useState<string | null>(null);
-  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  // Removed degreeHash and qrCodeUrl states – not needed for applications
 
   // Form fields that match the backend's degree creation schema
   const [form, setForm] = useState({
@@ -35,7 +34,7 @@ export default function ApplyDegree({ onNavigate }: Props) {
   }
 
   // Only approved students can apply
-const isApproved = currentUser?.isActive === true;
+  const isApproved = currentUser?.isActive === true;
 
   // Example list of fields of study – you can customize
   const fieldsOfStudy = [
@@ -65,13 +64,9 @@ const isApproved = currentUser?.isActive === true;
     };
 
     try {
-      const result = await degreesApi.issue(payload);
-      // After the API response unwrapping (Phase 3), result contains the degree data
-      // The backend returns: { degree: { id, degreeHash, ... } } but after unwrap we get the inner data
-      // We'll handle both cases
-      const degreeData = result;
-      setDegreeHash(degreeData?.degreeHash || null);
-      setQrCodeUrl(degreeData?.qrCodeUrl || null); // if backend adds this later
+      // 🔁 REPLACED: use applicationsApi.create instead of degreesApi.issue
+      const result = await applicationsApi.create(payload);
+      // result contains { applicationId, status }
       setSuccess(true);
     } catch (err: any) {
       console.error('Degree application error:', err);
@@ -114,31 +109,23 @@ const isApproved = currentUser?.isActive === true;
         ) : (
           <>
             {success ? (
+              // ✅ UPDATED success message
               <div className="bg-green-50 border border-green-200 rounded-lg p-6 space-y-4">
                 <div className="flex items-center gap-3">
                   <CheckCircle2 className="h-6 w-6 text-green-600" />
-                  <h3 className="text-lg font-semibold text-green-800">Degree Application Submitted!</h3>
+                  <h3 className="text-lg font-semibold text-green-800">
+                    Application Submitted! 🎉
+                  </h3>
                 </div>
                 <p className="text-green-700">
-                  Your degree has been issued and recorded on the blockchain.
+                  Your degree application has been sent for review.
+                  You will be notified once it's approved.
                 </p>
-                {degreeHash && (
-                  <div className="bg-white rounded p-3 border border-green-200">
-                    <p className="text-sm font-medium text-gray-700">Transaction Hash</p>
-                    <p className="text-xs text-gray-600 break-all font-mono">{degreeHash}</p>
-                  </div>
-                )}
-                {qrCodeUrl && (
-                  <div className="mt-4">
-                    <p className="text-sm font-medium text-gray-700">QR Code</p>
-                    <img src={qrCodeUrl} alt="Degree QR Code" className="w-32 h-32 border rounded" />
-                  </div>
-                )}
                 <button
-                  onClick={() => onNavigate('my-degrees')}
+                  onClick={() => onNavigate('dashboard')}
                   className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
                 >
-                  View My Degrees
+                  Return to Dashboard
                 </button>
               </div>
             ) : (
@@ -161,20 +148,20 @@ const isApproved = currentUser?.isActive === true;
                       value={form.degreeTitle}
                       onChange={handleChange}
                       placeholder="e.g., Bachelor of Science in Computer Science"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 text-black border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder-gray-400"
                       required
                     />
                   </div>
 
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium text-black mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Field of Study *
                     </label>
                     <select
                       name="fieldOfStudy"
                       value={form.fieldOfStudy}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       required
                     >
                       <option value="">Select field</option>
@@ -195,7 +182,7 @@ const isApproved = currentUser?.isActive === true;
                       name="graduationDate"
                       value={form.graduationDate}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       required
                     />
                   </div>
@@ -209,10 +196,10 @@ const isApproved = currentUser?.isActive === true;
                       name="gpa"
                       value={form.gpa}
                       onChange={handleChange}
-                      step="0.01"
+                      step="0.1"
                       min="0"
                       max="4.0"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-4 py-2 border border-gray-300 text-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       required
                     />
                   </div>
@@ -253,7 +240,7 @@ const isApproved = currentUser?.isActive === true;
                         Submitting...
                       </>
                     ) : (
-                      'Issue Degree'
+                      'Submit Application'
                     )}
                   </button>
                 </div>
