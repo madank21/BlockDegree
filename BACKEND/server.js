@@ -13,7 +13,7 @@ const PORT = parseInt(process.env.PORT, 10) || 5000;
 const CORE_ENV = [
   "JWT_SECRET",
   "SUPABASE_URL",
-  "SUPABASE_PUBLISHABLE_KEY",
+  "SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_KEY",
 ];
 
@@ -22,7 +22,6 @@ const CORE_ENV = [
  */
 const BLOCKCHAIN_ENV = [
   "BLOCKCHAIN_RPC_URL",
-  "PRIVATE_KEY",
   "CONTRACT_ADDRESS",
 ];
 
@@ -37,8 +36,21 @@ if (missingCore.length > 0) {
 
 if (process.env.NODE_ENV === "production") {
   const missingBlockchain = BLOCKCHAIN_ENV.filter((k) => !process.env[k]);
-  if (missingBlockchain.length > 0) {
-    console.error(`\n❌ Missing BLOCKCHAIN environment variables:\n   ${missingBlockchain.join("\n   ")}\n`);
+  const hasPrivateKey =
+    process.env.PRIVATE_KEY ||
+    process.env.PRIVATE_KEY_FILE ||
+    process.env.AWS_SECRETS_MANAGER_SECRET_ID ||
+    (process.env.VAULT_ADDR && process.env.VAULT_TOKEN);
+
+  if (missingBlockchain.length > 0 || !hasPrivateKey) {
+    console.error(`\n❌ Missing BLOCKCHAIN configuration:\n`);
+    if (missingBlockchain.length) {
+      console.error(`   Env vars: ${missingBlockchain.join(", ")}`);
+    }
+    if (!hasPrivateKey) {
+      console.error('   PRIVATE_KEY source: set PRIVATE_KEY, PRIVATE_KEY_FILE, AWS_SECRETS_MANAGER_SECRET_ID, or VAULT_*');
+    }
+    console.error('');
     process.exit(1);
   }
 }
@@ -113,7 +125,23 @@ const initializeServices = async () => {
   //   logger.warn("[Server] Minting queue not loaded:", err.message);
   // }
 
-  // 4. Blockchain sanity log (no secrets)
+  // 4. Face recognition models (non-fatal in development)
+  if (process.env.SKIP_FACE_MODELS !== 'true') {
+    try {
+      const { ensureModelsReady } = require('./services/faceVerificationService');
+      await ensureModelsReady();
+      logger.info('[Server] Face recognition models ready');
+    } catch (err) {
+      const msg = `[Server] Face models not loaded: ${err.message}`;
+      if (process.env.NODE_ENV === 'production') {
+        logger.warn(msg + ' — run npm run download-models');
+      } else {
+        logger.warn(msg);
+      }
+    }
+  }
+
+  // 5. Blockchain sanity log (no secrets)
   if (process.env.BLOCKCHAIN_RPC_URL) {
     logger.info("[Server] Blockchain config detected");
   }

@@ -39,17 +39,10 @@ const AuditLog             = require('../models/AuditLog');
 // FIX 10: correct import — supabase.js exports getSupabaseAdmin, not { supabase }
 const { getSupabaseAdmin } = require('../database/supabase');
 const { logger }           = require('../src/utils/logger');
+const backupService        = require('../services/backupService');
+const { restoreBackupData, validateBackupFormat } = require('../services/restoreService');
 const fs                   = require('fs');
 const path                 = require('path');
-
-const BACKUP_DIR = path.join(__dirname, '../backups');
-
-// ─── Ensure backup directory exists ──────────────────────────────────────────
-function ensureBackupDir() {
-  if (!fs.existsSync(BACKUP_DIR)) {
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
-  }
-}
 
 // ─── Compute uploads disk usage ───────────────────────────────────────────────
 function getUploadsSize() {
@@ -168,14 +161,11 @@ exports.checkIntegrity = asyncHandler(async (req, res) => {
 // ─── POST /api/v1/admin/backup ────────────────────────────────────────────────
 // FIX 4, 5, 6, 7: All findAll() Sequelize calls replaced with correct Supabase model methods.
 exports.createBackup = asyncHandler(async (req, res) => {
-  ensureBackupDir();
-
-  // FIX 4, 5, 6, 7: use the correct method per model
   const [usersRes, degreesRes, docsRes, auditRes] = await Promise.all([
-    User.findMany({ limit: 9999 }),     // FIX 5: was User.findAll()
-    Degree.findMany({ limit: 9999 }),   // FIX 4: was Degree.findAll()
-    Document.findAll({ limit: 9999 }),  // FIX 6: Document.findAll() exists ✓
-    AuditLog.findMany({ limit: 9999 }), // FIX 7: was AuditLog.findAll()
+    User.findMany({ limit: 9999 }),
+    Degree.findMany({ limit: 9999 }),
+    Document.findAll({ limit: 9999 }),
+    AuditLog.findMany({ limit: 9999 }),
   ]);
 
   const backupData = {
@@ -187,17 +177,15 @@ exports.createBackup = asyncHandler(async (req, res) => {
     version:   '1.0',
   };
 
-  const backupId   = `backup_${Date.now()}`;
-  const backupPath = path.join(BACKUP_DIR, `${backupId}.json`);
-
-  fs.writeFileSync(backupPath, JSON.stringify(backupData, null, 2));
+  const result = await backupService.createBackup(backupData, req.user?.id);
 
   await AuditLog.create({
     action:    'ADMIN_BACKUP_CREATED',
     actorId:   req.user?.id,
     actorRole: req.user?.role,
     details:   {
-      backupId,
+      backupId: result.backupId,
+      provider: result.provider,
       counts: {
         users:     usersRes.total,
         degrees:   degreesRes.total,
@@ -208,11 +196,12 @@ exports.createBackup = asyncHandler(async (req, res) => {
     ipAddress: req.ip,
   });
 
-  logger.info(`[Admin] Backup created: ${backupId}`);
+  logger.info(`[Admin] Backup created: ${result.backupId} (${result.provider})`);
 
   return sendSuccess(res, {
-    backupId,
-    timestamp: backupData.timestamp,
+    backupId:  result.backupId,
+    timestamp: result.timestamp,
+    provider:  result.provider,
     counts: {
       users:     usersRes.total,
       degrees:   degreesRes.total,
@@ -224,83 +213,45 @@ exports.createBackup = asyncHandler(async (req, res) => {
 
 // ─── GET /api/v1/admin/backup/last ───────────────────────────────────────────
 exports.getLastBackupInfo = asyncHandler(async (req, res) => {
-  if (!fs.existsSync(BACKUP_DIR)) {
+  const info = await backupService.getLastBackupInfo();
+  if (!info.lastBackup) {
     return sendSuccess(res, { lastBackup: null }, 'No backups found');
   }
-
-  const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.json'));
-  if (!files.length) {
-    return sendSuccess(res, { lastBackup: null }, 'No backups found');
-  }
-
-  const sorted = files.sort((a, b) =>
-    fs.statSync(path.join(BACKUP_DIR, b)).mtimeMs -
-    fs.statSync(path.join(BACKUP_DIR, a)).mtimeMs
-  );
-
-  const lastFile = sorted[0];
-  const stat     = fs.statSync(path.join(BACKUP_DIR, lastFile));
-
-  return sendSuccess(res, {
-    lastBackup:   stat.mtime.toISOString(),
-    backupFile:   lastFile,
-    totalBackups: files.length,
-  }, 'Last backup info retrieved');
+  return sendSuccess(res, info, 'Last backup info retrieved');
 });
 
 // ─── POST /api/v1/admin/restore ──────────────────────────────────────────────
 exports.restoreBackup = asyncHandler(async (req, res) => {
-  if (!fs.existsSync(BACKUP_DIR)) {
-    return sendError(res, 'No backup directory found.', 404);
-  }
+  const { backupId, confirm, includeAuditLogs = false } = req.body;
 
-  const { backupId } = req.body;
-  let targetFile;
-
-  if (backupId) {
-    targetFile = path.join(BACKUP_DIR, `${backupId}.json`);
-    if (!fs.existsSync(targetFile)) {
-      return sendNotFound(res, `Backup ${backupId}`);
-    }
-  } else {
-    const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.json'));
-    if (!files.length) return sendError(res, 'No backups found to restore.', 404);
-    const sorted = files.sort((a, b) =>
-      fs.statSync(path.join(BACKUP_DIR, b)).mtimeMs -
-      fs.statSync(path.join(BACKUP_DIR, a)).mtimeMs
+  if (!confirm) {
+    return sendError(
+      res,
+      'Restore requires explicit confirmation. Set confirm: true in the request body.',
+      400
     );
-    targetFile = path.join(BACKUP_DIR, sorted[0]);
   }
 
   let backupData;
   try {
-    backupData = JSON.parse(fs.readFileSync(targetFile, 'utf8'));
+    backupData = await backupService.downloadBackup(backupId || '');
   } catch (err) {
-    return sendError(res, `Could not read backup file: ${err.message}`, 500);
+    return sendError(res, `Could not load backup: ${err.message}`, 404);
   }
 
+  const meta = validateBackupFormat(backupData);
+
+  const counts = await restoreBackupData(backupData, { includeAuditLogs });
+
   await AuditLog.create({
-    action:    'ADMIN_RESTORE_ATTEMPTED',
+    action:    'ADMIN_RESTORE_COMPLETED',
     actorId:   req.user?.id,
     actorRole: req.user?.role,
-    details:   { targetFile },
+    details:   { backupId: backupId || 'latest', counts, meta },
     ipAddress: req.ip,
   });
 
-  // Full data restore is intentionally not auto-executed to prevent accidental data loss.
-  // The file is validated and the admin is shown what it contains.
-  return res.status(501).json({
-    success: false,
-    message: 'Full data restore requires manual confirmation. Backup file validated successfully.',
-    meta: {
-      backupTimestamp: backupData.timestamp,
-      counts: {
-        users:     backupData.users?.length     || 0,
-        degrees:   backupData.degrees?.length   || 0,
-        documents: backupData.documents?.length || 0,
-      },
-    },
-  });
+  return sendSuccess(res, { counts, meta }, 'Backup restored successfully');
 });
 
 // ─── GET /api/v1/admin/export ─────────────────────────────────────────────────
@@ -334,6 +285,18 @@ exports.importData = asyncHandler(async (req, res) => {
     return sendError(res, 'No file uploaded. Use multipart/form-data with field "data".', 400);
   }
 
+  const confirm = req.body?.confirm === true || req.body?.confirm === 'true';
+  if (!confirm) {
+    return sendError(
+      res,
+      'Import requires explicit confirmation. Set confirm: true in the request body.',
+      400
+    );
+  }
+
+  const includeAuditLogs =
+    req.body?.includeAuditLogs === true || req.body?.includeAuditLogs === 'true';
+
   let importData;
   try {
     importData = JSON.parse(req.file.buffer.toString('utf8'));
@@ -341,30 +304,18 @@ exports.importData = asyncHandler(async (req, res) => {
     return sendError(res, `Invalid JSON file: ${err.message}`, 400);
   }
 
-  if (!Array.isArray(importData.users) || !Array.isArray(importData.degrees)) {
-    return sendError(res, 'Invalid backup format — missing users or degrees arrays.', 400);
-  }
+  const meta = validateBackupFormat(importData);
+  const counts = await restoreBackupData(importData, { includeAuditLogs });
 
   await AuditLog.create({
-    action:    'ADMIN_IMPORT_ATTEMPTED',
+    action:    'ADMIN_IMPORT_COMPLETED',
     actorId:   req.user?.id,
     actorRole: req.user?.role,
-    details:   { exportedAt: importData.exportedAt || importData.timestamp },
+    details:   { counts, meta },
     ipAddress: req.ip,
   });
 
-  return res.status(501).json({
-    success: false,
-    message: 'Full data import requires manual confirmation. File validated successfully.',
-    meta: {
-      exportedAt: importData.exportedAt || importData.timestamp,
-      counts: {
-        users:     importData.users?.length     || 0,
-        degrees:   importData.degrees?.length   || 0,
-        documents: importData.documents?.length || 0,
-      },
-    },
-  });
+  return sendSuccess(res, { counts, meta }, 'Data imported successfully');
 });
 
 // ─── DELETE /api/v1/admin/cleanup?days=90 ────────────────────────────────────
