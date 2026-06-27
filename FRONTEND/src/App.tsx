@@ -12,6 +12,8 @@
  */
 
 import { useState, useEffect } from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './queryClient';
 import { useStore }             from './useStore';
 import Landing                  from './pages/Landing';
 import Login                    from './pages/Login';
@@ -74,6 +76,14 @@ function dashboardForRole(role: UserRole): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppRoutes />
+    </QueryClientProvider>
+  );
+}
+
+function AppRoutes() {
   const { currentUser } = useStore();
   const [page, setPage]   = useState('landing');
 

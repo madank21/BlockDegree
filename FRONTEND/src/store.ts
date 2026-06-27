@@ -1,7 +1,5 @@
-// FRONTEND/src/store.ts
-//
-// Fully integrated with backend API. All mutations go through API client.
-// Local state is cached copy; backend is source of truth.
+// FRONTEND/src/store.ts — Zustand-backed state + API integration
+import { createStore } from 'zustand/vanilla';
 
 import { User, DegreeApplication, BlockchainTransaction, AuditLog, FraudReport, VerificationRequest, UploadedDocument, UserRole } from './types';
 import {
@@ -245,21 +243,36 @@ const sampleVerifications: VerificationRequest[] = [
 // ============================================================
 
 function getInitialState(): AppState {
+  const empty: AppState = {
+    currentUser: null,
+    users: [],
+    degreeApplications: [],
+    blockchainTransactions: [],
+    auditLogs: [],
+    fraudReports: [],
+    verificationRequests: [],
+  };
+
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       return migrateState(JSON.parse(stored));
     }
   } catch {}
-  return {
-    currentUser: null,
-    users: [...sampleStudents, sampleAdmin, sampleEmployer],
-    degreeApplications: sampleDegreeApplications,
-    blockchainTransactions: sampleBlockchainTx,
-    auditLogs: sampleAuditLogs,
-    fraudReports: sampleFraudReports,
-    verificationRequests: sampleVerifications,
-  };
+
+  if (import.meta.env.DEV) {
+    return {
+      ...empty,
+      users: [...sampleStudents, sampleAdmin, sampleEmployer],
+      degreeApplications: sampleDegreeApplications,
+      blockchainTransactions: sampleBlockchainTx,
+      auditLogs: sampleAuditLogs,
+      fraudReports: sampleFraudReports,
+      verificationRequests: sampleVerifications,
+    };
+  }
+
+  return empty;
 }
 
 function migrateState(input: AppState): AppState {
@@ -279,33 +292,71 @@ function migrateState(input: AppState): AppState {
   };
 }
 
-let state: AppState = getInitialState();
-let listeners: Array<() => void> = [];
+const appStore = createStore<AppState>(() => getInitialState());
+
+function getState(): AppState {
+  return appStore.getState();
+}
+
+function patchState(reducer: (prev: AppState) => AppState) {
+  appStore.setState(reducer(getState()));
+  notify();
+}
+
+async function syncDegreesFromServer() {
+  try {
+    const result = await degreesApi.list();
+    const rows = (result as { data?: Record<string, unknown>[] }).data ?? [];
+    if (!Array.isArray(rows)) return;
+    patchState((s) => ({
+      ...s,
+      degreeApplications: rows.map((row) => ({
+        id: String(row.id ?? ''),
+        studentId: String(row.studentId ?? row.student_id ?? ''),
+        studentName: String(row.studentName ?? row.student_name ?? ''),
+        registrationNumber: String(row.studentId ?? row.student_id ?? ''),
+        department: String(row.fieldOfStudy ?? row.field_of_study ?? ''),
+        program: String(row.degreeTitle ?? row.degree_title ?? ''),
+        degreeTitle: String(row.degreeTitle ?? row.degree_title ?? ''),
+        cgpa: Number(row.gpa ?? 0),
+        graduationYear: String(row.graduationDate ?? row.graduation_date ?? ''),
+        status: (row.status as DegreeApplication['status']) ?? 'pending',
+        appliedAt: String(row.createdAt ?? row.created_at ?? new Date().toISOString()),
+        blockchainHash: String(row.degreeHash ?? row.degree_hash ?? ''),
+        degreeId: String(row.id ?? ''),
+        fraudScore: 100,
+        blockchainSyncStatus: row.blockchainSyncStatus as DegreeApplication['blockchainSyncStatus'],
+      })),
+    }));
+  } catch (err) {
+    console.warn('syncDegreesFromServer failed:', err);
+  }
+}
 
 function persist() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(getState()));
   } catch {}
 }
 
 function notify() {
   persist();
-  listeners.forEach(l => l());
 }
 
 // ============================================================
-// STORE EXPORT
+// STORE EXPORT (Zustand subscribe + legacy method surface)
 // ============================================================
 
 export const store = {
   subscribe(listener: () => void) {
-    listeners.push(listener);
-    return () => { listeners = listeners.filter(l => l !== listener); };
+    return appStore.subscribe(listener);
   },
 
   getState(): AppState {
-    return state;
+    return getState();
   },
+
+  syncFromServer: syncDegreesFromServer,
 
   // ---------- AUTH (uses backend API) ----------
   async login(email: string, password: string): Promise<User | null> {
@@ -316,14 +367,15 @@ export const store = {
       setToken(data.accessToken);
       const user = data.user as User;
 
-      const existing = state.users.find(u => u.id === user.id);
+      const existing = getState().users.find(u => u.id === user.id);
       if (!existing) {
-        state.users.push(user);
+        patchState(s => ({ ...s, users: [...s.users, user] }));
       } else {
         Object.assign(existing, user);
       }
-      state.currentUser = user;
+      patchState(s => ({ ...s, currentUser: user }));
       store.addAuditLog('User Login', user.id, user.name, `Logged in from ${email}`, 'auth');
+      await syncDegreesFromServer();
       notify();
       return user;
     } catch (error) {
@@ -346,39 +398,40 @@ export const store = {
       setToken(data.accessToken);   // FIX: only one argument
     }
     const user = data.user as User;
-    const existing = state.users.find(u => u.id === user.id);
+    const existing = getState().users.find(u => u.id === user.id);
     if (!existing) {
-      state.users.push(user);
+      patchState(s => ({ ...s, users: [...s.users, user] }));
     } else {
       Object.assign(existing, user);
     }
-    state.currentUser = user;
+    patchState(s => ({ ...s, currentUser: user }));
     store.addAuditLog('User Registration', user.id, user.name, `Registered as ${role}`, 'auth');
+    await syncDegreesFromServer();
     notify();
     return user;
   },
 
   // ========== NEW: setUser ==========
-  // Use this after a login via authApi (outside the store) to sync the store state.
+  // Use this after a login via authApi (outside the store) to sync the store getState().
   setUser(user: User) {
-    const existing = state.users.find(u => u.id === user.id);
+    const existing = getState().users.find(u => u.id === user.id);
     if (!existing) {
-      state.users.push(user);
+      patchState(s => ({ ...s, users: [...s.users, user] }));
     } else {
       Object.assign(existing, user);
     }
-    state.currentUser = user;
-    // Optionally log, but login already logs; we can skip.
+    patchState(s => ({ ...s, currentUser: user }));
     notify();
+    syncDegreesFromServer();
   },
   // ====================================
 
   logout() {
-    if (state.currentUser) {
-      store.addAuditLog('User Logout', state.currentUser.id, state.currentUser.name, 'User logged out', 'auth');
+    if (getState().currentUser) {
+      store.addAuditLog('User Logout', getState().currentUser.id, getState().currentUser.name, 'User logged out', 'auth');
     }
     clearToken();
-    state.currentUser = null;
+    patchState(s => ({ ...s, currentUser: null }));
     notify();
   },
 
@@ -401,30 +454,30 @@ export const store = {
       yoloStatus: 'pending',
       extractedData: {},
     };
-    state = {
-      ...state,
-      users: state.users.map(u => {
+    patchState(s => ({
+      ...s,
+      users: s.users.map(u => {
         if (u.id === userId) {
           const docs = u.documents ? [...u.documents, newDoc] : [newDoc];
           return { ...u, documents: docs, verificationStatus: 'documents_uploaded' as const };
         }
         return u;
       }),
-    };
-    if (state.currentUser?.id === userId) {
-      const updated = state.users.find(u => u.id === userId);
-      if (updated) state = { ...state, currentUser: updated };
+    }));
+    if (getState().currentUser?.id === userId) {
+      const updated = getState().users.find(u => u.id === userId);
+      if (updated) patchState(s => ({ ...s, currentUser: updated }));
     }
-    store.addAuditLog('Document Upload', userId, state.users.find(u => u.id === userId)?.name || '', `Uploaded ${doc.type}: ${doc.fileName}`, 'verification');
+    store.addAuditLog('Document Upload', userId, getState().users.find(u => u.id === userId)?.name || '', `Uploaded ${doc.type}: ${doc.fileName}`, 'verification');
     notify();
     return result;
   },
 
   // ---------- SIMULATIONS (local only – replace with backend calls later) ----------
   simulateOCR(userId: string, docId: string, extractedData?: Record<string, string>) {
-    state = {
-      ...state,
-      users: state.users.map(u => {
+    patchState(s => ({
+      ...s,
+      users: s.users.map(u => {
         if (u.id === userId && u.documents) {
           return {
             ...u,
@@ -438,18 +491,18 @@ export const store = {
         }
         return u;
       }),
-    };
-    if (state.currentUser?.id === userId) {
-      const updated = state.users.find(u => u.id === userId);
-      if (updated) state = { ...state, currentUser: updated };
+    }));
+    if (getState().currentUser?.id === userId) {
+      const updated = getState().users.find(u => u.id === userId);
+      if (updated) patchState(s => ({ ...s, currentUser: updated }));
     }
     notify();
   },
 
   simulateYOLO(userId: string, docId: string, result: 'valid' | 'suspicious' | 'fraudulent' = 'valid') {
-    state = {
-      ...state,
-      users: state.users.map(u => {
+    patchState(s => ({
+      ...s,
+      users: s.users.map(u => {
         if (u.id === userId && u.documents) {
           return {
             ...u,
@@ -458,60 +511,57 @@ export const store = {
         }
         return u;
       }),
-    };
-    if (state.currentUser?.id === userId) {
-      const updated = state.users.find(u => u.id === userId);
-      if (updated) state = { ...state, currentUser: updated };
+    }));
+    if (getState().currentUser?.id === userId) {
+      const updated = getState().users.find(u => u.id === userId);
+      if (updated) patchState(s => ({ ...s, currentUser: updated }));
     }
     notify();
   },
 
   completeFaceVerification(userId: string) {
-    state = {
-      ...state,
-      users: state.users.map(u => u.id === userId ? { ...u, verificationStatus: 'face_verified' as const } : u),
-    };
-    if (state.currentUser?.id === userId) {
-      const updated = state.users.find(u => u.id === userId);
-      if (updated) state = { ...state, currentUser: updated };
+    patchState(s => ({
+      ...s,
+      users: getState().users.map(u => u.id === userId ? { ...u, verificationStatus: 'face_verified' as const } : u),
+    }));
+    if (getState().currentUser?.id === userId) {
+      const updated = getState().users.find(u => u.id === userId);
+      if (updated) patchState(s => ({ ...s, currentUser: updated }));
     }
-    store.addAuditLog('Face Verification', userId, state.users.find(u => u.id === userId)?.name || '', 'Face verification passed (simulated)', 'verification');
+    store.addAuditLog('Face Verification', userId, getState().users.find(u => u.id === userId)?.name || '', 'Face verification passed (simulated)', 'verification');
     notify();
   },
 
   // ---------- ADMIN ACTIONS ----------
   approveStudent(userId: string) {
-    state = {
-      ...state,
-      users: state.users.map(u => u.id === userId ? { ...u, verificationStatus: 'approved' as const } : u),
-    };
-    const student = state.users.find(u => u.id === userId);
+    patchState(s => ({
+      ...s,
+      users: getState().users.map(u => u.id === userId ? { ...u, verificationStatus: 'approved' as const } : u),
+    }));
+    const student = getState().users.find(u => u.id === userId);
     store.addAuditLog('Student Approved', 'admin1', 'Administrator', `Approved student ${student?.name}`, 'admin');
     notify();
   },
 
   rejectStudent(userId: string) {
-    state = {
-      ...state,
-      users: state.users.map(u => u.id === userId ? { ...u, verificationStatus: 'rejected' as const } : u),
-    };
+    patchState(s => ({
+      ...s,
+      users: getState().users.map(u => u.id === userId ? { ...u, verificationStatus: 'rejected' as const } : u),
+    }));
     notify();
   },
 
   // ---------- DEGREE APPLICATIONS (uses backend API) ----------
   async applyForDegree(app: Omit<DegreeApplication, 'id' | 'status' | 'appliedAt' | 'fraudScore'>) {
-    const result = await degreesApi.issue({
-      studentName: app.studentName,
-      registrationNumber: app.registrationNumber,
-      department: app.department,
-      program: app.program,
-      degreeTitle: app.degreeTitle,
-      cgpa: app.cgpa,
-      admissionYear: app.admissionYear,
-      graduationYear: app.graduationYear,
+    const result = await degreesApi.apply({
+      degree_title: app.degreeTitle,
+      field_of_study: app.department,
+      graduation_date: `${app.graduationYear}-06-01`,
+      gpa: app.cgpa,
     });
+    const degreeData = (result as { degree?: Record<string, unknown> })?.degree || result as Record<string, unknown>;
     const newApp: DegreeApplication = {
-      id: result.degreeId,
+      id: String(degreeData.id ?? ''),
       studentId: app.studentId,
       studentName: app.studentName,
       registrationNumber: app.registrationNumber,
@@ -521,38 +571,36 @@ export const store = {
       cgpa: app.cgpa,
       admissionYear: app.admissionYear,
       graduationYear: app.graduationYear,
-      status: 'issued',
+      status: 'pending',
       appliedAt: new Date().toISOString(),
-      approvedAt: new Date().toISOString(),
-      blockchainHash: result.degreeHash,
-      degreeId: result.degreeId,
-      qrCodeData: result.qrCodeUrl,
+      blockchainHash: String(degreeData.degreeHash ?? degreeData.degree_hash ?? ''),
+      degreeId: String(degreeData.id ?? ''),
       fraudScore: 100,
     };
-    state = { ...state, degreeApplications: [...state.degreeApplications, newApp] };
-    store.addAuditLog('Degree Issued', app.studentId || '', app.studentName, `Issued ${app.degreeTitle}`, 'degree');
+    patchState(s => ({ ...s, degreeApplications: [...s.degreeApplications, newApp] }));
+    store.addAuditLog('Degree Applied', app.studentId || '', app.studentName, `Applied for ${app.degreeTitle}`, 'degree');
     notify();
     return newApp;
   },
 
   // FIX: Add 'reason' parameter and pass it to the API
   async revokeDegree(degreeId: string, reason: string = 'No reason provided') {
-    const degree = state.degreeApplications.find(d => d.id === degreeId);
+    const degree = getState().degreeApplications.find(d => d.id === degreeId);
     if (!degree || !degree.degreeId) throw new Error('Degree not found or missing degreeId');
     await degreesApi.revoke(degree.degreeId, reason);  // now pass reason
-    state = {
-      ...state,
-      degreeApplications: state.degreeApplications.map(d =>
+    patchState(s => ({
+      ...s,
+      degreeApplications: getState().degreeApplications.map(d =>
         d.id === degreeId ? { ...d, status: 'revoked' as const } : d
       ),
-    };
+    }));
     store.addAuditLog('Degree Revoked', 'admin1', 'Administrator', `Revoked degree ${degree.degreeId} with reason: ${reason}`, 'degree');
     notify();
   },
 
   // ---------- VERIFICATION (uses backend API) ----------
   verifyDegree(degreeIdOrHash: string): DegreeApplication | null {
-    return state.degreeApplications.find(d =>
+    return getState().degreeApplications.find(d =>
       d.degreeId === degreeIdOrHash || d.blockchainHash === degreeIdOrHash
     ) || null;
   },
@@ -582,24 +630,24 @@ export const store = {
       details,
       category,
     };
-    state = { ...state, auditLogs: [...state.auditLogs, log] };
+    patchState(s => ({ ...s, auditLogs: [...s.auditLogs, log] }));
   },
 
   // ---------- OTHER METHODS ----------
   updateUserProfile(userId: string, updates: Partial<User>) {
-    state = {
-      ...state,
-      users: state.users.map(u => u.id === userId ? { ...u, ...updates } : u),
-    };
-    if (state.currentUser?.id === userId) {
-      const updated = state.users.find(u => u.id === userId);
-      if (updated) state = { ...state, currentUser: updated };
+    patchState(s => ({
+      ...s,
+      users: s.users.map(u => u.id === userId ? { ...u, ...updates } : u),
+    }));
+    if (getState().currentUser?.id === userId) {
+      const updated = getState().users.find(u => u.id === userId);
+      if (updated) patchState(s => ({ ...s, currentUser: updated }));
     }
     notify();
   },
 
   validateDocumentData(userId: string, docId: string) {
-    const user = state.users.find(u => u.id === userId);
+    const user = getState().users.find(u => u.id === userId);
     const doc = user?.documents?.find(d => d.id === docId);
     const errors: string[] = [];
     if (!user || !doc) {
@@ -608,9 +656,9 @@ export const store = {
     }
     // Simple validation logic (can be expanded)
     const isValid = errors.length === 0;
-    state = {
-      ...state,
-      users: state.users.map(u => {
+    patchState(s => ({
+      ...s,
+      users: s.users.map(u => {
         if (u.id === userId && u.documents) {
           return {
             ...u,
@@ -623,25 +671,25 @@ export const store = {
         }
         return u;
       }),
-    };
-    if (state.currentUser?.id === userId) {
-      const updated = state.users.find(u => u.id === userId);
-      if (updated) state = { ...state, currentUser: updated };
+    }));
+    if (getState().currentUser?.id === userId) {
+      const updated = getState().users.find(u => u.id === userId);
+      if (updated) patchState(s => ({ ...s, currentUser: updated }));
     }
     notify();
     return { isValid, errors };
   },
 
   removeDocument(userId: string, docId: string) {
-    const user = state.users.find(u => u.id === userId);
+    const user = getState().users.find(u => u.id === userId);
     const doc = user?.documents?.find(d => d.id === docId);
     if (!user || !doc) {
       console.error('Document or user not found');
       return;
     }
-    state = {
-      ...state,
-      users: state.users.map(u => {
+    patchState(s => ({
+      ...s,
+      users: s.users.map(u => {
         if (u.id === userId) {
           return {
             ...u,
@@ -650,10 +698,10 @@ export const store = {
         }
         return u;
       }),
-    };
-    if (state.currentUser?.id === userId) {
-      const updated = state.users.find(u => u.id === userId);
-      if (updated) state = { ...state, currentUser: updated };
+    }));
+    if (getState().currentUser?.id === userId) {
+      const updated = getState().users.find(u => u.id === userId);
+      if (updated) patchState(s => ({ ...s, currentUser: updated }));
     }
     store.addAuditLog('Document Removed', userId, user.name, `Removed ${doc.type}: ${doc.fileName}`, 'verification');
     notify();
@@ -661,7 +709,7 @@ export const store = {
 
   resetData() {
     localStorage.removeItem(STORAGE_KEY);
-    state = getInitialState();
+    appStore.setState(getInitialState(), true);
     clearToken();
     notify();
   },
