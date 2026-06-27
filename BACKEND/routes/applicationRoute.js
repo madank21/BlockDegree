@@ -2,8 +2,8 @@
 const express = require("express");
 const router = express.Router();
 const { authenticate, requireRole } = require("../middleware/authMiddleware");
-const supabase = require("../config/supabase");
-const { createDegree } = require("../services/degree.service");
+const supabase = require("../database/supabase");
+const { createDegree } = require("../services/degreeService");
 // Optional: if you have a validation library like Joi, use it.
 
 // ─── Validation helper ──────────────────────────────────────────────────────────

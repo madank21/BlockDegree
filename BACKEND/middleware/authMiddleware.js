@@ -1,6 +1,6 @@
 // middleware/authMiddleware.js
 const jwt = require("jsonwebtoken");
-const supabase = require("../config/supabase"); // your Supabase client
+const supabase = require("../database/supabase"); // your Supabase client
 const { logger } = require("../src/utils/logger");
 
 // ─── Strict Authentication (requires valid token) ─────────────────────────────
@@ -24,7 +24,7 @@ const authenticate = async (req, res, next) => {
     if (error || !user) {
       return res.status(401).json({ error: "User not found" });
     }
-    if (!user.isActive) {
+    if (!user.is_active) {
       return res.status(401).json({ error: "Account deactivated" });
     }
 

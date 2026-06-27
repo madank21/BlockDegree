@@ -1,5 +1,5 @@
 // services/degree.service.js
-const supabase = require("../config/supabase");
+const supabase = require("../database/supabase");
 const { v4: uuidv4 } = require("uuid");
 const QRCode = require("qrcode"); // npm install qrcode
 
