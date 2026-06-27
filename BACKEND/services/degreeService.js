@@ -2,6 +2,7 @@ const supabase = require("../database/supabase");
 const { v4: uuidv4 } = require("uuid");
 const QRCode = require("qrcode");
 const crypto = require("crypto");
+const blockchainService = require("./blockchainService"); // ← real blockchain
 
 /**
  * Generate a SHA‑256 hash of the degree content (degree_hash)
@@ -13,7 +14,8 @@ const generateDegreeHash = (degreeData) => {
 };
 
 /**
- * Generate a dummy blockchain transaction hash (replace with actual blockchain call)
+ * DEPRECATED: dummy hash – kept for backward compatibility, not used.
+ * Real blockchain calls are made via blockchainService.issueDegree()
  */
 const generateBlockchainHash = async (degreeData) => {
   // In production, call your smart contract here.
@@ -63,7 +65,7 @@ const getStudentName = async (studentId) => {
 };
 
 /**
- * Create a new degree record.
+ * Create a new degree record – now issues the degree on the blockchain for real.
  * @param {Object} degreeData - { student_id, degree_title, field_of_study, graduation_date, gpa, honors, issued_by }
  */
 async function createDegree(degreeData) {
@@ -72,10 +74,22 @@ async function createDegree(degreeData) {
 
     const studentName = await getStudentName(degreeData.student_id);
     const degreeHash = generateDegreeHash(degreeData);
-    const blockchainTxHash = await generateBlockchainHash(degreeData);
     const qrCodeUrl = await generateQRCode(degreeId, degreeData.student_id);
     const certificateNumber = await generateCertificateNumber();
 
+    // ── Call the real blockchain ────────────────────────────────────────────
+    const blockchainResult = await blockchainService.issueDegree({
+      degreeId:           degreeId,
+      degreeHash:         degreeHash,
+      studentName:        studentName,
+      registrationNumber: degreeData.student_id,
+      department:         degreeData.field_of_study,
+      program:            degreeData.degree_title,
+      cgpa:               String(degreeData.gpa || '0'),
+      graduationYear:     String(new Date(degreeData.graduation_date).getFullYear()),
+    });
+
+    // ── Build degree object with on‑chain data ─────────────────────────────
     const newDegree = {
       id: degreeId,
       student_id: degreeData.student_id,
@@ -94,10 +108,12 @@ async function createDegree(degreeData) {
       degree_hash: degreeHash,
       certificate_number: certificateNumber,
       status: 'issued',
-      blockchain_sync_status: 'queued',     // ✅ FIXED: use allowed value
-      blockchain_tx_hash: blockchainTxHash,
-      blockchain_block_number: null,
-      blockchain_timestamp: null,
+      blockchain_sync_status: 'success',           // real success
+      blockchain_tx_hash: blockchainResult.txHash,
+      blockchain_block_number: blockchainResult.blockNumber,
+      blockchain_timestamp: blockchainResult.timestamp
+        ? Math.floor(new Date(blockchainResult.timestamp).getTime() / 1000)
+        : null,
       revocation_reason: null,
       revoked_at: null,
       revocation_tx_hash: null,
@@ -163,6 +179,6 @@ module.exports = {
   createDegree,
   getDegreeById,
   listDegrees,
-  generateBlockchainHash,
+  generateBlockchainHash,   // kept for backward compatibility
   generateQRCode,
 };

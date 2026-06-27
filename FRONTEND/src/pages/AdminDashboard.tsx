@@ -10,6 +10,8 @@
 //   [6] Each async fetch is independently try/caught so one failure doesn't blank the whole dashboard
 //   [7] Added applicationsApi integration for pending degree applications
 //       → displays pending applications with "Approve & Issue" button
+//   [8] Approve & Issue now calls degree issuance on blockchain after status update
+//       → shows per‑button loading indicator
 //
 
 import { motion }    from 'framer-motion';
@@ -32,7 +34,8 @@ export default function AdminDashboard({ onNavigate }: Props) {
   const [fraudAlerts,        setFraudAlerts]        = useState(0);
   const [recentActivity,     setRecentActivity]     = useState<any[]>([]);
   const [adminStats,         setAdminStats]         = useState<any>(null);
-  const [pendingApplications, setPendingApplications] = useState<any[]>([]);  // NEW
+  const [pendingApplications, setPendingApplications] = useState<any[]>([]);
+  const [approvingId,        setApprovingId]        = useState<string | null>(null); // loading per button
 
   const [loading,         setLoading]         = useState(true);
   const [error,           setError]           = useState<string | null>(null);
@@ -44,7 +47,6 @@ export default function AdminDashboard({ onNavigate }: Props) {
   const pendingStudents  = students.filter(
     s => s.verificationStatus && s.verificationStatus !== 'approved' && s.verificationStatus !== 'rejected'
   );
-  // Keep existing pendingDegrees for backward compatibility (if any), but we'll show applications instead
   const pendingDegrees   = degreeApps.filter(d => d.status === 'pending' || d.status === 'approved');
 
   // Refresh pending applications
@@ -93,7 +95,6 @@ export default function AdminDashboard({ onNavigate }: Props) {
       }
 
       // 3. Blockchain total
-      // [FIX 1] Backend returns { total: N }
       try {
         const bcRes = await blockchainApi.totalDegrees();
         setTotalAttestations(bcRes.total ?? 0);
@@ -106,34 +107,31 @@ export default function AdminDashboard({ onNavigate }: Props) {
         );
       }
 
-      // [FIX 3] Fraud alert count from real endpoint
+      // 4. Fraud alert count
       try {
         const fraudStats = await fraudApi.stats();
         setFraudAlerts(fraudStats?.unresolvedCount ?? 0);
       } catch (err) {
         console.warn('Fraud stats fetch failed:', err);
-        // Non-critical — keep 0
       }
 
-      // [FIX 4] Recent audit log activity
+      // 5. Recent audit log activity
       try {
         const auditRes = await auditApi.list({ limit: 5 });
         setRecentActivity(auditRes.data || []);
       } catch (err) {
         console.warn('Audit log fetch failed:', err);
-        // Non-critical — keep []
       }
 
-      // [FIX 2] Admin stats (documents count, storage usage)
+      // 6. Admin stats
       try {
         const stats = await adminApi.stats();
         setAdminStats(stats);
       } catch (err) {
         console.warn('Admin stats fetch failed:', err);
-        // Non-critical
       }
 
-      // [FIX 7] Fetch pending applications
+      // 7. Fetch pending applications
       await fetchPendingApplications();
 
       setLoading(false);
@@ -142,23 +140,38 @@ export default function AdminDashboard({ onNavigate }: Props) {
     fetchData();
   }, []);
 
-  // Handler for approving an application
+  // ─── Approve & Issue Handler ──────────────────────────────────────────────────
   const handleApproveApplication = async (applicationId: string) => {
+    setApprovingId(applicationId);
     try {
-      await applicationsApi.updateStatus(applicationId, 'approved');
-      // Refresh the list
+      // 1. Update application status to "approved" → backend creates degree record
+      const result = await applicationsApi.updateStatus(applicationId, 'approved');
+
+      // 2. Extract degree ID from the response
+      const degreeId = result?.degree?.id;
+      if (degreeId) {
+        // 3. Issue the degree on the blockchain
+        await degreesApi.issue_existing(degreeId);
+      } else {
+        console.warn('No degree ID returned after approval, skipping blockchain issuance.');
+      }
+
+      // 4. Refresh pending list and update degree counts
       await fetchPendingApplications();
-      // Optionally also refresh degree counts if needed
       const degreesRes = await degreesApi.list({ limit: 100 });
       const degrees = degreesRes.data || [];
       setDegreeApps(degrees);
       setIssuedDegreesCount(degrees.filter((d: any) => d.status === 'issued').length);
+
     } catch (err) {
-      console.error('Failed to approve application:', err);
-      alert('Failed to approve application. Please try again.');
+      console.error('Failed to approve/issue:', err);
+      alert('Failed to approve and issue degree. Please try again.');
+    } finally {
+      setApprovingId(null);
     }
   };
 
+  // ─── Stats ──────────────────────────────────────────────────────────────────────
   const stats = [
     {
       label:    'Total Students',
@@ -183,13 +196,12 @@ export default function AdminDashboard({ onNavigate }: Props) {
     },
     {
       label:    'Pending Apps',
-      value:    loading ? '…' : pendingApplications.length,  // Updated
+      value:    loading ? '…' : pendingApplications.length,
       icon:     Clock,
       gradient: 'from-yellow-600 to-orange-600',
       color:    'text-yellow-400',
     },
     {
-      // [FIX 3] Real fraud count
       label:    'Fraud Alerts',
       value:    loading ? '…' : fraudAlerts,
       icon:     AlertTriangle,
@@ -197,7 +209,6 @@ export default function AdminDashboard({ onNavigate }: Props) {
       color:    'text-red-400',
     },
     {
-      // [FIX 1] Reads totalDegrees correctly now
       label:    'Attestations',
       value:    loading ? '…' : (blockchainError ? '⚠️' : totalAttestations),
       icon:     Link2,
@@ -206,7 +217,6 @@ export default function AdminDashboard({ onNavigate }: Props) {
     },
   ];
 
-  // Extra stat cards from adminApi.stats (documents + storage)
   const adminStatCards = adminStats
     ? [
         {
@@ -276,7 +286,7 @@ export default function AdminDashboard({ onNavigate }: Props) {
         ))}
       </div>
 
-      {/* Secondary Stats (from adminApi.stats) */}
+      {/* Secondary Stats */}
       {adminStatCards.length > 0 && (
         <div className="grid grid-cols-2 gap-4">
           {adminStatCards.map((s, i) => (
@@ -339,7 +349,7 @@ export default function AdminDashboard({ onNavigate }: Props) {
           )}
         </div>
 
-        {/* Pending Degree Applications (NEW) */}
+        {/* Pending Degree Applications */}
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold flex items-center gap-2">
@@ -372,7 +382,7 @@ export default function AdminDashboard({ onNavigate }: Props) {
               {pendingApplications.slice(0, 4).map(app => (
                 <div key={app.id} className="flex items-center justify-between bg-gray-800/30 rounded-lg p-3">
                   <div>
-                    <p className="text-sm font-medium">{app.student?.full_name || 'Student'}</p>
+                    <p className="text-sm font-medium">{app.student?.name || 'Student'}</p>
                     <p className="text-xs text-gray-500">{app.degree_title}</p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -381,9 +391,20 @@ export default function AdminDashboard({ onNavigate }: Props) {
                     </span>
                     <button
                       onClick={() => handleApproveApplication(app.id)}
-                      className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-white transition"
+                      disabled={approvingId === app.id}
+                      className="text-xs px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-white transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                     >
-                      Approve & Issue
+                      {approvingId === app.id ? (
+                        <>
+                          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          Processing…
+                        </>
+                      ) : (
+                        'Approve & Issue'
+                      )}
                     </button>
                   </div>
                 </div>
@@ -393,7 +414,7 @@ export default function AdminDashboard({ onNavigate }: Props) {
         </div>
       </div>
 
-      {/* Recent Activity — [FIX 4] now populated from auditApi */}
+      {/* Recent Activity */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold flex items-center gap-2">

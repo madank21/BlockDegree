@@ -1,4 +1,3 @@
-// routes/degree.routes.js
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
@@ -36,7 +35,7 @@ const blockchainLimiter = rateLimit({
 
 // ─── Public Routes ─────────────────────────────────────────────────────────────
 router.get('/public/cert/:certNumber', getPublicCertificate);
-router.get('/public/degree/:id', publicLookupById);   // <-- NEW: public degree lookup by ID
+router.get('/public/degree/:id', publicLookupById);
 
 // ─── Protected Routes ──────────────────────────────────────────────────────────
 router.use(authenticate);
@@ -58,27 +57,27 @@ router.get('/:id/qr', ...uuidParamValidator(), getDegreeQR);
 //  Degree issuance – restricted to Admin and University ONLY
 // ═══════════════════════════════════════════════════════════════════════════════
 router.post('/',
-  authorizeUniversityOrAdmin,      // ✅ only admin/university
+  authorizeUniversityOrAdmin,
   blockchainLimiter,
   degreeCreateValidators,
   issueDegree
 );
 
 router.post('/:id/issue',
-  authorizeUniversityOrAdmin,      // ✅ only admin/university
+  authorizeUniversityOrAdmin,
   blockchainLimiter,
   ...uuidParamValidator(),
   issueExistingDegree
 );
 
 router.patch('/:id',
-  authorizeUniversityOrAdmin,      // ✅ only admin/university
+  authorizeUniversityOrAdmin,
   ...uuidParamValidator(),
   updateDegree
 );
 
 router.delete('/:id/revoke',
-  authorizeUniversityOrAdmin,      // ✅ only admin/university
+  authorizeUniversityOrAdmin,
   ...uuidParamValidator(),
   body('reason').isLength({ min: 10 }).withMessage('Reason must be at least 10 characters'),
   revokeDegree
