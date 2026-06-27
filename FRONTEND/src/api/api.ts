@@ -16,6 +16,7 @@
  *  9. blockchainApi.totalDegrees() typed correctly as { totalDegrees: number }
  * 10. Added documentsApi.update(id, payload) → PUT /documents/:id
  * 11. Added documentsApi.delete(id)           → DELETE /documents/:id
+ * 12. Added verificationApi.verifyPublicByTx(txHash) → GET /verification/public/tx/:txHash
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -290,6 +291,10 @@ export const verificationApi = {
 
   verifyPublic: (hash: string) =>
     get<{ valid: boolean; degreeDetails?: any; blockchain: any }>(`/verification/public/${encodeURIComponent(hash)}`),
+
+  /** NEW: Verify degree by transaction hash */
+  verifyPublicByTx: (txHash: string) =>
+    get<{ valid: boolean; degreeDetails?: any; blockchain: any }>(`/verification/public/tx/${encodeURIComponent(txHash)}`),
 
   getById:   (id: string)   => get<any>(`/verification/${id}`),
   getByCode: (code: string) => get<any>(`/verification/code/${encodeURIComponent(code)}`),

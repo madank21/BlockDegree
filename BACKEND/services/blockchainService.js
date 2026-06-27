@@ -27,13 +27,19 @@ class BlockchainService {
     if (this.isInitialized) return;
 
     const rpcUrl          = process.env.BLOCKCHAIN_RPC_URL;
-    const privateKey      = process.env.PRIVATE_KEY;
     const contractAddress = process.env.CONTRACT_ADDRESS;
 
-    if (!rpcUrl || !privateKey || !contractAddress) {
+    if (!rpcUrl || !contractAddress) {
       throw new Error(
-        'Missing blockchain env vars: BLOCKCHAIN_RPC_URL, PRIVATE_KEY, CONTRACT_ADDRESS'
+        'Missing blockchain env vars: BLOCKCHAIN_RPC_URL, CONTRACT_ADDRESS (and PRIVATE_KEY or secrets config)'
       );
+    }
+
+    const { getPrivateKey } = require('../src/config/secrets');
+    const privateKey = await getPrivateKey();
+
+    if (!privateKey) {
+      throw new Error('Could not resolve PRIVATE_KEY from secrets manager or environment');
     }
 
     try {
@@ -163,9 +169,9 @@ class BlockchainService {
   async revokeDegree(degreeId) {
     await this.ensureConnected();
     try {
-      const tx      = await this.contract.revokeDegree(degreeId);
-      const receipt = await tx.wait(1);
+      const tx = await this.contract.revokeDegree(degreeId);
       await this.savePendingTransaction(tx.hash, degreeId, 'revoke');
+      const receipt = await tx.wait(1);
       await this.updateTransactionStatus(tx.hash, 'confirmed', receipt);
       return {
         txHash:      tx.hash,

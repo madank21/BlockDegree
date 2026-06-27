@@ -87,6 +87,14 @@ const authLimiter = rateLimit({
   message:  { success: false, message: 'Too many authentication attempts, please try again later.' },
 });
 
+const blockchainLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max:      50,
+  message:  { success: false, message: 'Blockchain operation rate limit exceeded.' },
+  standardHeaders: true,
+  legacyHeaders:   false,
+});
+
 // ── Body Parsing ───────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -94,6 +102,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // ── Apply Rate Limiters ────────────────────────────────────────────────────────
 app.use('/api/', globalLimiter);
 app.use('/api/v1/auth', authLimiter);
+app.use('/api/v1/blockchain', blockchainLimiter);
 
 // ── Compression ────────────────────────────────────────────────────────────────
 app.use(compression());
@@ -122,20 +131,66 @@ app.use((req, res, next) => {
 });
 
 // ── Health Checks ──────────────────────────────────────────────────────────────
-app.get('/health', (_req, res) => res.status(200).json({
-  success:     true,
-  message:     'BlockDegree API is running',
-  timestamp:   new Date().toISOString(),
-  environment: process.env.NODE_ENV,
-  version:     '1.0.0',
-}));
+app.get('/health', async (_req, res) => {
+  let faceStatus = { loaded: false };
+  try {
+    const { getModelsStatus } = require('./services/faceVerificationService');
+    faceStatus = getModelsStatus();
+  } catch { /* optional */ }
 
-app.get('/api/v1/health', (_req, res) => res.status(200).json({
-  success:   true,
-  message:   'API v1 is healthy',
-  uptime:    process.uptime(),
-  timestamp: new Date().toISOString(),
-}));
+  let blockchainStatus = 'disabled';
+  if (process.env.BLOCKCHAIN_RPC_URL) {
+    try {
+      const blockchainService = require('./services/blockchainService');
+      await blockchainService.ensureConnected();
+      blockchainStatus = 'connected';
+    } catch {
+      blockchainStatus = 'error';
+    }
+  }
+
+  return res.status(200).json({
+    success:     true,
+    message:     'BlockDegree API is running',
+    timestamp:   new Date().toISOString(),
+    environment: process.env.NODE_ENV,
+    version:     '1.0.0',
+    services: {
+      face: faceStatus,
+      blockchain: blockchainStatus,
+    },
+  });
+});
+
+app.get('/api/v1/health', async (_req, res) => {
+  let faceStatus = { loaded: false };
+  try {
+    const { getModelsStatus } = require('./services/faceVerificationService');
+    faceStatus = getModelsStatus();
+  } catch { /* optional */ }
+
+  let blockchainStatus = 'disabled';
+  if (process.env.BLOCKCHAIN_RPC_URL) {
+    try {
+      const blockchainService = require('./services/blockchainService');
+      await blockchainService.ensureConnected();
+      blockchainStatus = 'connected';
+    } catch {
+      blockchainStatus = 'error';
+    }
+  }
+
+  return res.status(200).json({
+    success:   true,
+    message:   'API v1 is healthy',
+    uptime:    process.uptime(),
+    timestamp: new Date().toISOString(),
+    services: {
+      face: faceStatus,
+      blockchain: blockchainStatus,
+    },
+  });
+});
 
 // ── API Routes ─────────────────────────────────────────────────────────────────
 app.use('/api/v1/auth',         authRoutes);
