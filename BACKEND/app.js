@@ -6,6 +6,8 @@
  *  1. Uncommented faceRoutes (was commented out — entire FaceVerification feature was broken).
  *  2. CORS origins now also support production env var FRONTEND_URL.
  *  3. Removed duplicate /uploads static route.
+ *  4. Fixed application route require path to ./routes/application.routes
+ *  5. Fixed application route mount to /api/v1/applications
  */
 
 const path        = require('path');
@@ -37,7 +39,7 @@ const fraudRoutes        = require('./routes/fraudRoutes');
 const userRoutes         = require('./routes/userRoutes');
 const auditRoutes        = require('./routes/auditRoutes');
 const adminRoutes        = require('./routes/adminRoutes');
-const applicationRoutes = require('./routes/application.routes');
+const applicationRoutes = require('./routes/applicationRoute'); // FIXED: require path corrected
 const app = express();
 
 // ── Security Middleware ─────────────────────────────────────────────────────────
@@ -203,7 +205,8 @@ app.use('/api/v1/fraud',        fraudRoutes);
 app.use('/api/v1/users',        userRoutes);
 app.use('/api/v1/audit-logs',   auditRoutes);
 app.use('/api/v1/admin',        adminRoutes);
-app.use('/api/applications', applicationRoutes);
+app.use('/api/v1/applications', applicationRoutes); // FIXED: mount path corrected
+
 // ── Error Handling ─────────────────────────────────────────────────────────────
 app.use(notFound);
 app.use(errorHandler);

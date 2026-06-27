@@ -1,4 +1,4 @@
-// /database/supabase.js
+// /config/supabase.js
 // ─────────────────────────────────────────────────────────────────────────────
 // Supabase Client — Single Source of Truth for All Database Operations
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,8 +69,13 @@ const getSupabaseAdmin = () => supabaseAdmin;
 
 logger.info("[Supabase] Clients initialised");
 
-module.exports = {
-  getSupabaseAnon,
-  getSupabaseAdmin,
-  checkSupabaseConnection,
-};
+// ── Exports ───────────────────────────────────────────────────────────────────
+// Default export = admin client (bypasses RLS) – used by most backend services
+module.exports = supabaseAdmin;
+
+// Also attach named exports for compatibility with existing code
+module.exports.getSupabaseAnon   = getSupabaseAnon;
+module.exports.getSupabaseAdmin  = getSupabaseAdmin;
+module.exports.checkSupabaseConnection = checkSupabaseConnection;
+module.exports.supabaseAnon      = supabaseAnon;
+module.exports.supabaseAdmin     = supabaseAdmin;
