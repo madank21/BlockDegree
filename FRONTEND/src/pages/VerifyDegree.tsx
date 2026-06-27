@@ -1,4 +1,3 @@
-// VerifyDegree.tsx
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
@@ -19,6 +18,12 @@ export default function VerifyDegree() {
   const [searched, setSearched] = useState(false);
   const [result, setResult] = useState<VerifyStrictResult | null>(null);
 
+  // Detection helpers
+  const isTxHash = (q: string) => q.startsWith('0x') && q.length === 66;
+  const isDegreeHash = (q: string) => /^[0-9a-f]{64}$/i.test(q);
+  const isUUID = (q: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
+
   const handleVerify = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -28,72 +33,78 @@ export default function VerifyDegree() {
       const q = query.trim();
       let res: any = null;
 
-      // If input looks like a hash, use public verification endpoint
-      if (q.startsWith('0x') && q.length === 66) {
+      // 1. Transaction hash (0x... length 66)
+      if (isTxHash(q)) {
+        const data = await verificationApi.verifyPublicByTx(q);
+        res = {
+          valid: data.valid,
+          status: data.valid ? 'issued' : 'invalid',
+          errors: data.valid ? [] : ['Degree not found on blockchain.'],
+          degreeId: data.degreeDetails?.degreeId,
+          studentName: data.degreeDetails?.studentName,
+          registrationNumber: data.degreeDetails?.registrationNumber,
+          degreeTitle: data.degreeDetails?.degreeTitle,
+          department: data.degreeDetails?.department,
+          cgpa: data.degreeDetails?.cgpa,
+          graduationYear: data.degreeDetails?.graduationYear,
+          blockchainHash: data.blockchain?.txHash || q,
+          fraudScore: data.degreeDetails?.fraudScore || 0,
+          qrCodeData: data.degreeDetails?.qrCodeData,
+        };
+      }
+      // 2. Degree hash (64 hex chars, no 0x)
+      else if (isDegreeHash(q)) {
+        const data = await verificationApi.verifyPublic(q);
+        res = {
+          valid: data.valid,
+          status: data.valid ? 'issued' : 'invalid',
+          errors: data.valid ? [] : ['Degree not found on blockchain.'],
+          degreeId: data.degreeDetails?.degreeId,
+          studentName: data.degreeDetails?.studentName,
+          registrationNumber: data.degreeDetails?.registrationNumber,
+          degreeTitle: data.degreeDetails?.degreeTitle,
+          department: data.degreeDetails?.department,
+          cgpa: data.degreeDetails?.cgpa,
+          graduationYear: data.degreeDetails?.graduationYear,
+          blockchainHash: data.blockchain?.txHash || q,
+          fraudScore: data.degreeDetails?.fraudScore || 0,
+          qrCodeData: data.degreeDetails?.qrCodeData,
+        };
+      }
+      // 3. Not a hash → try degree ID or certificate number
+      else {
+        let degreeData = null;
+
         try {
-          const data = await verificationApi.verifyPublic(q);
-          res = {
-            valid: data.valid,
-            status: data.valid ? 'issued' : 'invalid',
-            errors: data.valid ? [] : ['Degree not found on blockchain or database.'],
-            degreeId: data.degreeDetails?.degreeId,
-            studentName: data.degreeDetails?.studentName,
-            registrationNumber: data.degreeDetails?.registrationNumber,
-            degreeTitle: data.degreeDetails?.degreeTitle,
-            department: data.degreeDetails?.department,
-            cgpa: data.degreeDetails?.cgpa,
-            graduationYear: data.degreeDetails?.graduationYear,
-            blockchainHash: data.blockchain?.txHash || q,
-            fraudScore: data.degreeDetails?.fraudScore || 0,
-            qrCodeData: data.degreeDetails?.qrCodeData,
-          };
-        } catch (err: any) {
-          // Distinguish 404 (not found) from other errors
-          if (err.status === 404 || err.response?.status === 404) {
+          degreeData = await degreesApi.publicLookup(q);
+        } catch (_) { /* ignore */ }
+
+        if (!degreeData && !isUUID(q)) {
+          try {
+            degreeData = await degreesApi.publicByCert(q);
+          } catch (_) { /* ignore */ }
+        }
+
+        if (degreeData) {
+          const degree = degreeData.degree || degreeData;
+          if (degree.blockchainHash) {
+            const verifyData = await verificationApi.verifyPublic(degree.blockchainHash);
             res = {
-              valid: false,
-              status: 'invalid',
-              errors: [err.message || 'Degree not found on blockchain registry.'],
+              valid: verifyData.valid,
+              status: verifyData.valid ? 'issued' : 'invalid',
+              errors: verifyData.valid ? [] : ['Blockchain verification failed.'],
+              degreeId: degree.id || q,
+              studentName: degree.studentName || degree.student_name,
+              registrationNumber: degree.studentId || degree.student_id,
+              degreeTitle: degree.degreeTitle || degree.degree_title,
+              department: degree.department || degree.field_of_study,
+              cgpa: degree.cgpa || degree.gpa,
+              graduationYear: degree.graduationYear || degree.graduation_date,
+              blockchainHash: degree.blockchainHash || degree.blockchain_tx_hash,
+              fraudScore: degree.fraudScore || 0,
+              qrCodeData: degree.qrCodeData || degree.qr_code_url,
             };
           } else {
-            throw err; // re-throw other errors to outer catch
-          }
-        }
-      } else {
-        // Treat as degree ID – use public lookup (no authentication required)
-        try {
-          const degreeData = await degreesApi.publicLookup(q);
-          const degree = degreeData.degree;
-          const hash = degree?.blockchainTxHash || degree?.blockchain_tx_hash || degree?.blockchainHash;
-          if (hash) {
-            try {
-              const verifyData = await verificationApi.verifyPublic(hash);
-              res = {
-                valid: verifyData.valid,
-                status: verifyData.valid ? 'issued' : 'invalid',
-                errors: verifyData.valid ? [] : ['Blockchain verification failed.'],
-                degreeId: degree.id || q,
-                studentName: degree.studentName || degree.student_name,
-                registrationNumber: degree.studentId || degree.student_id,
-                degreeTitle: degree.degreeTitle || degree.degree_title,
-                department: degree.department || degree.field_of_study,
-                cgpa: degree.cgpa || degree.gpa,
-                graduationYear: degree.graduationYear || degree.graduation_date,
-                blockchainHash: degree.blockchainTxHash || degree.blockchain_tx_hash || degree.blockchainHash,
-                fraudScore: degree.fraudScore || 0,
-                qrCodeData: degree.qrCodeData || degree.qr_code_url,
-              };
-            } catch (verifyErr: any) {
-              // Hash verification failed (e.g., 404)
-              res = {
-                valid: false,
-                status: 'invalid',
-                errors: [verifyErr.message || 'Blockchain verification failed.'],
-                ...degree, // keep degree details if available
-              };
-            }
-          } else {
-            // Degree exists but no on-chain record
             res = {
               valid: false,
               status: 'invalid',
@@ -101,36 +112,28 @@ export default function VerifyDegree() {
               ...degree,
             };
           }
-        } catch (err: any) {
-          // Degree not found or public lookup failed
-          if (err.status === 404 || err.response?.status === 404) {
-            res = {
-              valid: false,
-              status: 'invalid',
-              errors: [err.message || 'Degree not found. Please check the ID and try again.'],
-            };
-          } else {
-            throw err;
-          }
+        } else {
+          throw new Error('Degree not found by ID or certificate number.');
         }
       }
 
       if (!res) {
         setResult(null);
       } else {
-        // Check if revoked – you might have a revoked status from backend
-        const isRevoked = res.errors?.some((e: string) => e.toLowerCase().includes('revoked'));
+        const isRevoked =
+          res.errors?.some((e: string) => e.toLowerCase().includes('revoked')) ||
+          res.status === 'revoked';
         setResult({
           ...res,
-          status: isRevoked ? 'revoked' : (res.valid ? 'issued' : 'invalid'),
+          status: isRevoked ? 'revoked' : res.valid ? 'issued' : 'invalid',
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Verification error:', error);
       setResult({
         valid: false,
         status: 'invalid',
-        errors: ['An internal error occurred during verification.'],
+        errors: [error.message || 'An internal error occurred during verification.'],
       } as any);
     } finally {
       setSearched(true);
@@ -139,8 +142,10 @@ export default function VerifyDegree() {
   };
 
   const presetQueries = [
-    { label: 'IQRA-CS-2026-70618', value: 'IQRA-CS-2026-70618' },
-    { label: 'Sample Hash', value: '0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a' },
+    { label: 'Transaction Hash', value: '0x839473307dc759953bf26c64a80e84ff3c08aef08c7d2dce039dc4387db362ba' },
+    { label: 'Degree Hash', value: '1deb016eab2fa459ae07df4aa3327524d99b8366b38b667396e51da4b183b519' },
+    { label: 'Certificate #', value: 'BD-2026-100002' },
+    { label: 'UUID (demo)', value: 'ecd03fcb-b0e7-403c-b5cb-57c1eec34272' },
   ];
 
   return (
@@ -150,7 +155,9 @@ export default function VerifyDegree() {
           <Search className="w-8 h-8 text-blue-400" />
         </div>
         <h2 className="text-2xl font-bold">Verify a Degree</h2>
-        <p className="text-gray-400 mt-1">Enter a Degree ID or attestation hash to verify authenticity</p>
+        <p className="text-gray-400 mt-1">
+          Enter a Degree ID, certificate number, degree hash, or transaction hash
+        </p>
       </div>
 
       <form onSubmit={handleVerify} className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
@@ -160,7 +167,7 @@ export default function VerifyDegree() {
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Enter Degree ID or attestation hash..."
+            placeholder="e.g. degree hash, transaction hash, certificate, or UUID"
             className="w-full pl-12 pr-4 py-4 bg-gray-800/50 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition text-sm font-mono"
             required
           />
@@ -193,7 +200,7 @@ export default function VerifyDegree() {
         </button>
       </form>
 
-      {/* Results */}
+      {/* Results section – unchanged */}
       {searched && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -244,7 +251,9 @@ export default function VerifyDegree() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-500 uppercase">Fraud Score</p>
-                      <p className={`font-semibold ${result.fraudScore >= 71 ? 'text-green-400' : 'text-yellow-400'}`}>{result.fraudScore}/100 — Safe</p>
+                      <p className={`font-semibold ${result.fraudScore >= 71 ? 'text-green-400' : 'text-yellow-400'}`}>
+                        {result.fraudScore}/100 — Safe
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -279,7 +288,7 @@ export default function VerifyDegree() {
                   <p className="text-sm text-gray-400 mt-1">
                     {result?.errors?.length
                       ? result.errors.join(' ')
-                      : 'No valid attestation record found for this Degree ID / hash.'}
+                      : 'No valid attestation record found for this query.'}
                   </p>
 
                   {Array.isArray(result?.errors) && result.errors.length > 0 && (

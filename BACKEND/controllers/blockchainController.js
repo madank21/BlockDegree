@@ -56,10 +56,11 @@ const getNetworkInfo = asyncHandler(async (req, res) => {
 // ── GET /api/v1/blockchain/verify/:hash ─────────────────────────────────────
 const verifyOnBlockchain = asyncHandler(async (req, res) => {
   const { hash } = req.params;
-  if (!hash || !hash.startsWith('0x')) {
-    return sendError(res, 'Invalid degree hash format. Hash must start with 0x.', 400);
+  const normalized = hash?.startsWith('0x') ? hash.slice(2) : hash;
+  if (!normalized || normalized.length !== 64 || !/^[a-fA-F0-9]+$/.test(normalized)) {
+    return sendError(res, 'Invalid hash format. Expected 64-char SHA-256 degree hash.', 400);
   }
-  const result = await blockchainService.verifyDegree(hash);
+  const result = await blockchainService.verifyDegree(normalized);
   return sendSuccess(res, result, 'Blockchain verification complete');
 });
 
@@ -184,7 +185,7 @@ const reregisterDegree = asyncHandler(async (req, res) => {
       blockchain_tx_hash:      blockchainResult.txHash,
       blockchain_block_number: blockchainResult.blockNumber,
       blockchain_timestamp:    blockchainResult.timestamp,
-      blockchain_sync_status:  'confirmed',
+      blockchain_sync_status:  'success',
       status:                  'issued',
     });
 

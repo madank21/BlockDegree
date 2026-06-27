@@ -18,7 +18,7 @@
 
 import { useEffect, useRef } from 'react';
 import { DegreeApplication, User } from '../types';
-import universityLogo from '../assets/logo.jpeg';
+import universityLogo from '../assets/logo.png';
 
 // qr-code-styling is CJS — Vite pre-bundles it automatically, no config needed.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -126,6 +126,7 @@ function QRSeal({ value }: SealProps) {
           height: `${circleSize}px`,
           borderRadius: '50%',
           background: '#8B5CF6',
+          opacity: 0.7,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

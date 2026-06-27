@@ -12,6 +12,100 @@ const {
 } = require("../src/utils/response");
 const { logger } = require("../src/utils/logger");
 
+const assertUniversityOwnsDegree = (req, degree) => {
+  if (req.user.role === "admin") return true;
+  if (req.user.role === "university") {
+    const instId = req.user.institution_id || req.user.id;
+    if (!degree.institutionId) return true;
+    return degree.institutionId === instId;
+  }
+  return false;
+};
+
+async function mintDegreeOnChain(degree) {
+  const blockchainResult = await blockchainService.issueDegree({
+    degreeId: String(degree.id),
+    studentName: degree.studentName,
+    registrationNumber: degree.studentId,
+    department: degree.fieldOfStudy,
+    program: degree.degreeTitle,
+    cgpa: String(degree.gpa || "0"),
+    graduationYear: String(new Date(degree.graduationDate).getFullYear()),
+    degreeHash: degree.degreeHash,
+  });
+
+  return Degree.update(degree.id, {
+    blockchain_tx_hash: blockchainResult.txHash,
+    blockchain_block_number: blockchainResult.blockNumber,
+    blockchain_timestamp: blockchainResult.timestamp,
+    blockchain_sync_status: "success",
+    status: "issued",
+  });
+}
+
+function queueMintDegreeOnChain(degree, context = {}) {
+  const {
+    actorId,
+    actorRole,
+    auditAction,
+    auditDetails,
+    ipAddress,
+    sendEmail = false,
+  } = context;
+
+  setImmediate(async () => {
+    try {
+      await Degree.update(degree.id, { blockchain_sync_status: "processing" });
+      const updatedDegree = await mintDegreeOnChain(degree);
+
+      if (auditAction) {
+        await AuditLog.create({
+          action: auditAction,
+          actorId,
+          actorRole,
+          targetId: degree.id,
+          targetType: "degree",
+          details: auditDetails || {},
+          ipAddress,
+        });
+      }
+
+      if (sendEmail && updatedDegree.graduateEmail) {
+        notificationService.sendDegreeIssuedEmail(
+          { email: updatedDegree.graduateEmail },
+          updatedDegree
+        ).catch(() => {});
+      }
+
+      logger.info(`Background blockchain mint succeeded for degree ${degree.id}`);
+    } catch (err) {
+      logger.error(`Background blockchain mint failed for degree ${degree.id}:`, err);
+      await Degree.update(degree.id, { blockchain_sync_status: "failed" });
+    }
+  });
+}
+
+function formatDegreeResponse(degree, degreeHash) {
+  const verificationUrl = `${process.env.FRONTEND_URL}/verify/${degree.id}/${degreeHash || degree.degreeHash}`;
+  const certificateNumber = degree.certificateNumber || "PENDING_BATCH";
+
+  return {
+    id: degree.id,
+    studentName: degree.studentName,
+    studentId: degree.studentId,
+    degreeTitle: degree.degreeTitle,
+    fieldOfStudy: degree.fieldOfStudy,
+    graduationDate: degree.graduationDate,
+    degreeHash: degree.degreeHash || degreeHash,
+    certificateNumber,
+    status: degree.status,
+    blockchainTxHash: degree.blockchainTxHash,
+    blockchainStatus: degree.blockchainSyncStatus,
+    verificationUrl,
+    issuedAt: degree.createdAt,
+  };
+}
+
 // ─── POST /api/v1/degrees/issue ──────────────────────────────────────────────
 const issueDegree = asyncHandler(async (req, res) => {
   const { student_name, student_id, degree_title, field_of_study, graduation_date, gpa, honors, metadata, graduate_id, graduate_email } = req.body;
@@ -38,68 +132,80 @@ const issueDegree = asyncHandler(async (req, res) => {
     institution_name: institutionName,
     issued_by: req.user.id,
     degree_hash: degreeHash,
-    status: "issued",
-    blockchain_sync_status: "processing"
+    status: "pending",
+    blockchain_sync_status: "queued",
   });
 
-  try {
-    const blockchainResult = await blockchainService.issueDegree({
-      degreeId: String(degree.id),
-      studentName: degree.studentName,
-      registrationNumber: degree.studentId,
-      department: degree.fieldOfStudy,
-      program: degree.degreeTitle,
-      cgpa: String(degree.gpa || "0"),
-      graduationYear: String(
-        new Date(degree.graduationDate).getFullYear()
-      ),
-      degreeHash: degree.degreeHash
-    });
+  queueMintDegreeOnChain(degree, {
+    actorId: req.user.id,
+    actorRole: req.user.role,
+    auditAction: "DEGREE_ISSUED",
+    auditDetails: {
+      studentName: student_name,
+      studentId: student_id,
+      degreeHash: degreeHash.substring(0, 16) + "...",
+    },
+    ipAddress: req.ip,
+    sendEmail: !!(graduate_email || degree.graduateEmail),
+  });
 
-    const updatedDegree = await Degree.update(degree.id, {
-      blockchain_tx_hash: blockchainResult.txHash,
-      blockchain_sync_status: "success",
-    });
-  } catch (err) {
-    logger.error(err);
+  return sendSuccess(
+    res,
+    {
+      degree: formatDegreeResponse(degree, degreeHash),
+      message: "Degree created; blockchain minting queued",
+    },
+    "Degree issued successfully; blockchain minting in progress",
+    202
+  );
+});
 
-    await Degree.update(degree.id, {
-      blockchain_sync_status: "failed"
-    });
+// ─── POST /api/v1/degrees/apply (Student application — pending review) ────────
+const applyForDegree = asyncHandler(async (req, res) => {
+  const { degree_title, field_of_study, graduation_date, gpa, honors, metadata } = req.body;
 
-    return sendError(
-      res,
-      `Blockchain minting failed: ${err.message}`,
-      500
-    );
+  const student_name = req.user.name;
+  const student_id = req.user.student_id || req.user.id;
+
+  const degreeHash = generateDegreeHash({
+    student_name, student_id, degree_title, field_of_study, graduation_date, gpa,
+  });
+
+  const existing = await Degree.findByHash(degreeHash);
+  if (existing) {
+    return sendError(res, "Degree with identical credentials already exists", 409, { existingDegreeId: existing.id });
   }
 
+  const degree = await Degree.create({
+    student_name,
+    student_id,
+    graduate_id: req.user.id,
+    graduate_email: req.user.email,
+    degree_title,
+    field_of_study,
+    graduation_date,
+    gpa: gpa || null,
+    honors: honors || null,
+    metadata: metadata || {},
+    institution_id: null,
+    institution_name: "Pending Assignment",
+    issued_by: null,
+    degree_hash: degreeHash,
+    status: "pending",
+    blockchain_sync_status: "queued",
+  });
+
   await AuditLog.create({
-    action: "DEGREE_ISSUED", actorId: req.user.id, actorRole: req.user.role,
-    targetId: degree.id, targetType: "degree",
-    details: { studentName: student_name, studentId: student_id, degreeHash: degreeHash.substring(0, 16) + "..." },
+    action: "DEGREE_APPLIED",
+    actorId: req.user.id,
+    actorRole: req.user.role,
+    targetId: degree.id,
+    targetType: "degree",
+    details: { degreeTitle: degree_title },
     ipAddress: req.ip,
   });
 
-  const verificationUrl   = `${process.env.FRONTEND_URL}/verify/${degree.id}/${degreeHash}`;
-  const certificateNumber = degree.certificateNumber || "PENDING_BATCH";
-
-  return sendCreated(res, {
-    degree: {
-      id: degree.id,
-      studentName: degree.studentName,
-      studentId: degree.studentId,
-      degreeTitle: degree.degreeTitle,
-      fieldOfStudy: degree.fieldOfStudy,
-      graduationDate: degree.graduationDate,
-      degreeHash: degree.degreeHash,
-      certificateNumber,
-      status: degree.status,
-      blockchainStatus: degree.blockchainSyncStatus,
-      verificationUrl,
-      issuedAt: degree.createdAt,
-    },
-  }, "Degree issuance initiated — blockchain minting in progress");
+  return sendCreated(res, { degree }, "Degree application submitted for review");
 });
 
 // ─── POST /api/v1/degrees/:id/issue (Issue an existing degree) ─────────────
@@ -111,25 +217,38 @@ const issueExistingDegree = asyncHandler(async (req, res) => {
     return sendNotFound(res, "Degree");
   }
 
+  if (!assertUniversityOwnsDegree(req, degree)) {
+    return sendForbidden(res, "Access denied");
+  }
+
   if (degree.status === "issued") {
     return sendError(res, "Degree is already issued", 400);
   }
 
-  const updatedDegree = await Degree.update(id, {
-    status: "issued",
-  });
+  if (degree.blockchainTxHash) {
+    return sendError(res, "Degree is already registered on blockchain", 400);
+  }
 
-  await AuditLog.create({
-    action: "DEGREE_ISSUED",
+  await Degree.update(id, { blockchain_sync_status: "queued" });
+
+  queueMintDegreeOnChain(degree, {
     actorId: req.user.id,
     actorRole: req.user.role,
-    targetId: degree.id,
-    targetType: "degree",
-    details: { previousStatus: degree.status },
+    auditAction: "DEGREE_ISSUED",
+    auditDetails: { previousStatus: degree.status },
     ipAddress: req.ip,
+    sendEmail: !!degree.graduateEmail,
   });
 
-  return sendSuccess(res, { degree: updatedDegree }, "Degree issued successfully");
+  return sendSuccess(
+    res,
+    {
+      degree: formatDegreeResponse({ ...degree, blockchainSyncStatus: "queued" }),
+      message: "Blockchain minting queued",
+    },
+    "Degree issuance queued; blockchain minting in progress",
+    202
+  );
 });
 
 // ─── GET /api/v1/degrees ──────────────────────────────────────────────────────
@@ -164,6 +283,13 @@ const getDegreeQR = asyncHandler(async (req, res) => {
   const degree = await Degree.findById(req.params.id);
   if (!degree) return sendNotFound(res, "Degree");
 
+  if (req.user.role === "student" && degree.studentId !== req.user.student_id) {
+    return sendForbidden(res, "Access denied");
+  }
+  if (req.user.role === "university" && !assertUniversityOwnsDegree(req, degree)) {
+    return sendForbidden(res, "Access denied");
+  }
+
   if (degree.qrCodeUrl) {
     return sendSuccess(res, {
       qrCode: degree.qrCodeUrl,
@@ -190,6 +316,9 @@ const revokeDegree = asyncHandler(async (req, res) => {
   const { reason } = req.body;
   const degree = await Degree.findById(req.params.id);
   if (!degree) return sendNotFound(res, "Degree");
+  if (!assertUniversityOwnsDegree(req, degree)) {
+    return sendForbidden(res, "Access denied");
+  }
   if (degree.status === "revoked") return sendError(res, "Already revoked", 400);
 
   let blockchainRevocation = null;
@@ -214,11 +343,11 @@ const revokeDegree = asyncHandler(async (req, res) => {
   });
 
   if (degree.graduateEmail) {
-    notificationService.sendDegreeRevokedEmail(degree.graduateEmail, {
-      studentName: degree.studentName,
-      degreeTitle: degree.degreeTitle,
-      reason,
-    }).catch(() => {});
+    notificationService.sendDegreeRevokedEmail(
+      { email: degree.graduateEmail },
+      degree,
+      reason
+    ).catch(() => {});
   }
 
   return sendSuccess(res, { degree: revoked }, "Degree revoked successfully");
@@ -244,8 +373,6 @@ const getPublicCertificate = asyncHandler(async (req, res) => {
     degreeHash: degree.degreeHash,
     status: degree.status,
     transactionHash: degree.blockchainTxHash,
-    ipfsCID: degree.ipfsCid,
-    ipfsUrl: degree.ipfsCid ? `https://ipfs.io/ipfs/${degree.ipfsCid}` : null,
   });
 });
 
@@ -272,8 +399,7 @@ const publicLookupById = asyncHandler(async (req, res) => {
     status: degree.status,
     blockchainTxHash: degree.blockchainTxHash,   // critical for on-chain verification
     qrCodeUrl: degree.qrCodeUrl,
-    ipfsCid: degree.ipfsCid,
-    ipfsGatewayUrl: degree.ipfsGatewayUrl,
+    documentUrl: degree.documentUrl || null,
     createdAt: degree.createdAt,
   };
 
@@ -282,14 +408,33 @@ const publicLookupById = asyncHandler(async (req, res) => {
 
 // ─── PATCH /api/v1/degrees/:id ───────────────────────────────────────────────
 const updateDegree = asyncHandler(async (req, res) => {
-  const { gpa, honors, metadata } = req.body;
+  const { gpa, honors, metadata, status } = req.body;
   const degree = await Degree.findById(req.params.id);
   if (!degree) return sendNotFound(res, "Degree");
+
+  if (!assertUniversityOwnsDegree(req, degree)) {
+    return sendForbidden(res, "Access denied");
+  }
 
   const updates = {};
   if (gpa !== undefined) updates.gpa = gpa;
   if (honors !== undefined) updates.honors = honors;
   if (metadata !== undefined) updates.metadata = metadata;
+  if (status !== undefined) {
+    const allowed = ["pending", "approved", "issued", "revoked", "suspended"];
+    if (!allowed.includes(status)) {
+      return sendError(res, `Invalid status. Allowed: ${allowed.join(", ")}`, 400);
+    }
+    if (status === "issued" && degree.status !== "issued") {
+      return sendError(res, "Use POST /degrees/:id/issue to issue on blockchain", 400);
+    }
+    updates.status = status;
+    if ((status === "approved" || status === "issued") && !degree.institutionId) {
+      updates.institution_id = req.user.institution_id || req.user.id;
+      updates.institution_name = req.user.institution_name || req.user.name || "Unknown Institution";
+      updates.issued_by = req.user.id;
+    }
+  }
 
   if (Object.keys(updates).length === 0) {
     return sendError(res, "No valid fields to update", 400);
@@ -312,6 +457,7 @@ const updateDegree = asyncHandler(async (req, res) => {
 // ─── EXPORTS ──────────────────────────────────────────────────────────────────
 module.exports = {
   issueDegree,
+  applyForDegree,
   issueExistingDegree,
   getDegrees,
   getDegreeById,
