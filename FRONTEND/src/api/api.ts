@@ -417,6 +417,17 @@ export const adminApi = {
   reset: () => del<any>('/admin/reset'),
 };
 
+// ── Applications (Degree Applications) ──────────────────────────────────────────
+export const applicationsApi = {
+  create: (payload: Record<string, unknown>) =>
+    post<{ applicationId: string; status: string }>('/applications', payload),
+  list: (params?: { status?: string; page?: number }) =>
+    listRequest<any>(`/applications${buildQuery(params)}`),
+  updateStatus: (id: string, status: string, notes?: string) =>
+    patch<any>(`/applications/${id}/status`, { status, notes }),
+  // ... other methods
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 7. Default export (raw request object for ad-hoc use)
 // ─────────────────────────────────────────────────────────────────────────────

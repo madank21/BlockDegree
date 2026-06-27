@@ -1,9 +1,7 @@
-// /middleware/authMiddleware.js — Supabase only
-const jwt  = require("jsonwebtoken");
-const User = require("../models/User");
+// middleware/authMiddleware.js
+const jwt = require("jsonwebtoken");
+const supabase = require("../config/supabase"); // your Supabase client
 const { logger } = require("../src/utils/logger");
-// (intentionally not using sendUnauthorized; authMiddleware returns raw res.status(401)...)
-// const { sendUnauthorized } = require("../src/utils/response");
 
 // ─── Strict Authentication (requires valid token) ─────────────────────────────
 const authenticate = async (req, res, next) => {
@@ -13,18 +11,24 @@ const authenticate = async (req, res, next) => {
       return res.status(401).json({ error: "Authorization Bearer token required" });
     }
 
-    const token   = authHeader.split(" ")[1];
+    const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const user = await User.findById(decoded.userId);
-    if (!user) {
+    // Fetch user from Supabase instead of Mongoose
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", decoded.userId)
+      .single();
+
+    if (error || !user) {
       return res.status(401).json({ error: "User not found" });
     }
     if (!user.isActive) {
       return res.status(401).json({ error: "Account deactivated" });
     }
 
-    req.user = user;
+    req.user = user; // contains id, role, isActive, email, etc.
     next();
   } catch (error) {
     if (error.name === "TokenExpiredError") {
@@ -41,7 +45,6 @@ const authenticate = async (req, res, next) => {
 // ─── Optional Authentication (proceeds even without/invalid token) ─────────────
 const optionalAuthenticate = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  // If no token, just continue with req.user = null
   if (!authHeader?.startsWith("Bearer ")) {
     req.user = null;
     return next();
@@ -50,25 +53,39 @@ const optionalAuthenticate = async (req, res, next) => {
   const token = authHeader.split(" ")[1];
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", decoded.userId)
+      .single();
+
     if (user && user.isActive) {
-      req.user = user;   // attach user if valid and active
+      req.user = user;
     } else {
-      req.user = null;   // user not found or inactive → treat as unauthenticated
+      req.user = null;
     }
   } catch (error) {
-    // Token invalid/expired → still continue, but user is null
     req.user = null;
-    // Optionally log the error silently (not critical)
-    if (error.name !== 'TokenExpiredError' && error.name !== 'JsonWebTokenError') {
+    if (error.name !== "TokenExpiredError" && error.name !== "JsonWebTokenError") {
       logger.warn(`[OptionalAuth] ${error.message}`);
     }
   }
   next();
 };
 
-// ─── Exports ────────────────────────────────────────────────────────────────────
+// ─── Role‑based access control (must be used after `authenticate`) ─────────────
+const requireRole = (roles) => (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized – no user attached" });
+  }
+  if (!roles.includes(req.user.role)) {
+    return res.status(403).json({ error: "Forbidden – insufficient privileges" });
+  }
+  next();
+};
+
 module.exports = {
   authenticate,
   optionalAuthenticate,
+  requireRole,
 };

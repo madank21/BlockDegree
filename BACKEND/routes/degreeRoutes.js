@@ -1,3 +1,4 @@
+// routes/degree.routes.js
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
@@ -53,29 +54,31 @@ router.post('/apply',
 router.get('/:id', ...uuidParamValidator(), getDegreeById);
 router.get('/:id/qr', ...uuidParamValidator(), getDegreeQR);
 
-// University and Admin only
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Degree issuance – restricted to Admin and University ONLY
+// ═══════════════════════════════════════════════════════════════════════════════
 router.post('/',
-  authorizeUniversityOrAdmin,
+  authorizeUniversityOrAdmin,      // ✅ only admin/university
   blockchainLimiter,
   degreeCreateValidators,
   issueDegree
 );
 
 router.post('/:id/issue',
-  authorizeUniversityOrAdmin,
+  authorizeUniversityOrAdmin,      // ✅ only admin/university
   blockchainLimiter,
   ...uuidParamValidator(),
   issueExistingDegree
 );
 
 router.patch('/:id',
-  authorizeUniversityOrAdmin,
+  authorizeUniversityOrAdmin,      // ✅ only admin/university
   ...uuidParamValidator(),
   updateDegree
 );
 
 router.delete('/:id/revoke',
-  authorizeUniversityOrAdmin,
+  authorizeUniversityOrAdmin,      // ✅ only admin/university
   ...uuidParamValidator(),
   body('reason').isLength({ min: 10 }).withMessage('Reason must be at least 10 characters'),
   revokeDegree
