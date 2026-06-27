@@ -3,6 +3,7 @@ const fs = require("fs");
 const { asyncHandler } = require("../middleware/errorMiddleware");
 const { sendSuccess, sendError, sendCreated, sendPaginated } = require("../src/utils/response");
 const Document = require("../models/Document");
+const Degree = require("../models/Degree");
 const AuditLog = require("../models/AuditLog");
 const User = require("../models/User"); // <-- Added for user lookup
 const ocrService = require("../services/ocrService");
@@ -71,6 +72,8 @@ const uploadDocument = asyncHandler(async (req, res) => {
           await Document.update(document.id, {
             ocr_data: ocrData,
             ocr_confidence: ocrResult.confidence,
+            extracted_data: ocrResult.extractedData || {},
+            ocr_text: ocrResult.rawText || null,
           });
         }
 
@@ -107,7 +110,7 @@ const uploadDocument = asyncHandler(async (req, res) => {
     return sendCreated(res, document, "Document uploaded successfully. Processing in background.");
   } catch (error) {
     cleanupFile(filePath);
-    console.error("[uploadDocument] error:", error.message, error.stack);
+    logger.error("[uploadDocument] error:", error.message);
     throw error;
   }
 });
@@ -116,21 +119,13 @@ const uploadDocument = asyncHandler(async (req, res) => {
 const getMyDocuments = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, document_type } = req.query;
 
-  console.log(`[getMyDocuments] user: ${req.user.id}, page: ${page}, limit: ${limit}`);
+  const result = await Document.findByUser(req.user.id, {
+    page: parseInt(page),
+    limit: parseInt(limit),
+    documentType: document_type,
+  });
 
-  try {
-    const result = await Document.findByUser(req.user.id, {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      documentType: document_type,
-    });
-
-    console.log(`[getMyDocuments] found ${result.data.length} documents`);
-    return sendPaginated(res, result.data, result, "Documents retrieved successfully");
-  } catch (error) {
-    console.error("[getMyDocuments] error:", error.message);
-    throw error;
-  }
+  return sendPaginated(res, result.data, result, "Documents retrieved successfully");
 });
 
 // ─── Get Document By ID ────────────────────────────────────────────────────────
@@ -147,6 +142,18 @@ const getDocumentById = asyncHandler(async (req, res) => {
 // ─── Get Documents by Degree ───────────────────────────────────────────────────
 const getDocumentsByDegree = asyncHandler(async (req, res) => {
   const { degreeId } = req.params;
+  const degree = await Degree.findById(degreeId);
+  if (!degree) return sendError(res, "Degree not found.", 404);
+
+  const isAdmin = req.user.role === "admin";
+  const isOwner = degree.graduateId === req.user.id
+    || degree.studentId === req.user.student_id
+    || degree.institutionId === (req.user.institution_id || req.user.id);
+
+  if (!isAdmin && !isOwner) {
+    return sendError(res, "Access denied.", 403);
+  }
+
   const documents = await Document.findByDegree(degreeId);
   return sendSuccess(res, documents, "Documents retrieved successfully");
 });
@@ -229,12 +236,14 @@ const updateDocument = asyncHandler(async (req, res) => {
   if (req.user.role !== "admin" && document.user_id !== req.user.id) {
     return sendError(res, "Access denied.", 403);
   }
-  const allowedFields = [
+  const adminFields = [
     "ocr_status", "yolo_status", "validation_status",
-    "ocr_text", "ocr_confidence", "extracted_data",
-    "yolo_detections", "validation_errors",
-    "yolo_valid", "yolo_confidence"
+    "ocr_confidence", "yolo_valid", "yolo_confidence", "is_verified",
   ];
+  const ownerFields = ["ocr_text", "extracted_data", "yolo_detections", "validation_errors"];
+  const allowedFields = req.user.role === "admin"
+    ? [...adminFields, ...ownerFields]
+    : ownerFields;
   const filteredUpdates = {};
   for (const key of allowedFields) {
     if (updates[key] !== undefined) {
@@ -267,7 +276,12 @@ const verifyDocument = asyncHandler(async (req, res) => {
   }
 
   // 4. Get the extracted name from the document (case‑insensitive compare)
-  const extractedName = (document.extracted_data?.Name || "").trim();
+  const extractedName = (
+    document.extracted_data?.studentName
+    || document.extracted_data?.Name
+    || document.ocr_data?.extractedData?.studentName
+    || ""
+  ).trim();
   const officialName = (user.name || user.full_name || "").trim();
 
   let status = "valid";

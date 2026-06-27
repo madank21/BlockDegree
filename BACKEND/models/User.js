@@ -4,8 +4,8 @@
 // ─────────────────────────────────────────────────────────────
 
 const { getSupabaseAdmin } = require("../database/supabase");
-const bcrypt = require("bcrypt");   // <-- unchanged
-
+const bcrypt = require("bcrypt");
+const { sanitizeSearchInput } = require("../src/utils/searchSanitizer");
 const TABLE = "users";
 
 // ─────────────────────────────────────────────────────────────
@@ -148,13 +148,15 @@ const User = {
     if (institutionId) query = query.eq("institution_id", institutionId);
 
     if (search) {
-      query = query.or(
-        `name.ilike.%${search}%,` +
-        `email.ilike.%${search}%,` +
-        `student_id.ilike.%${search}%`
-      );
+      const safe = sanitizeSearchInput(search);
+      if (safe) {
+        query = query.or(
+          `name.ilike.%${safe}%,` +
+          `email.ilike.%${safe}%,` +
+          `student_id.ilike.%${safe}%`
+        );
+      }
     }
-
     const { data, count, error } = await query
       .order("created_at", { ascending: false })
       .range(offset, offset + parseInt(limit) - 1);
@@ -192,6 +194,15 @@ const User = {
       avatarUrl: "avatar_url",
       lastLogin: "last_login",
       metadata: "metadata",
+      password_hash: "password_hash",
+      password_reset_token: "password_reset_token",
+      password_reset_expires: "password_reset_expires",
+      email_verified: "email_verified",
+      email_verify_token: "email_verify_token",
+      email_verify_expires: "email_verify_expires",
+      refresh_token: "refresh_token",
+      refresh_token_expires: "refresh_token_expires",
+      last_login: "last_login",
     };
 
     for (const [key, col] of Object.entries(map)) {
@@ -255,6 +266,39 @@ const User = {
     if (!email) return false;
     const user = await this.findByEmail(email);
     return !!user;
+  },
+
+  // ── Refresh token validation (internal) ───────────────────
+  async getRefreshTokenData(id) {
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select("id, refresh_token, refresh_token_expires, is_active")
+      .eq("id", id)
+      .single();
+    if (error || !data) return null;
+    return data;
+  },
+
+  async setRefreshToken(id, tokenHash, expiresAt) {
+    return this.update(id, {
+      refresh_token: tokenHash,
+      refresh_token_expires: expiresAt,
+    });
+  },
+
+  async clearRefreshToken(id) {
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase
+      .from(TABLE)
+      .update({
+        refresh_token: null,
+        refresh_token_expires: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) throw new Error(`User.clearRefreshToken failed: ${error.message}`);
+    return true;
   },
 
   // ── Compare password (for login) ──────────────────────────

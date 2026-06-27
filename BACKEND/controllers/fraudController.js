@@ -59,7 +59,7 @@ exports.getReports = asyncHandler(async (req, res) => {
   const opts = { page: parsedPage, limit: parsedLimit };
 
   // FIX 1: map Sequelize-style "resolved" query param → is_resolved column filter
-  if (resolved !== undefined) opts.isResolved = resolved === 'true';
+  if (resolved !== undefined) opts.resolved = resolved === 'true';
 
   // Support both "severity" (old Sequelize column) and "riskLevel" (actual DB column)
   if (riskLevel) opts.riskLevel = riskLevel.toUpperCase();
@@ -208,7 +208,8 @@ exports.resolveReport = asyncHandler(async (req, res) => {
   const updated = await FraudLog.update(reportId, {
     is_resolved: true,
     resolved_at: new Date().toISOString(),
-    notes:       req.body?.notes || null,
+    resolved_by: req.user?.id || null,
+    resolution_notes: req.body?.notes || null,
   });
 
   await AuditLog.create({

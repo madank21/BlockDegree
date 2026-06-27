@@ -35,7 +35,7 @@ export default function ApplyDegree({ onNavigate }: Props) {
   }
 
   // Only approved students can apply
-  const isApproved = currentUser.verificationStatus === 'approved';
+const isApproved = currentUser?.isActive === true;
 
   // Example list of fields of study – you can customize
   const fieldsOfStudy = [
