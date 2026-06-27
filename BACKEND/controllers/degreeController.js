@@ -164,8 +164,9 @@ const issueDegree = asyncHandler(async (req, res) => {
 const applyForDegree = asyncHandler(async (req, res) => {
   const { degree_title, field_of_study, graduation_date, gpa, honors, metadata } = req.body;
 
+  // 🔥 FIX: Always use the user's UUID, not a separate student_id field
   const student_name = req.user.name;
-  const student_id = req.user.student_id || req.user.id;
+  const student_id = req.user.id;   // ← always the UUID
 
   const degreeHash = generateDegreeHash({
     student_name, student_id, degree_title, field_of_study, graduation_date, gpa,
@@ -178,7 +179,7 @@ const applyForDegree = asyncHandler(async (req, res) => {
 
   const degree = await Degree.create({
     student_name,
-    student_id,
+    student_id,   // ← now always the UUID
     graduate_id: req.user.id,
     graduate_email: req.user.email,
     degree_title,
@@ -256,8 +257,13 @@ const getDegrees = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, status, search } = req.query;
   const filter = {};
 
-  if (req.user.role === "student")    filter.studentId     = req.user.student_id;
-  if (req.user.role === "university") filter.institutionId = req.user.institution_id || req.user.id;
+  // 🔥 FIX: For students, filter by the user's UUID (req.user.id)
+  if (req.user.role === "student") {
+    filter.studentId = req.user.id;   // ← now the UUID
+  }
+  if (req.user.role === "university") {
+    filter.institutionId = req.user.institution_id || req.user.id;
+  }
   if (status) filter.status = status;
   if (search) filter.search = search;
 
@@ -270,10 +276,13 @@ const getDegreeById = asyncHandler(async (req, res) => {
   const degree = await Degree.findById(req.params.id);
   if (!degree) return sendNotFound(res, "Degree");
 
-  if (req.user.role === "student" && degree.studentId !== req.user.student_id)
+  // 🔥 FIX: Compare with req.user.id for students
+  if (req.user.role === "student" && degree.studentId !== req.user.id) {
     return sendForbidden(res, "Access denied");
-  if (req.user.role === "university" && degree.institutionId !== (req.user.institution_id || req.user.id))
+  }
+  if (req.user.role === "university" && degree.institutionId !== (req.user.institution_id || req.user.id)) {
     return sendForbidden(res, "Access denied");
+  }
 
   return sendSuccess(res, { degree });
 });
@@ -283,7 +292,8 @@ const getDegreeQR = asyncHandler(async (req, res) => {
   const degree = await Degree.findById(req.params.id);
   if (!degree) return sendNotFound(res, "Degree");
 
-  if (req.user.role === "student" && degree.studentId !== req.user.student_id) {
+  // 🔥 FIX: Compare with req.user.id for students
+  if (req.user.role === "student" && degree.studentId !== req.user.id) {
     return sendForbidden(res, "Access denied");
   }
   if (req.user.role === "university" && !assertUniversityOwnsDegree(req, degree)) {
@@ -385,7 +395,6 @@ const publicLookupById = asyncHandler(async (req, res) => {
     return sendNotFound(res, "Degree");
   }
 
-  // Return only public-safe fields, including blockchainTxHash for verification
   const publicData = {
     id: degree.id,
     studentName: degree.studentName,
@@ -397,7 +406,7 @@ const publicLookupById = asyncHandler(async (req, res) => {
     honors: degree.honors,
     certificateNumber: degree.certificateNumber,
     status: degree.status,
-    blockchainTxHash: degree.blockchainTxHash,   // critical for on-chain verification
+    blockchainTxHash: degree.blockchainTxHash,
     qrCodeUrl: degree.qrCodeUrl,
     documentUrl: degree.documentUrl || null,
     createdAt: degree.createdAt,
@@ -466,5 +475,5 @@ module.exports = {
   getDegreeStats,
   getPublicCertificate,
   updateDegree,
-  publicLookupById,   // <-- new export for public ID lookup
+  publicLookupById,
 };
