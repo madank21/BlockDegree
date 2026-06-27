@@ -6,36 +6,99 @@ import {
   X, Eye
 } from 'lucide-react';
 import DegreeCertificate from '../components/DegreeCertificate';
-import { degreesApi } from '../api/api'; // new import
+import { degreesApi } from '../api/api';
+
+// ─── Normalisation helper ──────────────────────────────────────────────────────
+const normalizeDegree = (raw: any) => {
+  // Log the raw object to see what we're getting
+  console.log('Normalizing degree:', raw);
+
+  return {
+    id: raw.id || raw.degreeId,
+    degreeId: raw.id || raw.degreeId,
+    degreeTitle: raw.degree_title || raw.degreeTitle || 'Untitled',
+    department: raw.field_of_study || raw.department || 'Unknown',
+    cgpa: raw.gpa ?? raw.cgpa ?? 'N/A',
+    graduationYear: raw.graduation_date
+      ? new Date(raw.graduation_date).getFullYear()
+      : raw.graduationYear || 'N/A',
+    fraudScore: raw.fraud_score ?? raw.fraudScore ?? 0,
+    blockchainHash: raw.blockchain_tx_hash || raw.blockchainHash || raw.blockchainTxHash || null,
+    blockchainTxHash: raw.blockchain_tx_hash || raw.blockchainTxHash || null,
+    status: raw.status || 'pending',
+    studentName: raw.student_name || raw.studentName || 'Unknown',
+    certificateNumber: raw.certificate_number || raw.certificateNumber || null,
+    // preserve any other fields
+    ...raw,
+  };
+};
 
 export default function MyDegrees() {
   const { currentUser } = useStore();
   const [degrees, setDegrees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedDegree, setSelectedDegree] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Fetch degrees on mount
+  // Fetch degrees when user is available
   useEffect(() => {
+    // Don't fetch if no user
+    if (!currentUser) {
+      setLoading(false);
+      return;
+    }
+
     const fetchDegrees = async () => {
       try {
-        const data = await degreesApi.list();
-        // data.data is the array
-        setDegrees(data.data || []);
-      } catch (err) {
+        setLoading(true);
+        setError(null);
+
+        console.log('Fetching degrees for user:', currentUser.id);
+
+        // Use degreesApi.list with limit 100 to get all
+        const response = await degreesApi.list({ limit: 100 });
+
+        console.log('API response:', response);
+
+        // The API returns { data: [], total, pagination }
+        const rawDegrees = response.data || [];
+
+        console.log('Raw degrees:', rawDegrees);
+
+        if (!Array.isArray(rawDegrees)) {
+          console.warn('Degrees data is not an array:', rawDegrees);
+          setDegrees([]);
+          return;
+        }
+
+        // Normalise each degree
+        const normalized = rawDegrees.map(normalizeDegree);
+        console.log('Normalized degrees:', normalized);
+
+        setDegrees(normalized);
+      } catch (err: any) {
         console.error('Failed to fetch degrees:', err);
+        setError(err.message || 'Failed to load degrees');
         setDegrees([]);
       } finally {
         setLoading(false);
       }
     };
+
     fetchDegrees();
-  }, []);
+  }, [currentUser]); // re‑fetch when user changes
 
-  if (!currentUser) return null;
+  if (!currentUser) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <p className="text-gray-400">Please log in to view your degrees.</p>
+      </div>
+    );
+  }
 
-  // Filter degrees: search and status (backend already constrains scoping to current user)
+  // Filter degrees
   const myDegrees = degrees
     .filter(d =>
       d.degreeTitle?.toLowerCase().includes(search.toLowerCase()) ||
@@ -47,11 +110,9 @@ export default function MyDegrees() {
 
   const activeDegree = myDegrees.find(d => d.id === selectedDegree);
 
-  // Helper: generate public verification URL
   const getVerificationUrl = (degreeId: string) =>
     `${window.location.origin}/verify/${degreeId}`;
 
-  // Print certificate function (unchanged)
   const printCertificate = (id: string) => {
     const element = document.getElementById(`degree-certificate-${id}`);
     if (!element) {
@@ -75,17 +136,29 @@ export default function MyDegrees() {
     win?.print();
   };
 
-  // Statistics
   const totalDegrees = myDegrees.length;
   const issuedCount = myDegrees.filter(d => d.status === 'issued').length;
   const pendingCount = myDegrees.filter(d => d.status === 'pending').length;
-  const verifiedCount = myDegrees.filter(d => d.blockchainHash || d.blockchainTxHash || d.blockchain_tx_hash).length;
+  const verifiedCount = myDegrees.filter(d => d.blockchainHash).length;
 
-  // Loading state
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="w-8 h-8 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-6 text-red-400">
+        <p>Error loading degrees: {error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-2 text-sm underline"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -100,7 +173,7 @@ export default function MyDegrees() {
         </p>
       </div>
 
-      {/* Statistics Cards (unchanged) */}
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-gray-900 rounded-xl p-4">
           <p className="text-gray-400 text-sm">Total Degrees</p>
@@ -120,7 +193,7 @@ export default function MyDegrees() {
         </div>
       </div>
 
-      {/* Search & Filter (unchanged) */}
+      {/* Search & Filter */}
       <div className="flex gap-3">
         <input
           type="text"
@@ -142,7 +215,7 @@ export default function MyDegrees() {
         </select>
       </div>
 
-      {/* Degree List (unchanged except using myDegrees) */}
+      {/* Degree List */}
       {myDegrees.length === 0 ? (
         <div className="text-center py-16">
           <GraduationCap className="w-16 h-16 text-gray-600 mx-auto mb-4" />
@@ -167,7 +240,6 @@ export default function MyDegrees() {
               }`}
               onClick={() => setSelectedDegree(deg.id)}
             >
-              {/* Card content unchanged */}
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
@@ -198,10 +270,10 @@ export default function MyDegrees() {
                 <div><span className="text-gray-500">Fraud Score:</span> <span className={deg.fraudScore >= 71 ? 'text-green-400' : deg.fraudScore >= 41 ? 'text-yellow-400' : 'text-red-400'}>{deg.fraudScore}/100</span></div>
               </div>
 
-              {(deg.blockchainHash || deg.blockchainTxHash || deg.blockchain_tx_hash) && (
+              {deg.blockchainHash && (
                 <div className="mt-3 flex items-center gap-2 bg-gray-800/30 rounded-lg px-3 py-2">
                   <Link2 className="w-4 h-4 text-blue-400 shrink-0" />
-                  <span className="text-xs text-gray-400 truncate font-mono">{deg.blockchainHash || deg.blockchainTxHash || deg.blockchain_tx_hash}</span>
+                  <span className="text-xs text-gray-400 truncate font-mono">{deg.blockchainHash}</span>
                 </div>
               )}
 
@@ -226,7 +298,7 @@ export default function MyDegrees() {
         </div>
       )}
 
-      {/* Modal (unchanged) */}
+      {/* Modal */}
       <AnimatePresence>
         {activeDegree && (
           <motion.div
@@ -262,13 +334,6 @@ export default function MyDegrees() {
                 </div>
               )}
 
-              {activeDegree.status === 'revoked' && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mt-4">
-                  <p className="text-red-400 font-semibold">Degree Revoked</p>
-                  <p className="text-sm text-gray-400">This certificate is no longer valid.</p>
-                </div>
-              )}
-
               <div className="bg-gray-900 rounded-xl p-4 mt-4">
                 <h4 className="font-semibold mb-3">Blockchain Information</h4>
                 <div className="space-y-2 text-sm">
@@ -285,7 +350,7 @@ export default function MyDegrees() {
                   <div>
                     <span className="text-gray-400">Blockchain Hash:</span>
                     <p className="font-mono text-xs break-all text-white">
-                      {activeDegree.blockchainHash || activeDegree.blockchainTxHash || activeDegree.blockchain_tx_hash || 'Not yet recorded'}
+                      {activeDegree.blockchainHash || 'Not yet recorded'}
                     </p>
                   </div>
                 </div>

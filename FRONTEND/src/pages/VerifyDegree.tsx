@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { QRCodeSVG } from 'qrcode.react';
 import { Search, CheckCircle2, XCircle, Link2, Shield, Loader2, AlertTriangle } from 'lucide-react';
 import { verificationApi, degreesApi } from '../api/api';
 import type { DegreeApplication } from '../types';
+
+// Use the same QR library as the certificate
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import QRCodeStyling from 'qr-code-styling';
 
 type VerifyStrictResult = (DegreeApplication & {
   valid: boolean;
@@ -12,6 +15,178 @@ type VerifyStrictResult = (DegreeApplication & {
   status: 'issued' | 'revoked' | 'invalid';
 };
 
+// ─── QR Seal Component (exact replica from DegreeCertificate) ──────────────
+interface QRSealProps {
+  value: string;
+}
+
+function QRSeal({ value }: QRSealProps) {
+  const qrRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!qrRef.current || !value) return;
+
+    // Clear previous render
+    qrRef.current.innerHTML = '';
+
+    try {
+      const qr = new QRCodeStyling({
+        width: 150,
+        height: 150,
+        type: 'svg',
+        data: value,
+        margin: 0,
+        qrOptions: {
+          errorCorrectionLevel: 'H',
+          
+        },
+        dotsOptions: {
+          color: '#8B5CF6',
+          type: 'rounded',
+        },
+        cornersSquareOptions: {
+          type: 'extra-rounded',
+          color: '#8B5CF6',
+        },
+        cornersDotOptions: {
+          type: 'dot',
+          color: '#8B5CF6',
+        },
+        backgroundOptions: {
+          color: '#ffffff',
+        },
+      });
+
+      qr.append(qrRef.current);
+    } catch (err) {
+      console.warn('QR generation failed:', err);
+      qrRef.current.innerHTML =
+        '<p style="font-size:8px;color:#8B5CF6;text-align:center;padding:4px;">QR data too long</p>';
+    }
+  }, [value]);
+
+  const circleSize = 160;
+  const cardSize = 124;
+  const qrSize = 150;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* Purple circle with camera-shutter lines */}
+      <div
+        style={{
+          position: 'relative',
+          width: `${circleSize}px`,
+          height: `${circleSize}px`,
+          borderRadius: '50%',
+          background: '#8B5CF6',
+          opacity: 0.7,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          boxShadow: '0 4px 18px rgba(139,92,246,0.5), 0 1px 4px rgba(139,92,246,0.3)',
+        }}
+      >
+        {[0, 60, 120].map((deg) => (
+          <div
+            key={deg}
+            style={{
+              position: 'absolute',
+              width: `${circleSize}px`,
+              height: '5px',
+              background: 'rgba(255,255,255,0.35)',
+              left: '50%',
+              top: '50%',
+              transformOrigin: 'left center',
+              transform: `translate(-50%, -50%) rotate(${deg}deg)`,
+              pointerEvents: 'none',
+            }}
+          />
+        ))}
+
+        {/* White rounded card behind QR */}
+        <div
+          style={{
+            position: 'relative',
+            zIndex: 10,
+            width: `${cardSize}px`,
+            height: `${cardSize}px`,
+            background: '#ffffff',
+            borderRadius: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            padding: '6px',
+          }}
+        >
+          <div
+            ref={qrRef}
+            style={{
+              width: `${qrSize}px`,
+              height: `${qrSize}px`,
+              transform: `scale(${(cardSize - 12) / qrSize})`,
+              transformOrigin: 'center',
+              flexShrink: 0,
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Label */}
+      <p
+        style={{
+          marginTop: '5px',
+          fontSize: '7px',
+          fontFamily: 'monospace',
+          color: '#8B5CF6',
+          letterSpacing: '0.12em',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          textAlign: 'center',
+        }}
+      >
+        Blockchain Verified
+      </p>
+    </div>
+  );
+}
+
+// ─── Placeholder for when QR data is missing ────────────────────────────────
+function QRSealPlaceholder() {
+  return (
+    <div
+      style={{
+        width: '140px',
+        height: '140px',
+        borderRadius: '50%',
+        background: '#8B5CF6',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxShadow: '0 4px 18px rgba(139,92,246,0.4)',
+      }}
+    >
+      <div
+        style={{
+          width: '108px',
+          height: '108px',
+          background: '#fff',
+          borderRadius: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <p style={{ fontSize: '8px', color: '#8B5CF6', fontFamily: 'monospace', textAlign: 'center', padding: '6px' }}>
+          Hash pending…
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main VerifyDegree Component ─────────────────────────────────────────────
 export default function VerifyDegree() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,7 +208,6 @@ export default function VerifyDegree() {
       const q = query.trim();
       let res: any = null;
 
-      // 1. Transaction hash (0x... length 66)
       if (isTxHash(q)) {
         const data = await verificationApi.verifyPublicByTx(q);
         res = {
@@ -51,9 +225,7 @@ export default function VerifyDegree() {
           fraudScore: data.degreeDetails?.fraudScore || 0,
           qrCodeData: data.degreeDetails?.qrCodeData,
         };
-      }
-      // 2. Degree hash (64 hex chars, no 0x)
-      else if (isDegreeHash(q)) {
+      } else if (isDegreeHash(q)) {
         const data = await verificationApi.verifyPublic(q);
         res = {
           valid: data.valid,
@@ -70,11 +242,8 @@ export default function VerifyDegree() {
           fraudScore: data.degreeDetails?.fraudScore || 0,
           qrCodeData: data.degreeDetails?.qrCodeData,
         };
-      }
-      // 3. Not a hash → try degree ID or certificate number
-      else {
+      } else {
         let degreeData = null;
-
         try {
           degreeData = await degreesApi.publicLookup(q);
         } catch (_) { /* ignore */ }
@@ -200,7 +369,7 @@ export default function VerifyDegree() {
         </button>
       </form>
 
-      {/* Results section – unchanged */}
+      {/* Results section */}
       {searched && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -266,9 +435,14 @@ export default function VerifyDegree() {
                   <p className="text-xs text-gray-400 font-mono break-all">{result.blockchainHash}</p>
                 </div>
 
-                {result.qrCodeData && (
-                  <div className="flex items-center justify-center bg-white rounded-lg p-4 w-fit mx-auto">
-                    <QRCodeSVG value={result.qrCodeData} size={120} level="H" />
+                {/* ─── NEW QR SEAL (matches DegreeCertificate) ─── */}
+                {result.qrCodeData ? (
+                  <div className="flex justify-center pt-2">
+                    <QRSeal value={ result.blockchainHash || result.degreeId || ''} />
+                  </div>
+                ) : (
+                  <div className="flex justify-center pt-2">
+                    <QRSealPlaceholder />
                   </div>
                 )}
               </div>
