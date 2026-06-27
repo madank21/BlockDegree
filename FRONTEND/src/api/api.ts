@@ -420,12 +420,13 @@ export const adminApi = {
 // ── Applications (Degree Applications) ──────────────────────────────────────────
 export const applicationsApi = {
   create: (payload: Record<string, unknown>) =>
-    post<{ applicationId: string; status: string }>('/applications', payload),
+    post<{ applicationId: string; status: string; createdAt: string }>('/applications', payload), // ✅ added createdAt
   list: (params?: { status?: string; page?: number }) =>
     listRequest<any>(`/applications${buildQuery(params)}`),
   updateStatus: (id: string, status: string, notes?: string) =>
     patch<any>(`/applications/${id}/status`, { status, notes }),
-  // ... other methods
+  getById: (id: string) => get<any>(`/applications/${id}`),
+  delete: (id: string) => del<any>(`/applications/${id}`),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

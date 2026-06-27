@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../useStore';
-import { GraduationCap, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { applicationsApi } from '../api/api'; // ← changed import
+import { GraduationCap, AlertCircle, CheckCircle2, Trash2, Clock, XCircle } from 'lucide-react'; // added Trash2, Clock, XCircle
+import { applicationsApi } from '../api/api';
 
 interface Props {
   onNavigate: (page: string) => void;
@@ -13,16 +13,19 @@ export default function ApplyDegree({ onNavigate }: Props) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Removed degreeHash and qrCodeUrl states – not needed for applications
 
-  // Form fields that match the backend's degree creation schema
+  // ── NEW: application details state ──────────────────────────────────────────
+  const [applicationId, setApplicationId] = useState<string | null>(null);
+  const [applicationStatus, setApplicationStatus] = useState<string | null>(null);
+  const [applicationCreated, setApplicationCreated] = useState<string | null>(null);
+
+  // Form fields
   const [form, setForm] = useState({
-    // student_name and student_id are derived from currentUser
     degreeTitle: '',
-    fieldOfStudy: currentUser?.program || '',   // maps to field_of_study
-    graduationDate: '',                         // will be a date string (YYYY-MM-DD)
-    gpa: currentUser?.cgpa || 0,                // maps to gpa
-    honors: false,                              // boolean
+    fieldOfStudy: currentUser?.program || '',
+    graduationDate: '',
+    gpa: currentUser?.cgpa || 0,
+    honors: false,
   });
 
   if (!currentUser) {
@@ -33,10 +36,8 @@ export default function ApplyDegree({ onNavigate }: Props) {
     );
   }
 
-  // Only approved students can apply
   const isApproved = currentUser?.isActive === true;
 
-  // Example list of fields of study – you can customize
   const fieldsOfStudy = [
     'Computer Science',
     'Software Engineering',
@@ -52,25 +53,56 @@ export default function ApplyDegree({ onNavigate }: Props) {
     setError(null);
     setSuccess(false);
 
-    // Build payload exactly as the backend expects (snake_case)
     const payload = {
-      student_name: currentUser.name,                    // from user
-      student_id: currentUser.registrationNumber,       // or currentUser.id – backend expects a string
+      student_name: currentUser.name,
+      student_id: currentUser.registrationNumber,
       degree_title: form.degreeTitle,
       field_of_study: form.fieldOfStudy,
-      graduation_date: form.graduationDate,              // must be a valid date string
+      graduation_date: form.graduationDate,
       gpa: form.gpa,
       honors: form.honors,
     };
 
     try {
-      // 🔁 REPLACED: use applicationsApi.create instead of degreesApi.issue
       const result = await applicationsApi.create(payload);
-      // result contains { applicationId, status }
+      // ── NEW: store application details ──────────────────────────────────────
+      setApplicationId(result.applicationId);
+      setApplicationStatus(result.status);
+      setApplicationCreated(result.createdAt || null);
       setSuccess(true);
     } catch (err: any) {
       console.error('Degree application error:', err);
       setError(err.message || 'Failed to submit degree application. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── NEW: delete handler ──────────────────────────────────────────────────────
+  const handleDelete = async () => {
+    if (!applicationId) return;
+    if (!confirm('Are you sure you want to delete this application?')) return;
+
+    setLoading(true);
+    try {
+      await applicationsApi.delete(applicationId);
+      // Reset state
+      setSuccess(false);
+      setApplicationId(null);
+      setApplicationStatus(null);
+      setApplicationCreated(null);
+      setError(null);
+      // Optionally reset form
+      setForm({
+        degreeTitle: '',
+        fieldOfStudy: currentUser?.program || '',
+        graduationDate: '',
+        gpa: currentUser?.cgpa || 0,
+        honors: false,
+      });
+    } catch (err: any) {
+      console.error('Delete error:', err);
+      setError(err.message || 'Failed to delete application.');
     } finally {
       setLoading(false);
     }
@@ -84,12 +116,26 @@ export default function ApplyDegree({ onNavigate }: Props) {
     }));
   };
 
+  // ── NEW: status badge helper ──────────────────────────────────────────────
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return { label: 'Pending Review', icon: Clock, className: 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20' };
+      case 'approved':
+        return { label: 'Approved ✓', icon: CheckCircle2, className: 'bg-green-400/10 text-green-400 border-green-400/20' };
+      case 'rejected':
+        return { label: 'Rejected ✗', icon: XCircle, className: 'bg-red-400/10 text-red-400 border-red-400/20' };
+      default:
+        return { label: status, icon: AlertCircle, className: 'bg-gray-400/10 text-gray-400 border-gray-400/20' };
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-2xl shadow-xl p-8"
+        className="rounded-2xl shadow-xl p-8 bg-gradient-to-br from-blue-100 via-purple-400 via-white to-indigo-700"
       >
         <div className="flex items-center gap-3 mb-6">
           <GraduationCap className="h-8 w-8 text-blue-600" />
@@ -109,18 +155,53 @@ export default function ApplyDegree({ onNavigate }: Props) {
         ) : (
           <>
             {success ? (
-              // ✅ UPDATED success message
-              <div className="bg-green-50 border border-green-200 rounded-lg p-6 space-y-4">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="h-6 w-6 text-green-600" />
-                  <h3 className="text-lg font-semibold text-green-800">
-                    Application Submitted! 🎉
-                  </h3>
+              // ─── UPDATED success block: shows status & delete ───────────────
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+                  <div className="flex items-center gap-3 mb-2">
+                    <CheckCircle2 className="h-6 w-6 text-green-600" />
+                    <h3 className="text-lg font-semibold text-green-800">
+                      Application Submitted! 🎉
+                    </h3>
+                  </div>
+                  <p className="text-green-700">
+                    Your degree application has been sent for review.
+                    You will be notified once it's approved.
+                  </p>
+                  {applicationCreated && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Submitted on {new Date(applicationCreated).toLocaleString()}
+                    </p>
+                  )}
                 </div>
-                <p className="text-green-700">
-                  Your degree application has been sent for review.
-                  You will be notified once it's approved.
-                </p>
+
+                {/* Status badge */}
+                {applicationStatus && (
+                  <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <span className="text-sm font-medium text-gray-700">Status:</span>
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${
+                      getStatusBadge(applicationStatus).className
+                    }`}>
+                      {(() => {
+                        const { icon: Icon, label } = getStatusBadge(applicationStatus);
+                        return <><Icon className="w-3.5 h-3.5" /> {label}</>;
+                      })()}
+                    </span>
+                  </div>
+                )}
+
+                {/* Delete button (only if pending) */}
+                {applicationStatus === 'pending' && (
+                  <button
+                    onClick={handleDelete}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition disabled:opacity-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {loading ? 'Deleting...' : 'Delete Application'}
+                  </button>
+                )}
+
                 <button
                   onClick={() => onNavigate('dashboard')}
                   className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
