@@ -1,10 +1,8 @@
-// routes/application.routes.js
 const express = require("express");
 const router = express.Router();
 const { authenticate, requireRole } = require("../middleware/authMiddleware");
 const supabase = require("../database/supabase");
 const { createDegree } = require("../services/degreeService");
-// Optional: if you have a validation library like Joi, use it.
 
 // ─── Validation helper ──────────────────────────────────────────────────────────
 const validateApplication = (data) => {
@@ -17,7 +15,6 @@ const validateApplication = (data) => {
     throw new Error("graduation_date must be a valid date");
   if (gpa === undefined || isNaN(gpa) || gpa < 0 || gpa > 4.0)
     throw new Error("gpa must be a number between 0 and 4.0");
-  // honors is optional boolean
   return true;
 };
 
@@ -27,7 +24,7 @@ const validateApplication = (data) => {
 router.post(
   "/",
   authenticate,
-  requireRole(["student", "admin", "university"]), // allow admin/university for testing
+  requireRole(["student", "admin", "university"]),
   async (req, res) => {
     try {
       const userId = req.user.id;
@@ -80,7 +77,7 @@ router.get(
 
       let query = supabase
         .from("applications")
-        .select("*, student:users(id, email, full_name)", { count: "exact" });
+        .select("*, student:users(id, email, name)", { count: "exact" });
 
       if (status) {
         query = query.eq("status", status);
@@ -116,11 +113,10 @@ router.get(
 
       let query = supabase
         .from("applications")
-        .select("*, student:users(id, email, full_name)")
+        .select("*, student:users(id, email, name)")
         .eq("id", id)
         .single();
 
-      // If student, only allow if they own it
       if (userRole === "student") {
         query = query.eq("student_id", userId);
       }
@@ -187,13 +183,13 @@ router.patch(
           gpa: app.gpa,
           honors: app.honors,
           issued_by: req.user.id,
-          issued_at: new Date(),
         });
 
         if (!degreeResult.success) {
           throw new Error(degreeResult.message || "Failed to issue degree");
         }
-        updates.degree_id = degreeResult.degree.id;
+        // ❗ Removed: updates.degree_id = degreeResult.degree.id;
+        // If you later add a degree_id column to applications, uncomment the line above.
       }
 
       // Update application
