@@ -167,7 +167,7 @@ const isApproved = currentUser?.isActive === true;
                   </div>
 
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-black mb-1">
                       Field of Study *
                     </label>
                     <select

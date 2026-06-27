@@ -69,7 +69,7 @@ export interface User {
   institutionName?:    string;
 
   // Common
-  is_active?:          boolean;
+  isActive?:          boolean;
   status?:             string;
   createdAt:           string;
   created_at?:         string;
