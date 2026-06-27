@@ -33,7 +33,8 @@ const registerValidators = [
     .withMessage('Full name is required (2-100 characters)'),
   // ✅ Changed: role list now includes 'student' instead of 'graduate'
   body('role')
-    .isIn(['admin', 'university', 'employer', 'student'])
+    .optional()
+    .isIn(['university', 'employer', 'student'])
     .withMessage('Invalid role'),
   body('phone')
     .optional()
@@ -58,6 +59,21 @@ const degreeCreateValidators = [
     .withMessage('Student name is required'),
   body('student_id').trim().notEmpty().isLength({ min: 2, max: 100 })
     .withMessage('Student ID is required'),
+  body('degree_title').trim().notEmpty().isLength({ min: 2, max: 255 })
+    .withMessage('Degree title is required'),
+  body('field_of_study').trim().notEmpty().isLength({ min: 2, max: 255 })
+    .withMessage('Field of study is required'),
+  body('graduation_date').isISO8601().toDate()
+    .withMessage('Valid graduation date is required'),
+  body('gpa').optional().isFloat({ min: 0.0, max: 4.0 })
+    .withMessage('GPA must be between 0 and 4'),
+  body('honors').optional().isIn(['Summa Cum Laude', 'Magna Cum Laude', 'Cum Laude', 'With Distinction'])
+    .withMessage('Invalid honors value'),
+  handleValidationErrors,
+];
+
+// Student apply route — student identity comes from JWT, not request body
+const degreeApplyValidators = [
   body('degree_title').trim().notEmpty().isLength({ min: 2, max: 255 })
     .withMessage('Degree title is required'),
   body('field_of_study').trim().notEmpty().isLength({ min: 2, max: 255 })
@@ -98,6 +114,7 @@ module.exports = {
   registerValidators,
   loginValidators,
   degreeCreateValidators,
+  degreeApplyValidators,
   verificationCreateValidators,
   uuidParamValidator,
   paginationValidators,
