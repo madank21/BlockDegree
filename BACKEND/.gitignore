@@ -1,15 +1,10 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
 # dependencies
-logs/combined.log
 node_modules/
-.env
-uploads/
-uploads/documents/
+BACKEND/logs/
 
-combined.log
-combined
-error.log
+
 
 
 # Expo
@@ -51,5 +46,12 @@ app-example
 /ios
 /android
 
-
+# secret
+backend/logs/
+combined.log
+combined
+error.log
+.env
+uploads/
+uploads/documents/
 .env
